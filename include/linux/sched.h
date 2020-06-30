@@ -688,6 +688,8 @@ struct task_struct {
 #ifdef CONFIG_SCHED_CORE
 	struct rb_node			core_node;
 	unsigned long			core_cookie;
+	unsigned long			core_task_cookie;
+	unsigned long			core_group_cookie;
 	unsigned int			core_occupation;
 #endif
 
@@ -2075,5 +2077,13 @@ int sched_trace_rq_cpu_capacity(struct rq *rq);
 int sched_trace_rq_nr_running(struct rq *rq);
 
 const struct cpumask *sched_trace_rd_span(struct root_domain *rd);
+
+#ifdef CONFIG_SCHED_CORE
+int sched_core_share_pid(unsigned long flags, pid_t pid);
+void sched_tsk_free(struct task_struct *tsk);
+#else
+#define sched_core_share_pid(flags, pid) do { } while (0)
+#define sched_tsk_free(tsk) do { } while (0)
+#endif
 
 #endif
