@@ -8,6 +8,7 @@
  */
 #include "sched.h"
 
+#include <linux/entry-common.h>
 #include <trace/events/power.h>
 
 /* Linker adds these: start and end of __cpuidle functions */
@@ -156,12 +157,6 @@ static void cpuidle_idle_call(void)
 		return;
 	}
 
-	/*
-	 * The RCU framework needs to be told that we are entering an idle
-	 * section, so no more rcu read side critical sections and one more
-	 * step to the grace period
-	 */
-
 	if (cpuidle_not_available(drv, dev)) {
 		tick_nohz_idle_stop_tick();
 
@@ -259,6 +254,7 @@ static void do_idle(void)
 		}
 
 		arch_cpu_idle_enter();
+		entry_idle_enter();
 
 		/*
 		 * In poll mode we reenable interrupts and spin. Also if we
@@ -272,6 +268,8 @@ static void do_idle(void)
 		} else {
 			cpuidle_idle_call();
 		}
+
+		entry_idle_exit();
 		arch_cpu_idle_exit();
 	}
 
