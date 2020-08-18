@@ -196,7 +196,7 @@ static void __notify_execute_cb(struct i915_request *rq)
 	if (llist_empty(&rq->execute_cb))
 		return;
 
-	llist_for_each_entry_safe(cb, cn, rq->execute_cb.first, work.llnode)
+	llist_for_each_entry_safe(cb, cn, rq->execute_cb.first, work.node.llist)
 		irq_work_queue(&cb->work);
 
 	/*
@@ -469,7 +469,7 @@ __await_execution(struct i915_request *rq,
 		i915_sw_fence_complete(cb->fence);
 		kmem_cache_free(global.slab_execute_cbs, cb);
 	} else {
-		__llist_add(&cb->work.llnode, &signal->execute_cb);
+		__llist_add(&cb->work.node.llist, &signal->execute_cb);
 	}
 	spin_unlock_irq(&signal->lock);
 
