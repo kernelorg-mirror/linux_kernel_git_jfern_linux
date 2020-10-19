@@ -1,0 +1,128 @@
+Eighth iteration of the Core-Scheduling feature.
+
+Core scheduling is a feature that allows only trusted tasks to run
+concurrently on cpus sharing compute resources (eg: hyperthreads on a
+core). The goal is to mitigate the core-level side-channel attacks
+without requiring to disable SMT (which has a significant impact on
+performance in some situations). Core scheduling (as of v7) mitigates
+user-space to user-space attacks and user to kernel attack when one of
+the siblings enters the kernel via interrupts or system call.
+
+By default, the feature doesn't change any of the current scheduler
+behavior. The user decides which tasks can run simultaneously on the
+same core (for now by having them in the same tagged cgroup). When a tag
+is enabled in a cgroup and a task from that cgroup is running on a
+hardware thread, the scheduler ensures that only idle or trusted tasks
+run on the other sibling(s). Besides security concerns, this feature can
+also be beneficial for RT and performance applications where we want to
+control how tasks make use of SMT dynamically.
+
+This iteration focuses on the the following stuff:
+- Redesigned API
+- Rework of Kernel Protection feature
+- Rework of hotplug fixes
+- Address review comments in v7
+
+[Joel: Details about API implementation]
+
+[Joel: chromeos test results]
+[Julien: Performance test results]
+
+v8 is rebased on 5.9.0(bbf5c979011a)
+[Affix the github link]
+
+TODO
+----
+- Load balancing/Migration fixes for core scheduling.
+  With v6, Load balancing is partially coresched aware, but has some
+  issues w.r.t process/taskgroup weights:
+  https://lwn.net/ml/linux-kernel/20200225034438.GA617271@z...
+- Core scheduling test framework: kselftests, torture tests etc
+
+Changes in v8
+-------------
+- New interface/API implementation
+  - Joel
+- Revised kernel protection patch
+  - Joel
+- Revised Hotplug fixes
+  - Joel
+- Minor bug fixes and address review comments
+  - Vineeth
+
+Changes in v7
+-------------
+- Kernel protection from untrusted usermode tasks
+  - Joel, Vineeth
+- Fix for hotplug crashes and hangs
+  - Joel, Vineeth
+
+Changes in v6
+-------------
+- Documentation
+  - Joel
+- Pause siblings on entering nmi/irq/softirq
+  - Joel, Vineeth
+- Fix for RCU crash
+  - Joel
+- Fix for a crash in pick_next_task
+  - Yu Chen, Vineeth
+- Minor re-write of core-wide vruntime comparison
+  - Aaron Lu
+- Cleanup: Address Review comments
+- Cleanup: Remove hotplug support (for now)
+- Build fixes: 32 bit, SMT=n, AUTOGROUP=n etc
+  - Joel, Vineeth
+
+Changes in v5
+-------------
+- Fixes for cgroup/process tagging during corner cases like cgroup
+  destroy, task moving across cgroups etc
+  - Tim Chen
+- Coresched aware task migrations
+  - Aubrey Li
+- Other minor stability fixes.
+
+Changes in v4
+-------------
+- Implement a core wide min_vruntime for vruntime comparison of tasks
+  across cpus in a core.
+  - Aaron Lu
+- Fixes a typo bug in setting the forced_idle cpu.
+  - Aaron Lu
+
+Changes in v3
+-------------
+- Fixes the issue of sibling picking up an incompatible task
+  - Aaron Lu
+  - Vineeth Pillai
+  - Julien Desfossez
+- Fixes the issue of starving threads due to forced idle
+  - Peter Zijlstra
+- Fixes the refcounting issue when deleting a cgroup with tag
+  - Julien Desfossez
+- Fixes a crash during cpu offline/online with coresched enabled
+  - Vineeth Pillai
+- Fixes a comparison logic issue in sched_core_find
+  - Aaron Lu
+
+Changes in v2
+-------------
+- Fixes for couple of NULL pointer dereference crashes
+  - Subhra Mazumdar
+  - Tim Chen
+- Improves priority comparison logic for process in different cpus
+  - Peter Zijlstra
+  - Aaron Lu
+- Fixes a hard lockup in rq locking
+  - Vineeth Pillai
+  - Julien Desfossez
+- Fixes a performance issue seen on IO heavy workloads
+  - Vineeth Pillai
+  - Julien Desfossez
+- Fix for 32bit build
+  - Aubrey Li
+
+option-prefix PATCH v8
+option-subject Core scheduling
+option-skip-get-maint
