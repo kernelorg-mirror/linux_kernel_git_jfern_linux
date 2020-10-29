@@ -4077,6 +4077,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	int i, j, cpu, occ = 0;
 	bool need_sync = false;
 	bool fi_before = false;
+	bool fi_inc_once;
 
 	cpu = cpu_of(rq);
 	if (cpu_is_offline(cpu))
@@ -4201,8 +4202,6 @@ again:
 			rq_i->core_pick = p;
 			if (rq_i->idle == p && rq_i->nr_running) {
 				rq->core->core_forceidle = true;
-				if (!fi_before)
-					rq->core->core_forceidle_seq++;
 			}
 
 			/*
@@ -4259,6 +4258,7 @@ next_class:;
 	 * non-matching user state.
 	 */
 	need_sync = false;
+	fi_inc_once = false;
 	for_each_cpu(i, smt_mask) {
 		struct rq *rq_i = cpu_rq(i);
 
@@ -4267,8 +4267,13 @@ next_class:;
 
 		WARN_ON_ONCE(!rq_i->core_pick);
 
-		if (!fi_before && rq->core->core_forceidle)
+		if (!fi_before && rq->core->core_forceidle) {
+			if (!fi_inc_once) {
+				fi_inc_once = true;
+				rq->core->core_forceidle_seq++;
+			}
 			task_vruntime_update(rq_i, rq_i->core_pick);
+		}
 
 		rq_i->core_pick->core_occupation = occ;
 
