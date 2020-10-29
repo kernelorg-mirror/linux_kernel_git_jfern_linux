@@ -4267,7 +4267,7 @@ next_class:;
 
 		WARN_ON_ONCE(!rq_i->core_pick);
 
-		if (!(fi_before && rq->core->core_forceidle))
+		if (!fi_before && rq->core->core_forceidle)
 			task_vruntime_update(rq_i, rq_i->core_pick);
 
 		rq_i->core_pick->core_occupation = occ;
