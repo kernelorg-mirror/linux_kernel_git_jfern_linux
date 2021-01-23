@@ -96,6 +96,7 @@ noinstr long syscall_enter_from_user_mode(struct pt_regs *regs, long syscall)
 {
 	long ret;
 
+	trace_printk("syscall: Enter from user\n");
 	enter_from_user_mode(regs, HT_PROTECT_SYSCALL);
 
 	instrumentation_begin();
@@ -299,11 +300,14 @@ __visible noinstr void syscall_exit_to_user_mode(struct pt_regs *regs)
 	local_irq_disable_exit_to_user();
 	exit_to_user_mode_prepare(regs, HT_PROTECT_SYSCALL);
 	instrumentation_end();
+	trace_printk("syscall: Entering exit_to_user_mode\n");
 	exit_to_user_mode();
+	trace_printk("syscall: Leaving exit_to_user_mode\n");
 }
 
 noinstr void irqentry_enter_from_user_mode(struct pt_regs *regs)
 {
+	trace_printk("irq: Enter from user\n");
 	enter_from_user_mode(regs, HT_PROTECT_IRQ);
 }
 
@@ -312,7 +316,9 @@ noinstr void irqentry_exit_to_user_mode(struct pt_regs *regs)
 	instrumentation_begin();
 	exit_to_user_mode_prepare(regs, HT_PROTECT_IRQ);
 	instrumentation_end();
+	trace_printk("irq: Entering exit_to_user_mode\n");
 	exit_to_user_mode();
+	trace_printk("irq: Entering exit_to_user_mode\n");
 }
 
 noinstr irqentry_state_t irqentry_enter(struct pt_regs *regs)

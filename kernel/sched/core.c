@@ -5194,6 +5194,17 @@ static inline bool cookie_match(struct task_struct *a, struct task_struct *b)
  */
 static void sched_core_irq_work(struct irq_work *work)
 {
+	struct rq *rq;
+	int cpu;
+	cpu = smp_processor_id();
+	rq = cpu_rq(cpu);
+
+	WARN_ON_ONCE(!rq->pause_pending);
+
+	trace_printk("Entering irq work hnd\n");
+	trace_printk("Exit irq work hnd\n");
+
+	rq->pause_pending = false;
 }
 
 static inline void init_sched_core_irq_work(struct rq *rq)
@@ -5217,6 +5228,7 @@ bool sched_core_wait_till_safe(unsigned long ti_check)
 	bool restart = false;
 	struct rq *rq;
 	int cpu;
+	int loops = 0;
 
 	/* If arch doesn't define the TIF flag, don't do anything. */
 	if (!TIF_UNSAFE_RET)
@@ -5235,12 +5247,13 @@ bool sched_core_wait_till_safe(unsigned long ti_check)
 	preempt_disable();
 	local_irq_enable();
 
+	trace_printk("Enter wait\n");
 	/*
 	 * Wait till the core of this HT is not in an unsafe state.
 	 *
 	 * Pair with raw_spin_lock/unlock() in sched_core_unsafe_enter/exit().
 	 */
-	while (smp_load_acquire(&rq->core->core_unsafe_nest) > 0) {
+	while (smp_load_acquire(&rq->core->core_unsafe_nest) > 0 && loops++ < 100000000) {
 		cpu_relax();
 		if (READ_ONCE(current_thread_info()->flags) & ti_check) {
 			restart = true;
@@ -5251,6 +5264,11 @@ bool sched_core_wait_till_safe(unsigned long ti_check)
 	/* Upgrade it back to the expectations of entry code. */
 	local_irq_disable();
 	preempt_enable();
+
+	trace_printk("Exit wait\n");
+
+	if (WARN_ON_ONCE(loops >= 100000000))
+		panic("excessive spinning\n");
 
 ret:
 	if (!restart)
@@ -5303,6 +5321,11 @@ void sched_core_unsafe_enter(enum ht_protect_ctx ctx)
 
 	/* Count unsafe_enter() calls received without unsafe_exit() on this CPU. */
 	rq->core_this_unsafe_nest++;
+	trace_printk("enter: unsafe this nest now: %d\n", rq->core_this_unsafe_nest);
+	if (rq->core_this_unsafe_nest < 0) {
+		trace_printk("issue stop\n");
+		tracing_stop();
+	}
 
 	/*
 	 * Should not nest: enter() should only pair with exit(). Both are done
@@ -5322,16 +5345,23 @@ void sched_core_unsafe_enter(enum ht_protect_ctx ctx)
 	 * counter's smp_load_acquire() in sched_core_wait_till_safe().
 	 */
 	WRITE_ONCE(rq->core->core_unsafe_nest, rq->core->core_unsafe_nest + 1);
+	trace_printk("enter: unsafe nest now: %d\n", rq->core->core_unsafe_nest);
+	if (rq->core->core_unsafe_nest < 0) {
+		trace_printk("issue stop core-wide\n");
+		tracing_stop();
+	}
 
 	if (WARN_ON_ONCE(rq->core->core_unsafe_nest == UINT_MAX))
 		goto unlock;
 
 	if (irq_work_is_busy(&rq->core_irq_work)) {
+		WARN_ON_ONCE(!rq->pause_pending);
 		/*
 		 * Do nothing more since we are in an IPI sent from another
 		 * sibling to enforce safety. That sibling would have sent IPIs
 		 * to all of the HTs.
 		 */
+		trace_printk("We are in IPI, do nothing more.\n");
 		goto unlock;
 	}
 
@@ -5339,8 +5369,10 @@ void sched_core_unsafe_enter(enum ht_protect_ctx ctx)
 	 * If we are not the first ones on the core to enter core-wide unsafe
 	 * state, do nothing.
 	 */
-	if (rq->core->core_unsafe_nest > 1)
+	if (rq->core->core_unsafe_nest > 1) {
+		trace_printk("Inner core-wide nest.\n");
 		goto unlock;
+	}
 
 	/* Do nothing more if the core is not tagged. */
 	if (!rq->core->core_cookie)
@@ -5364,6 +5396,8 @@ void sched_core_unsafe_enter(enum ht_protect_ctx ctx)
 		 * pending, no new IPIs are sent. This is Ok since the receiver
 		 * would already be in the kernel, or on its way to it.
 		 */
+		trace_printk("Queuing irq_work on %d\n", i);
+		srq->pause_pending = true;
 		irq_work_queue_on(&srq->core_irq_work, i);
 	}
 unlock:
@@ -5404,6 +5438,11 @@ void sched_core_unsafe_exit(enum ht_protect_ctx ctx)
 		goto ret;
 
 	rq->core_this_unsafe_nest--;
+	trace_printk("exit: unsafe this nest now: %d\n", rq->core_this_unsafe_nest);
+	if (rq->core_this_unsafe_nest < 0) {
+		trace_printk("issue stop\n");
+		tracing_stop();
+	}
 
 	/* enter() should be paired with exit() only. */
 	if (WARN_ON_ONCE(rq->core_this_unsafe_nest != 0))
@@ -5418,6 +5457,7 @@ void sched_core_unsafe_exit(enum ht_protect_ctx ctx)
 	WARN_ON_ONCE(!nest);
 
 	WRITE_ONCE(rq->core->core_unsafe_nest, nest - 1);
+	trace_printk("exit: unsafe nest now: %d\n", rq->core->core_unsafe_nest);
 	/*
 	 * The raw_spin_unlock release semantics pairs with the nest counter's
 	 * smp_load_acquire() in sched_core_wait_till_safe().

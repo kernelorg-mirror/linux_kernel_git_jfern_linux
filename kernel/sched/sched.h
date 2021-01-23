@@ -1085,6 +1085,7 @@ struct rq {
 	struct rb_root		core_tree;
 	struct irq_work		core_irq_work; /* To force HT into kernel */
 	unsigned int		core_this_unsafe_nest;
+	bool pause_pending;
 
 	/* shared state */
 	unsigned int		core_task_seq;
