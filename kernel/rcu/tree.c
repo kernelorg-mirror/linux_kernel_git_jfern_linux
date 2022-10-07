@@ -67,6 +67,7 @@
 
 #include "tree.h"
 #include "rcu.h"
+#include "debug.h"
 
 #ifdef MODULE_PARAM_PREFIX
 #undef MODULE_PARAM_PREFIX
@@ -75,7 +76,7 @@
 
 /* Data structures. */
 
-static DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data) = {
+DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data) = {
 	.gpwrap = true,
 #ifdef CONFIG_RCU_NOCB_CPU
 	.cblist.flags = SEGCBLIST_RCU_CORE,
@@ -2044,6 +2045,22 @@ rcu_check_quiescent_state(struct rcu_data *rdp)
 }
 
 /*
+ * Lock wrapper for rcu_debug_cb_done(). Required as rcu_debug_ptr_unqueue()
+ * expects the rdp lock to be held.
+ */
+int rcu_debug_cb_done_lock(struct rcu_data *rdp, void *ip, struct rcu_head_debug_data *data)
+{
+	unsigned long flags;
+	int ret;
+
+	rcu_nocb_lock_irqsave(rdp, flags);
+	ret = rcu_debug_cb_done(rdp, ip, data);
+	rcu_nocb_unlock_irqrestore(rdp, flags);
+
+	return ret;
+}
+
+/*
  * Invoke any RCU callbacks that have made it to the end of their grace
  * period.  Throttle as specified by rdp->blimit.
  */
@@ -2100,15 +2117,18 @@ static void rcu_do_batch(struct rcu_data *rdp)
 
 	for (; rhp; rhp = rcu_cblist_dequeue(&rcl)) {
 		rcu_callback_t f;
+		struct rcu_head_debug_data *debug_data;
 
 		count++;
-		debug_rcu_head_unqueue(rhp);
+		debug_rcu_head_unqueue(rhp, &debug_data);
 
 		rcu_lock_acquire(&rcu_callback_map);
 		trace_rcu_invoke_callback(rcu_state.name, rhp);
 
 		f = rhp->func;
+		rcu_debug_cb_done_lock(rdp, f, debug_data);
 		WRITE_ONCE(rhp->func, (rcu_callback_t)0L);
+
 		f(rhp);
 
 		rcu_lock_release(&rcu_callback_map);
@@ -2842,7 +2862,7 @@ debug_rcu_bhead_unqueue(struct kvfree_rcu_bulk_data *bhead)
 	int i;
 
 	for (i = 0; i < bhead->nr_records; i++)
-		debug_rcu_head_unqueue((struct rcu_head *)(bhead->records[i]));
+		debug_rcu_head_unqueue((struct rcu_head *)(bhead->records[i]), NULL);
 #endif
 }
 
@@ -2955,7 +2975,7 @@ kvfree_rcu_list(struct rcu_head *head)
 		unsigned long offset = (void *) head - ptr;
 
 		next = head->next;
-		debug_rcu_head_unqueue((struct rcu_head *)ptr);
+		debug_rcu_head_unqueue((struct rcu_head *)ptr, NULL);
 		rcu_lock_acquire(&rcu_callback_map);
 		trace_rcu_invoke_kvfree_callback(rcu_state.name, head, offset);
 
@@ -3345,7 +3365,7 @@ unlock_return:
 	 * CPU can pass the QS state.
 	 */
 	if (!success) {
-		debug_rcu_head_unqueue((struct rcu_head *) ptr);
+		debug_rcu_head_unqueue((struct rcu_head *) ptr, NULL);
 		synchronize_rcu();
 		kvfree(ptr);
 	}
@@ -3898,7 +3918,7 @@ static void rcu_barrier_entrain(struct rcu_data *rdp)
 	if (rcu_segcblist_entrain(&rdp->cblist, &rdp->barrier_head)) {
 		atomic_inc(&rcu_state.barrier_cpu_count);
 	} else {
-		debug_rcu_head_unqueue(&rdp->barrier_head);
+		debug_rcu_head_unqueue(&rdp->barrier_head, NULL);
 		rcu_barrier_trace(TPS("IRQNQ"), -1, rcu_state.barrier_sequence);
 	}
 	rcu_nocb_unlock(rdp);

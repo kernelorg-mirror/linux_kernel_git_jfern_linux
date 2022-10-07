@@ -169,6 +169,10 @@ static inline unsigned long rcu_seq_diff(unsigned long new, unsigned long old)
 	return ((rnd_diff - RCU_SEQ_STATE_MASK - 1) >> RCU_SEQ_CTR_SHIFT) + 2;
 }
 
+struct rcu_head_debug_data {
+	u64 enqueue_nsecs;			/* Time at enqueue. */
+};
+
 /*
  * debug_rcu_head_queue()/debug_rcu_head_unqueue() are used internally
  * by call_rcu() and rcu callback execution, and are therefore not part
@@ -185,16 +189,23 @@ extern const struct debug_obj_descr rcuhead_debug_descr;
 static inline int debug_rcu_head_queue(struct rcu_head *head)
 {
 	int r1;
+	struct rcu_head_debug_data *data;
 
 	r1 = debug_object_activate(head, &rcuhead_debug_descr);
 	debug_object_active_state(head, &rcuhead_debug_descr,
 				  STATE_RCU_HEAD_READY,
 				  STATE_RCU_HEAD_QUEUED);
+
+	data = debug_object_get_data(head);
+	data->enqueue_nsecs = ktime_get_mono_fast_ns();
+
 	return r1;
 }
 
-static inline void debug_rcu_head_unqueue(struct rcu_head *head)
+static inline void debug_rcu_head_unqueue(struct rcu_head *head, struct rcu_head_debug_data **datap)
 {
+	if (datap)
+		*datap = debug_object_get_data(head);
 	debug_object_active_state(head, &rcuhead_debug_descr,
 				  STATE_RCU_HEAD_QUEUED,
 				  STATE_RCU_HEAD_READY);

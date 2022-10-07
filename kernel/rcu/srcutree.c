@@ -1506,7 +1506,7 @@ static void srcu_barrier_one_cpu(struct srcu_struct *ssp, struct srcu_data *sdp)
 	debug_rcu_head_queue(&sdp->srcu_barrier_head);
 	if (!rcu_segcblist_entrain(&sdp->srcu_cblist,
 				   &sdp->srcu_barrier_head)) {
-		debug_rcu_head_unqueue(&sdp->srcu_barrier_head);
+		debug_rcu_head_unqueue(&sdp->srcu_barrier_head, NULL);
 		atomic_dec(&ssp->srcu_barrier_cpu_cnt);
 	}
 	spin_unlock_irq_rcu_node(sdp);
@@ -1670,7 +1670,7 @@ static void srcu_invoke_callbacks(struct work_struct *work)
 	spin_unlock_irq_rcu_node(sdp);
 	rhp = rcu_cblist_dequeue(&ready_cbs);
 	for (; rhp != NULL; rhp = rcu_cblist_dequeue(&ready_cbs)) {
-		debug_rcu_head_unqueue(rhp);
+		debug_rcu_head_unqueue(rhp, NULL);
 		local_bh_disable();
 		rhp->func(rhp);
 		local_bh_enable();

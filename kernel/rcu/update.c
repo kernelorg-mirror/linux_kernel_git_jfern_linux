@@ -229,8 +229,12 @@ static bool rcu_boot_ended __read_mostly;
 /*
  * Inform RCU of the end of the in-kernel boot sequence.
  */
+void rcu_debug_init(void);
+
 void rcu_end_inkernel_boot(void)
 {
+	rcu_debug_init();
+
 	rcu_unexpedite_gp();
 	rcu_async_relax();
 	if (rcu_normal_after_boot)
