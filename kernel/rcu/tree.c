@@ -67,6 +67,7 @@
 
 #include "tree.h"
 #include "rcu.h"
+#include "debug.h"
 
 #ifdef MODULE_PARAM_PREFIX
 #undef MODULE_PARAM_PREFIX
@@ -2178,6 +2179,49 @@ int rcutree_dead_cpu(unsigned int cpu)
 }
 
 /*
+ * Lock wrapper for rcu_debug_set_context(). Required as
+ * rcu_debug_set_context() expects the rdp lock to be held.
+ */
+static void rcu_debug_set_context_lock(struct rcu_data *rdp, void *ip)
+{
+	unsigned long flags;
+
+	rcu_nocb_lock_irqsave(rdp, flags);
+	rcu_debug_set_context(rdp, ip);
+	rcu_nocb_unlock_irqrestore(rdp, flags);
+}
+
+/*
+ * Lock wrapper for rcu_debug_ptr_unqueue(). Required as
+ * rcu_debug_ptr_unqueue() expects the rdp lock to be held.
+ */
+rcu_debug_entry rcu_debug_ptr_unqueue_lock(struct rcu_data *rdp, void *ip)
+{
+	unsigned long flags;
+	rcu_debug_entry ret;
+
+	rcu_nocb_lock_irqsave(rdp, flags);
+	ret = rcu_debug_ptr_unqueue(rdp, ip);
+	rcu_nocb_unlock_irqrestore(rdp, flags);
+
+	return ret;
+}
+
+/*
+ * Lock wrapper for rcu_debug_ptr_queue(). Required as
+ * rcu_debug_ptr_queue() expects the rdp lock to be held.
+ */
+static void rcu_debug_ptr_queue_lock(struct rcu_data *rdp, void *ip,
+	       			      bool lazy)
+{
+	unsigned long flags;
+
+	rcu_nocb_lock_irqsave(rdp, flags);
+	WARN_ON_ONCE(rcu_debug_ptr_queue(rdp, ip, lazy));
+	rcu_nocb_unlock_irqrestore(rdp, flags);
+}
+
+/*
  * Invoke any RCU callbacks that have made it to the end of their grace
  * period.  Throttle as specified by rdp->blimit.
  */
@@ -2234,16 +2278,25 @@ static void rcu_do_batch(struct rcu_data *rdp)
 
 	for (; rhp; rhp = rcu_cblist_dequeue(&rcl)) {
 		rcu_callback_t f;
+		rcu_debug_entry de;
 
 		count++;
 		debug_rcu_head_unqueue(rhp);
 
 		rcu_lock_acquire(&rcu_callback_map);
-		trace_rcu_invoke_callback(rcu_state.name, rhp);
+		de = rcu_debug_ptr_unqueue_lock(rdp, rhp);
+		trace_printk("func %ps (%p) queue jiff %llu\n", rhp->func, rhp, de.queue_jiffies);
+		WARN_ON_ONCE(!de.valid);
+		trace_rcu_invoke_callback(rcu_state.name, rhp,
+			       	get_jiffies_64() - de.queue_jiffies);
 
 		f = rhp->func;
 		WRITE_ONCE(rhp->func, (rcu_callback_t)0L);
+
+		if (de.lazy)
+			rcu_debug_set_context_lock(rdp, f);
 		f(rhp);
+		rcu_debug_reset_context();
 
 		rcu_lock_release(&rcu_callback_map);
 
@@ -2726,7 +2779,7 @@ static void check_cb_ovld(struct rcu_data *rdp)
 	raw_spin_unlock_rcu_node(rnp);
 }
 
-static void
+void
 __call_rcu_common(struct rcu_head *head, rcu_callback_t func, bool lazy)
 {
 	static atomic_t doublefrees;
@@ -2768,8 +2821,13 @@ __call_rcu_common(struct rcu_head *head, rcu_callback_t func, bool lazy)
 	}
 
 	check_cb_ovld(rdp);
+
+	trace_dump_stack(0);
+	rcu_debug_ptr_queue_lock(rdp, (void *)head, lazy);
+
 	if (rcu_nocb_try_bypass(rdp, head, &was_alldone, flags, lazy))
 		return; // Enqueued onto ->nocb_bypass, so just leave.
+
 	// If no-CBs CPU gets here, rcu_nocb_try_bypass() acquired ->nocb_lock.
 	rcu_segcblist_enqueue(&rdp->cblist, head);
 	if (__is_kvfree_rcu_offset((unsigned long)func))
@@ -4354,6 +4412,7 @@ void rcu_report_dead(unsigned int cpu)
 void rcutree_migrate_callbacks(int cpu)
 {
 	unsigned long flags;
+	struct rcu_head *rh;
 	struct rcu_data *my_rdp;
 	struct rcu_node *my_rnp;
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
@@ -4374,6 +4433,12 @@ void rcutree_migrate_callbacks(int cpu)
 	/* Leverage recent GPs and set GP for new callbacks. */
 	needwake = rcu_advance_cbs(my_rnp, rdp) ||
 		   rcu_advance_cbs(my_rnp, my_rdp);
+	/*
+	 * Disable in-flight status of migrated CBs. We wont collect statistics
+	 * for these special cases, to keep debug code simple.
+	 */
+	for (rh = my_rdp->cblist.head; rh; rh = rh->next)
+		WARN_ON_ONCE(!rcu_debug_ptr_unqueue(rdp, rh).valid);
 	rcu_segcblist_merge(&my_rdp->cblist, &rdp->cblist);
 	raw_spin_unlock(&rcu_state.barrier_lock); /* irqs remain disabled. */
 	needwake = needwake || rcu_advance_cbs(my_rnp, my_rdp);
@@ -4798,11 +4863,14 @@ static void __init kfree_rcu_batch_init(void)
 
 void __init rcu_init(void)
 {
+	int i;
 	int cpu = smp_processor_id();
+	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 
 	rcu_early_boot_tests();
 
 	kfree_rcu_batch_init();
+	rcu_debug_init();
 	rcu_bootup_announce();
 	sanitize_kthread_prio();
 	rcu_init_geometry();
@@ -4838,6 +4906,13 @@ void __init rcu_init(void)
 	// Kick-start any polled grace periods that started early.
 	if (!(per_cpu_ptr(&rcu_data, cpu)->mynode->exp_seq_poll_rq & 0x1))
 		(void)start_poll_synchronize_rcu_expedited();
+
+	// Just to be sure, delete if percpu variable (rdp) is default
+	// cleared on boot.
+	for (i = 0; i < RCU_DEBUGFS_PTRS_SIZE; i++) {
+		rdp->rcu_debug_ptrs[i].valid = false;
+		rdp->rcu_debug_ptrs[i].in_flight = false;
+	}
 }
 
 #include "tree_stall.h"

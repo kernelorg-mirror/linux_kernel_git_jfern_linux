@@ -9,7 +9,10 @@
  *	   Paul E. McKenney <paulmck@linux.ibm.com>
  */
 
+#ifndef __RCU_TREE_H
+#define __RCU_TREE_H
 #include <linux/cache.h>
+#include <linux/irq_work.h>
 #include <linux/kthread.h>
 #include <linux/spinlock.h>
 #include <linux/rtmutex.h>
@@ -18,8 +21,20 @@
 #include <linux/seqlock.h>
 #include <linux/swait.h>
 #include <linux/rcu_node_tree.h>
+#include <linux/tracepoint.h>
 
 #include "rcu_segcblist.h"
+
+#define RCU_DEBUGFS_PTRS_SIZE 4096
+typedef struct {
+	unsigned long ip;	// rcu_head pointer (key)
+	u64 queue_jiffies;	// jiffies at queue time
+	bool lazy;		// Was the callback queued as lazy?
+	bool valid;		// Is the entry valid? On boot, everything is
+				// valid. Once an entry is valid, it stays so.
+				// Remaining fields not to be trusted if invalid.
+	bool in_flight;		// Is the callback in flight?
+} rcu_debug_entry;
 
 /* Communicate arguments to a workqueue handler. */
 struct rcu_exp_work {
@@ -262,6 +277,11 @@ struct rcu_data {
 	short rcu_onl_gp_flags;		/* ->gp_flags at last online. */
 	unsigned long last_fqs_resched;	/* Time of last rcu_resched(). */
 	unsigned long last_sched_clock;	/* Jiffies of last rcu_sched_clock_irq(). */
+#ifdef CONFIG_RCU_DEBUGFS
+					/* Array of function entries. */
+	rcu_debug_entry rcu_debug_ptrs[RCU_DEBUGFS_PTRS_SIZE];
+	unsigned int rcu_debug_ptrs_nr;/* Number of function entries. */
+#endif /* ifdef CONFIG_RCU_DEBUGFS */
 
 	long lazy_len;			/* Length of buffered lazy callbacks. */
 	int cpu;
@@ -488,3 +508,4 @@ static void rcu_check_gp_start_stall(struct rcu_node *rnp, struct rcu_data *rdp,
 
 /* Forward declarations for tree_exp.h. */
 static void sync_rcu_do_polled_gp(struct work_struct *wp);
+#endif /* __RCU_TREE_H */

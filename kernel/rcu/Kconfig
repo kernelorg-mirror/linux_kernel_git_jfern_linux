@@ -317,4 +317,13 @@ config RCU_LAZY
 	  To save power, batch RCU callbacks and flush after delay, memory
 	  pressure, or callback list growing too big.
 
+config RCU_DEBUGFS
+	bool "RCU debug information available via debugfs"
+	depends on DEBUG_FS
+	default n
+	help
+	  Various RCU-related debugging information for better visibility.
+	  The files here are not considered ABI and are subject to change
+	  in formatting.
+
 endmenu # "RCU Subsystem"

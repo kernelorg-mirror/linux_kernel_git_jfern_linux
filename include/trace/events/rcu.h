@@ -630,24 +630,26 @@ TRACE_EVENT_RCU(rcu_batch_start,
  */
 TRACE_EVENT_RCU(rcu_invoke_callback,
 
-	TP_PROTO(const char *rcuname, struct rcu_head *rhp),
+	TP_PROTO(const char *rcuname, struct rcu_head *rhp, u64 delta),
 
-	TP_ARGS(rcuname, rhp),
+	TP_ARGS(rcuname, rhp, delta),
 
 	TP_STRUCT__entry(
 		__field(const char *, rcuname)
 		__field(void *, rhp)
 		__field(void *, func)
+		__field(u64, delta)
 	),
 
 	TP_fast_assign(
 		__entry->rcuname = rcuname;
 		__entry->rhp = rhp;
 		__entry->func = rhp->func;
+		__entry->delta = delta;
 	),
 
-	TP_printk("%s rhp=%p func=%ps",
-		  __entry->rcuname, __entry->rhp, __entry->func)
+	TP_printk("%s rhp=%p func=%ps, delta=%llu",
+		  __entry->rcuname, __entry->rhp, __entry->func, __entry->delta)
 );
 
 /*
