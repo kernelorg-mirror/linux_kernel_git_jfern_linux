@@ -108,6 +108,8 @@ static inline void init_timer_on_stack_key(struct timer_list *timer,
 }
 #endif
 
+extern unsigned long sysctl_global_slack_us;
+
 #ifdef CONFIG_LOCKDEP
 #define __init_timer(_timer, _fn, _flags)				\
 	do {								\

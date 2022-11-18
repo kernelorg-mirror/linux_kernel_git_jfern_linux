@@ -57,6 +57,8 @@
 #define HRTIMER_ACTIVE_SOFT	(HRTIMER_ACTIVE_HARD << MASK_SHIFT)
 #define HRTIMER_ACTIVE_ALL	(HRTIMER_ACTIVE_SOFT | HRTIMER_ACTIVE_HARD)
 
+unsigned long sysctl_global_slack_us = 50;
+
 /*
  * The timer bases:
  *
@@ -1986,7 +1988,7 @@ long hrtimer_nanosleep(ktime_t rqtp, const enum hrtimer_mode mode,
 	int ret = 0;
 	u64 slack;
 
-	slack = current->timer_slack_ns;
+	slack = sysctl_global_slack_us * 1000;
 	if (dl_task(current) || rt_task(current))
 		slack = 0;
 
