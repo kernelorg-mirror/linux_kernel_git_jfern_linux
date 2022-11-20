@@ -4858,6 +4858,15 @@ struct callback_head balance_push_callback = {
 	.func = (void (*)(struct callback_head *))balance_push,
 };
 
+/*
+ * Delete the cb list and return its head.
+ *
+ * corner case: If head is balance_push_callback and split is true, fool the
+ * caller that the list was empty by returning NULL  and don't actually delete
+ * anything.
+ *
+ * Otherwise delete the list even if it had head as balance_push_callback.
+ */
 static inline struct callback_head *
 __splice_balance_callbacks(struct rq *rq, bool split)
 {
@@ -4883,16 +4892,32 @@ __splice_balance_callbacks(struct rq *rq, bool split)
 	return head;
 }
 
+// Return the head with the fooling around mentioned above, if
+// head is balance_push_callbacks.
+//
+// This is only done from sched_setscheduler to grab the head before
+// the rq lock is dropped.
 static inline struct callback_head *splice_balance_callbacks(struct rq *rq)
 {
 	return __splice_balance_callbacks(rq, true);
 }
 
+// This is called when balancing is done while the rq_lock is still held but
+// unpinned. It is is called from:
+// * rt_mutex_setprio
+// * schedule.
 static void __balance_callbacks(struct rq *rq)
 {
 	do_balance_callbacks(rq, __splice_balance_callbacks(rq, false));
 }
 
+// This is only done from setscheduler after calling splice_balance_callbacks().
+//
+// This is called when the balancing is done after dropping the rq lock (rq
+// lock is not held).
+//
+// splice_balance_callbacks() needs to be called before dropping the rqlock
+// to grab the head.
 static inline void balance_callbacks(struct rq *rq, struct callback_head *head)
 {
 	unsigned long flags;
