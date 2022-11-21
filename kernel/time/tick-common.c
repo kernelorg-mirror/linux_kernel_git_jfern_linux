@@ -48,6 +48,7 @@ ktime_t tick_next_period;
  *    procedure also covers cpu hotplug.
  */
 int tick_do_timer_cpu __read_mostly = TICK_DO_TIMER_BOOT;
+EXPORT_SYMBOL_GPL(tick_do_timer_cpu);
 #ifdef CONFIG_NO_HZ_FULL
 /*
  * tick_do_timer_boot_cpu indicates the boot CPU temporarily owns

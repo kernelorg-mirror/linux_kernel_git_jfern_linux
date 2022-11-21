@@ -33,6 +33,7 @@
 #include <linux/delay.h>
 #include <linux/stat.h>
 #include <linux/slab.h>
+#include <linux/tick.h>
 #include <linux/trace_clock.h>
 #include <linux/ktime.h>
 #include <asm/byteorder.h>
@@ -358,7 +359,16 @@ torture_onoff(void *arg)
 			schedule_timeout_interruptible(HZ / 10);
 			continue;
 		}
+#ifdef CONFIG_NO_HZ_FULL
+		/* do not offline tick do timer cpu */
+		if (tick_nohz_full_running) {
+			cpu = (torture_random(&rand) >> 4) % maxcpu;
+			if (cpu >= tick_do_timer_cpu)
+				cpu = (cpu + 1) % (maxcpu + 1);
+		} else
+#else
 		cpu = (torture_random(&rand) >> 4) % (maxcpu + 1);
+#endif
 		if (!torture_offline(cpu,
 				     &n_offline_attempts, &n_offline_successes,
 				     &sum_offline, &min_offline, &max_offline))
