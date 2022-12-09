@@ -22,6 +22,7 @@
 #include <linux/ptrace.h>
 #include <linux/uaccess.h>
 #include <trace/events/sched.h>
+#include <linux/sched/debug.h>
 
 static DEFINE_SPINLOCK(kthread_create_lock);
 static LIST_HEAD(kthread_create_list);
@@ -407,8 +408,8 @@ static void __kthread_bind_mask(struct task_struct *p, const struct cpumask *mas
 {
 	unsigned long flags;
 
-	if (!wait_task_inactive(p, state)) {
-		WARN_ON(1);
+	if (WARN_ON(!wait_task_inactive(p, state))) {
+		sched_show_task(p);
 		return;
 	}
 
