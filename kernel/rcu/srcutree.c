@@ -983,12 +983,20 @@ static bool try_check_zero(struct srcu_struct *ssp, int idx, int trycount)
 static void srcu_flip(struct srcu_struct *ssp)
 {
 	/*
-	 * Ensure that if this updater saw a given reader's increment
-	 * from __srcu_read_lock(), that reader was using an old value
-	 * of ->srcu_idx.  Also ensure that if a given reader sees the
-	 * new value of ->srcu_idx, this updater's earlier scans cannot
-	 * have seen that reader's increments (which is OK, because this
-	 * grace period need not wait on that reader).
+	 * Control dependency (causality) between the before-flip
+	 * srcu_readers_active_idx_check() and a call to srcu_flip(), ensures
+	 * that we end up here only if lock and unlock counts match.  This fact
+	 * ensures that if this updater saw a given reader's increment from
+	 * __srcu_read_lock(), that reader was using an old value of
+	 * ->srcu_idx. That is why the lock and unlock counts matched in the
+	 * first place. The causality also ensures that if a given reader sees
+	 * the new value of ->srcu_idx, this updater's earlier scans cannot
+	 * have seen that reader's increments (which is OK, because this grace
+	 * period need not wait on that reader), because again, that would
+	 * cause a lock/unlock count mismatch and we not end up here.
+	 *
+	 * So we don't really need the following smp_mb() before incrementing
+	 * srcu_idx, however we have it anyway for additional safety.
 	 */
 	smp_mb(); /* E */  /* Pairs with B and C. */
 
