@@ -649,6 +649,9 @@ static int torture_shutdown(void *arg)
 		torture_shutdown_hook();
 	else
 		VERBOSE_TOROUT_STRING("No torture_shutdown_hook(), skipping.");
+
+	VERBOSE_TOROUT_STRING("torture_shutdown hook called");
+
 	if (ftrace_dump_at_shutdown)
 		rcu_ftrace_dump(DUMP_ALL);
 	kernel_power_off();	/* Shut down the system. */
@@ -886,7 +889,12 @@ EXPORT_SYMBOL_GPL(torture_cleanup_end);
  */
 bool torture_must_stop(void)
 {
-	return torture_must_stop_irq() || kthread_should_stop();
+	bool should_stop;
+	should_stop = torture_must_stop_irq() || kthread_should_stop();
+
+	trace_printk("torture_must_stop(): %d tmsi:%d kss:%d", should_stop, torture_must_stop_irq(), kthread_should_stop());
+
+	return should_stop;
 }
 EXPORT_SYMBOL_GPL(torture_must_stop);
 
@@ -907,6 +915,9 @@ EXPORT_SYMBOL_GPL(torture_must_stop_irq);
  * should be called from all torture kthreads immediately prior to
  * returning.
  */
+
+unsigned long kthread_flags(void);
+
 void torture_kthread_stopping(char *title)
 {
 	char buf[128];
@@ -952,6 +963,9 @@ void _torture_stop_kthread(char *m, struct task_struct **tp)
 	if (*tp == NULL)
 		return;
 	VERBOSE_TOROUT_STRING(m);
+
+	trace_printk("Attempting to stop kthread %s with PID %d\n",
+			m, (*tp)->pid);
 	kthread_stop(*tp);
 	*tp = NULL;
 }

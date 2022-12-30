@@ -534,6 +534,9 @@ asmlinkage __visible void __softirq_entry __do_softirq(void)
 	bool in_hardirq;
 	__u32 pending;
 	int softirq_bit;
+	int debug;
+
+	debug = 1;
 
 	/*
 	 * Mask out PF_MEMALLOC as the current task context is borrowed for the
@@ -568,7 +571,11 @@ restart:
 		kstat_incr_softirqs_this_cpu(vec_nr);
 
 		trace_softirq_entry(vec_nr);
+		if (debug)
+			trace_printk("__do_softirq calling func %ps", (void *)(h->action));
 		h->action(h);
+		if (debug)
+			trace_printk("__do_softirq called func %ps", (void *)(h->action));
 		trace_softirq_exit(vec_nr);
 		if (unlikely(prev_count != preempt_count())) {
 			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
@@ -581,8 +588,13 @@ restart:
 	}
 
 	if (!IS_ENABLED(CONFIG_PREEMPT_RT) &&
-	    __this_cpu_read(ksoftirqd) == current)
+	    __this_cpu_read(ksoftirqd) == current) {
+
+		if (debug)
+			trace_printk("__do_softirq qs: %s (%d)", __FILE__, __LINE__);
 		rcu_softirq_qs();
+
+	}
 
 	local_irq_disable();
 

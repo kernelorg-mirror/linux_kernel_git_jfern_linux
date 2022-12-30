@@ -1240,6 +1240,7 @@ rcu_torture_writer(void *arg)
 	}
 
 	do {
+		trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
 		rcu_torture_writer_state = RTWS_FIXED_DELAY;
 		torture_hrtimeout_us(500, 1000, &rand);
 		rp = rcu_torture_alloc();
@@ -1254,6 +1255,9 @@ rcu_torture_writer(void *arg)
 		rp->rtort_mbtest = 1;
 		rcu_assign_pointer(rcu_torture_current, rp);
 		smp_wmb(); /* Mods to old_rp must follow rcu_assign_pointer() */
+
+		trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
+
 		if (old_rp) {
 			i = old_rp->rtort_pipe_count;
 			if (i > RCU_TORTURE_PIPE_LEN)
@@ -1341,6 +1345,7 @@ rcu_torture_writer(void *arg)
 				break;
 			}
 		}
+		trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
 		WRITE_ONCE(rcu_torture_current_version,
 			   rcu_torture_current_version + 1);
 		/* Cycle through nesting levels of rcu_expedite_gp() calls. */
@@ -1360,6 +1365,7 @@ rcu_torture_writer(void *arg)
 		rcu_torture_writer_state = RTWS_STUTTER;
 		boot_ended = rcu_inkernel_boot_has_ended();
 		stutter_waited = stutter_wait("rcu_torture_writer");
+		trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
 		if (stutter_waited &&
 		    !atomic_read(&rcu_fwd_cb_nodelay) &&
 		    !cur_ops->slow_gps &&
@@ -1376,18 +1382,28 @@ rcu_torture_writer(void *arg)
 		if (stutter_waited)
 			sched_set_normal(current, oldnice);
 	} while (!torture_must_stop());
+
+	trace_printk("rcu_torture_writer exited the main while loop");
+	trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
+
 	rcu_torture_current = NULL;  // Let stats task know that we are done.
 	/* Reset expediting back to unexpedited. */
 	if (expediting > 0)
 		expediting = -expediting;
 	while (can_expedite && expediting++ < 0)
 		rcu_unexpedite_gp();
+
+	trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
+
 	WARN_ON_ONCE(can_expedite && rcu_gp_is_expedited());
 	if (!can_expedite)
 		pr_alert("%s" TORTURE_FLAG
 			 " Dynamic grace-period expediting was disabled.\n",
 			 torture_type);
 	rcu_torture_writer_state = RTWS_STOPPING;
+
+	trace_printk("rcu_torture_writer: %s (%d)", __FILE__, __LINE__);
+
 	torture_kthread_stopping("rcu_torture_writer");
 	return 0;
 }
@@ -1417,11 +1433,14 @@ rcu_torture_fakewriter(void *arg)
 	}
 
 	do {
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 		torture_hrtimeout_jiffies(torture_random(&rand) % 10, &rand);
 		if (cur_ops->cb_barrier != NULL &&
 		    torture_random(&rand) % (nfakewriters * 8) == 0) {
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 			cur_ops->cb_barrier();
 		} else {
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 			switch (synctype[torture_random(&rand) % nsynctypes]) {
 			case RTWS_DEF_FREE:
 				break;
@@ -1459,10 +1478,14 @@ rcu_torture_fakewriter(void *arg)
 				WARN_ON_ONCE(1);
 				break;
 			}
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 		}
 		stutter_wait("rcu_torture_fakewriter");
+
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 	} while (!torture_must_stop());
 
+	trace_printk("%s (%d)", __FILE__, __LINE__);
 	torture_kthread_stopping("rcu_torture_fakewriter");
 	return 0;
 }
@@ -1832,25 +1855,35 @@ rcu_torture_reader(void *arg)
 	if (irqreader && cur_ops->irq_capable)
 		timer_setup_on_stack(&t, rcu_torture_timer, 0);
 	tick_dep_set_task(current, TICK_DEP_BIT_RCU);
+	trace_printk("%s (%d)", __FILE__, __LINE__);
 	do {
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 		if (irqreader && cur_ops->irq_capable) {
 			if (!timer_pending(&t))
 				mod_timer(&t, jiffies + 1);
 		}
-		if (!rcu_torture_one_read(&rand, myid) && !torture_must_stop())
+		if (!rcu_torture_one_read(&rand, myid) && !torture_must_stop()) {
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 			schedule_timeout_interruptible(HZ);
+		}
 		if (time_after(jiffies, lastsleep) && !torture_must_stop()) {
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 			torture_hrtimeout_us(500, 1000, &rand);
 			lastsleep = jiffies + 10;
 		}
-		while (torture_num_online_cpus() < mynumonline && !torture_must_stop())
+		while (torture_num_online_cpus() < mynumonline && !torture_must_stop()) {
+			trace_printk("%s (%d)", __FILE__, __LINE__);
 			schedule_timeout_interruptible(HZ / 5);
+		}
 		stutter_wait("rcu_torture_reader");
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 	} while (!torture_must_stop());
 	if (irqreader && cur_ops->irq_capable) {
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 		del_timer_sync(&t);
 		destroy_timer_on_stack(&t);
 	}
+	trace_printk("%s (%d)", __FILE__, __LINE__);
 	tick_dep_clear_task(current, TICK_DEP_BIT_RCU);
 	torture_kthread_stopping("rcu_torture_reader");
 	return 0;
@@ -3033,27 +3066,43 @@ rcu_torture_cleanup(void)
 	unsigned long gp_seq = 0;
 	int i;
 
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	if (torture_cleanup_begin()) {
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		if (cur_ops->cb_barrier != NULL) {
+			pr_err("%s (%d)", __FILE__, __LINE__);
 			pr_info("%s: Invoking %pS().\n", __func__, cur_ops->cb_barrier);
 			cur_ops->cb_barrier();
+			pr_err("%s (%d)", __FILE__, __LINE__);
 		}
 		rcu_gp_slow_unregister(NULL);
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		return;
 	}
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	if (!cur_ops) {
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		torture_cleanup_end();
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		rcu_gp_slow_unregister(NULL);
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		return;
 	}
 
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	if (cur_ops->gp_kthread_dbg)
 		cur_ops->gp_kthread_dbg();
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	rcu_torture_read_exit_cleanup();
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	rcu_torture_barrier_cleanup();
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	rcu_torture_fwd_prog_cleanup();
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	torture_stop_kthread(rcu_torture_stall, stall_task);
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	torture_stop_kthread(rcu_torture_writer, writer_task);
+	pr_err("%s (%d)", __FILE__, __LINE__);
 
 	if (nocb_tasks) {
 		for (i = 0; i < nrealnocbers; i++)
@@ -3063,9 +3112,13 @@ rcu_torture_cleanup(void)
 	}
 
 	if (reader_tasks) {
-		for (i = 0; i < nrealreaders; i++)
+		pr_err("%s (%d)", __FILE__, __LINE__);
+		for (i = 0; i < nrealreaders; i++) {
+			pr_err("%s (%d)", __FILE__, __LINE__);
 			torture_stop_kthread(rcu_torture_reader,
-					     reader_tasks[i]);
+					reader_tasks[i]);
+			pr_err("%s (%d)", __FILE__, __LINE__);
+		}
 		kfree(reader_tasks);
 		reader_tasks = NULL;
 	}
@@ -3073,20 +3126,28 @@ rcu_torture_cleanup(void)
 	rcu_torture_reader_mbchk = NULL;
 
 	if (fakewriter_tasks) {
-		for (i = 0; i < nfakewriters; i++)
+		for (i = 0; i < nfakewriters; i++) {
+			pr_err("%s (%d)", __FILE__, __LINE__);
 			torture_stop_kthread(rcu_torture_fakewriter,
 					     fakewriter_tasks[i]);
+			pr_err("%s (%d)", __FILE__, __LINE__);
+		}
+		pr_err("%s (%d)", __FILE__, __LINE__);
 		kfree(fakewriter_tasks);
 		fakewriter_tasks = NULL;
 	}
 
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	rcutorture_get_gp_data(cur_ops->ttype, &flags, &gp_seq);
 	srcutorture_get_gp_data(cur_ops->ttype, srcu_ctlp, &flags, &gp_seq);
 	pr_alert("%s:  End-test grace-period state: g%ld f%#x total-gps=%ld\n",
 		 cur_ops->name, (long)gp_seq, flags,
 		 rcutorture_seq_diff(gp_seq, start_gp_seq));
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	torture_stop_kthread(rcu_torture_stats, stats_task);
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	torture_stop_kthread(rcu_torture_fqs, fqs_task);
+	pr_err("%s (%d)", __FILE__, __LINE__);
 	if (rcu_torture_can_boost() && rcutor_hp >= 0)
 		cpuhp_remove_state(rcutor_hp);
 
