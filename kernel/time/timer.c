@@ -1497,10 +1497,13 @@ static void expire_timers(struct timer_base *base, struct hlist_head *head)
 	 * is related to the old base->clk value.
 	 */
 	unsigned long baseclk = base->clk - 1;
+	int n_timers = 0;
 
 	while (!hlist_empty(head)) {
 		struct timer_list *timer;
 		void (*fn)(struct timer_list *);
+
+		n_timers++;
 
 		timer = hlist_entry(head->first, struct timer_list, entry);
 
@@ -1508,6 +1511,8 @@ static void expire_timers(struct timer_base *base, struct hlist_head *head)
 		detach_timer(timer, true);
 
 		fn = timer->function;
+
+		trace_printk("Calling timerfn %d: %ps", n_timers, (void *)fn);
 
 		if (timer->flags & TIMER_IRQSAFE) {
 			raw_spin_unlock(&base->lock);
@@ -1765,8 +1770,11 @@ static inline void __run_timers(struct timer_base *base)
 	struct hlist_head heads[LVL_DEPTH];
 	int levels;
 
-	if (time_before(jiffies, base->next_expiry))
+	trace_printk("%s (%d)", __FILE__, __LINE__);
+	if (time_before(jiffies, base->next_expiry)) {
+		trace_printk("%s (%d)", __FILE__, __LINE__);
 		return;
+	}
 
 	timer_base_lock_expiry(base);
 	raw_spin_lock_irq(&base->lock);
@@ -1789,8 +1797,11 @@ static inline void __run_timers(struct timer_base *base)
 		while (levels--)
 			expire_timers(base, heads + levels);
 	}
+	trace_printk("%s (%d)", __FILE__, __LINE__);
+
 	raw_spin_unlock_irq(&base->lock);
 	timer_base_unlock_expiry(base);
+	trace_printk("%s (%d)", __FILE__, __LINE__);
 }
 
 /*
@@ -1800,6 +1811,7 @@ static __latent_entropy void run_timer_softirq(struct softirq_action *h)
 {
 	struct timer_base *base = this_cpu_ptr(&timer_bases[BASE_STD]);
 
+	trace_printk("%s (%d)", __FILE__, __LINE__);
 	__run_timers(base);
 	if (IS_ENABLED(CONFIG_NO_HZ_COMMON))
 		__run_timers(this_cpu_ptr(&timer_bases[BASE_DEF]));

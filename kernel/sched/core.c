@@ -6390,6 +6390,8 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
  *
  * WARNING: must be called with preemption disabled!
  */
+static int rcu_tort_ds;
+
 static void __sched notrace __schedule(unsigned int sched_mode)
 {
 	struct task_struct *prev, *next;
@@ -6451,6 +6453,11 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 			if (prev->sched_contributes_to_load)
 				rq->nr_uninterruptible++;
+
+			// Dump stack for uninterruptible every 10 stacks.
+			if (prev_state & TASK_UNINTERRUPTIBLE && ((rcu_tort_ds++ % 10) == 0)) {
+				trace_dump_stack(0);
+			}
 
 			/*
 			 * __schedule()			ttwu()

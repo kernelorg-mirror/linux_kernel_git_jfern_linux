@@ -158,6 +158,13 @@ bool kthread_should_stop(void)
 }
 EXPORT_SYMBOL(kthread_should_stop);
 
+unsigned long kthread_flags(void)
+{
+	return to_kthread(current)->flags;
+}
+EXPORT_SYMBOL(kthread_flags);
+
+
 bool __kthread_should_park(struct task_struct *k)
 {
 	return test_bit(KTHREAD_SHOULD_PARK, &to_kthread(k)->flags);

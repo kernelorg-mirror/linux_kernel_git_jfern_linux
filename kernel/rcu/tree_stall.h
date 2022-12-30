@@ -142,6 +142,8 @@ static void panic_on_rcu_stall(void)
 	if (++cpu_stall < sysctl_max_rcu_stall_to_panic)
 		return;
 
+	trace_printk("RCU stall triggered, now panic.");
+
 	if (sysctl_panic_on_rcu_stall)
 		panic("RCU Stall\n");
 }

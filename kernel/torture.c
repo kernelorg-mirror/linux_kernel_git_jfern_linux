@@ -886,7 +886,12 @@ EXPORT_SYMBOL_GPL(torture_cleanup_end);
  */
 bool torture_must_stop(void)
 {
-	return torture_must_stop_irq() || kthread_should_stop();
+	bool should_stop;
+	should_stop = torture_must_stop_irq() || kthread_should_stop();
+
+	trace_printk("torture_must_stop(): %d tmsi:%d kss:%d", should_stop, torture_must_stop_irq(), kthread_should_stop());
+
+	return should_stop;
 }
 EXPORT_SYMBOL_GPL(torture_must_stop);
 
@@ -907,6 +912,9 @@ EXPORT_SYMBOL_GPL(torture_must_stop_irq);
  * should be called from all torture kthreads immediately prior to
  * returning.
  */
+
+unsigned long kthread_flags(void);
+
 void torture_kthread_stopping(char *title)
 {
 	char buf[128];
@@ -914,8 +922,10 @@ void torture_kthread_stopping(char *title)
 	snprintf(buf, sizeof(buf), "%s is stopping", title);
 	VERBOSE_TOROUT_STRING(buf);
 	while (!kthread_should_stop()) {
+		trace_printk("kss:%d ktflags:0x%lx (tmsi:%d)", kthread_should_stop(),
+				kthread_flags(), torture_must_stop_irq());
 		torture_shutdown_absorb(title);
-		schedule_timeout_uninterruptible(1);
+		schedule_timeout_uninterruptible(50);
 	}
 }
 EXPORT_SYMBOL_GPL(torture_kthread_stopping);
@@ -952,6 +962,9 @@ void _torture_stop_kthread(char *m, struct task_struct **tp)
 	if (*tp == NULL)
 		return;
 	VERBOSE_TOROUT_STRING(m);
+
+	trace_printk("Attempting to stop kthread %s with PID %d\n",
+			m, (*tp)->pid);
 	kthread_stop(*tp);
 	*tp = NULL;
 }
