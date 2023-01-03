@@ -7451,8 +7451,22 @@ simple:
 		put_prev_task(rq, prev);
 
 	do {
-		se = pick_next_entity(cfs_rq, NULL);
-		set_next_entity(cfs_rq, se);
+		/* 
+		 * Need to pass cfs_rq->curr as well, as
+		 * rbtree may not have cfs_rq->curr yet.
+		 */
+		se = pick_next_entity(cfs_rq, cfs_rq->curr);
+
+		/* 
+		 * Only need to set_next_entity() if new se
+		 * is selected. Otherwise not needed as we have
+		 * not done a put_prev_entity on the task.
+		 */
+		if (se != cfs_rq->curr) {
+			if (cfs_rq->curr)
+				put_prev_entity(cfs_rq, cfs_rq->curr);
+			set_next_entity(cfs_rq, se);
+		}
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
 
