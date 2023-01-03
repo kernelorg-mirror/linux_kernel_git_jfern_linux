@@ -6499,7 +6499,6 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
 
 		rq_unpin_lock(rq, &rf);
-		put_prev_task(rq, prev);
 		__balance_callbacks(rq);
 		raw_spin_rq_unlock_irq(rq);
 	}
