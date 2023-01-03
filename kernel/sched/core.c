@@ -5780,7 +5780,8 @@ static void put_prev_task_balance(struct rq *rq, struct task_struct *prev,
 	}
 #endif
 
-	put_prev_task(rq, prev);
+	// Move to end of schedule, remove balance-cb mechanism
+	//	put_prev_task(rq, prev);
 }
 
 /*
@@ -6491,11 +6492,14 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next, prev_state);
 
 		/* Also unlocks the rq: */
+
+		put_prev_task(rq, prev);
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
 
 		rq_unpin_lock(rq, &rf);
+		put_prev_task(rq, prev);
 		__balance_callbacks(rq);
 		raw_spin_rq_unlock_irq(rq);
 	}
