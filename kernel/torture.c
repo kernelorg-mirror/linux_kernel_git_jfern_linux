@@ -21,6 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/sched.h>
 #include <linux/sched/clock.h>
+#include <linux/sched/rt.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/completion.h>
@@ -734,7 +735,7 @@ bool stutter_wait(const char *title)
 	cond_resched_tasks_rcu_qs();
 	spt = READ_ONCE(stutter_pause_test);
 	for (; spt; spt = READ_ONCE(stutter_pause_test)) {
-		if (!ret) {
+		if (!ret && !rt_task(current)) {
 			sched_set_normal(current, MAX_NICE);
 			ret = true;
 		}
@@ -944,6 +945,10 @@ int _torture_create_kthread(int (*fn)(void *arg), void *arg, char *s, char *m,
 		*tp = NULL;
 		return ret;
 	}
+
+	if (!strncmp(s, "lock_torture_writer", strlen(s)))
+		sched_set_fifo(*tp);
+
 	wake_up_process(*tp);  // Process is sleeping, so ordering provided.
 	torture_shuffle_task_register(*tp);
 	return ret;
