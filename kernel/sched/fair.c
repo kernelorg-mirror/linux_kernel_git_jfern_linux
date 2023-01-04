@@ -4606,7 +4606,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 static void
 set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	pr_err("%s: comm=%s, pid=%d", __func__,
+	trace_printk("%s: comm=%s, pid=%d", __func__,
 			se ? task_of(se)->comm : "none",
 			se ? task_of(se)->pid : -1);
 
@@ -4708,7 +4708,7 @@ static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq);
 
 static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 {
-	pr_err("%s: comm=%s, pid=%d", __func__,
+	trace_printk("%s: comm=%s, pid=%d", __func__,
 			prev ? task_of(prev)->comm : "none",
 			prev ? task_of(prev)->pid : -1);
 
@@ -7373,7 +7373,7 @@ pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 	struct task_struct *p;
 	int new_tasks;
 
-	pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
+	trace_printk("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
 again:
 	if (!sched_fair_runnable(rq))
 		goto idle;
@@ -7473,11 +7473,11 @@ simple:
 		 */
 		if (se != cfs_rq->curr) {
 			if (cfs_rq->curr) {
-				pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
-				put_prev_entity(cfs_rq, cfs_rq->curr);
+				// pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
+				// put_prev_entity(cfs_rq, cfs_rq->curr);
 			}
 
-			pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
+			trace_printk("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
 			set_next_entity(cfs_rq, se);
 		}
 		cfs_rq = group_cfs_rq(se);
@@ -7543,7 +7543,7 @@ static void put_prev_task_fair(struct rq *rq, struct task_struct *prev)
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
-		pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
+		trace_printk("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
 		put_prev_entity(cfs_rq, se);
 	}
 }
@@ -11678,7 +11678,7 @@ static void set_next_task_fair(struct rq *rq, struct task_struct *p, bool first)
 	for_each_sched_entity(se) {
 		struct cfs_rq *cfs_rq = cfs_rq_of(se);
 
-		pr_err("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
+		trace_printk("%s: (%s) (%d)", __func__, __FILE__, __LINE__);
 		set_next_entity(cfs_rq, se);
 		/* ensure bandwidth has been allocated on our new cfs_rq */
 		account_cfs_rq_runtime(cfs_rq, 0);
