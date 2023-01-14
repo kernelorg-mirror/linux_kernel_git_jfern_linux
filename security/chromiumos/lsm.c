@@ -42,122 +42,11 @@
 #include "inode_mark.h"
 #include "utils.h"
 
-#if defined(CONFIG_SECURITY_CHROMIUMOS_NO_UNPRIVILEGED_UNSAFE_MOUNTS) || \
-	defined(CONFIG_SECURITY_CHROMIUMOS_NO_SYMLINK_MOUNT)
-static void report(const char *origin, const struct path *path, char *operation)
-{
-	char *alloced = NULL, *cmdline;
-	char *pathname; /* Pointer to either static string or "alloced". */
-
-	if (!path)
-		pathname = "<unknown>";
-	else {
-		/* We will allow 11 spaces for ' (deleted)' to be appended */
-		alloced = pathname = kmalloc(PATH_MAX+11, GFP_KERNEL);
-		if (!pathname)
-			pathname = "<no_memory>";
-		else {
-			pathname = d_path(path, pathname, PATH_MAX+11);
-			if (IS_ERR(pathname))
-				pathname = "<too_long>";
-			else {
-				pathname = printable(pathname, PATH_MAX+11);
-				kfree(alloced);
-				alloced = pathname;
-			}
-		}
-	}
-
-	cmdline = printable_cmdline(current);
-
-	pr_notice("%s %s obj=%s pid=%d cmdline=%s\n", origin,
-		  operation, pathname, task_pid_nr(current), cmdline);
-
-	kfree(cmdline);
-	kfree(alloced);
-}
-#endif
-
 static int chromiumos_security_sb_mount(const char *dev_name,
 					const struct path *path,
 					const char *type, unsigned long flags,
 					void *data)
 {
-#ifdef CONFIG_SECURITY_CHROMIUMOS_NO_SYMLINK_MOUNT
-	if (!(path->link_count & PATH_LINK_COUNT_VALID)) {
-		WARN(1, "No link count available");
-		return -ELOOP;
-	} else if (path->link_count & ~PATH_LINK_COUNT_VALID) {
-		report("sb_mount", path, "Mount path with symlinks prohibited");
-		pr_notice("sb_mount dev=%s type=%s flags=%#lx\n",
-			  dev_name, type, flags);
-		return -ELOOP;
-	}
-#endif
-
-#ifdef CONFIG_SECURITY_CHROMIUMOS_NO_UNPRIVILEGED_UNSAFE_MOUNTS
-	if ((!(flags & (MS_BIND | MS_MOVE | MS_SHARED | MS_PRIVATE | MS_SLAVE |
-			MS_UNBINDABLE)) ||
-	     ((flags & MS_REMOUNT) && (flags & MS_BIND))) &&
-	    !capable(CAP_SYS_ADMIN)) {
-		int required_mnt_flags = MNT_NOEXEC | MNT_NOSUID | MNT_NODEV;
-
-		if (flags & MS_REMOUNT) {
-			/*
-			 * If this is a remount, we only require that the
-			 * requested flags are a superset of the original mount
-			 * flags. In addition, using nosymfollow is not
-			 * initially required, but remount is not allowed to
-			 * remove it.
-			 */
-			required_mnt_flags |= MNT_NOSYMFOLLOW;
-			required_mnt_flags &= path->mnt->mnt_flags;
-		}
-		/*
-		 * The three flags we are interested in disallowing in
-		 * unprivileged user namespaces (MS_NOEXEC, MS_NOSUID, MS_NODEV)
-		 * cannot be modified when doing a bind-mount. The kernel
-		 * attempts to dispatch calls to do_mount() within
-		 * fs/namespace.c in the following order:
-		 *
-		 * * If the MS_REMOUNT flag is present, it calls do_remount().
-		 *   When MS_BIND is also present, it only allows to modify the
-		 *   per-mount flags, which are copied into
-		 *   |required_mnt_flags|.  Otherwise it bails in the absence of
-		 *   the CAP_SYS_ADMIN in the init ns.
-		 * * If the MS_BIND flag is present, the only other flag checked
-		 *   is MS_REC.
-		 * * If any of the mount propagation flags are present
-		 *   (MS_SHARED, MS_PRIVATE, MS_SLAVE, MS_UNBINDABLE),
-		 *   flags_to_propagation_type() filters out any additional
-		 *   flags.
-		 * * If MS_MOVE flag is present, all other flags are ignored.
-		 */
-		if ((required_mnt_flags & MNT_NOEXEC) && !(flags & MS_NOEXEC)) {
-			report("sb_mount", path,
-			       "Mounting a filesystem with 'exec' flag requires CAP_SYS_ADMIN in init ns");
-			pr_notice("sb_mount dev=%s type=%s flags=%#lx\n",
-				  dev_name, type, flags);
-			return -EPERM;
-		}
-		if ((required_mnt_flags & MNT_NOSUID) && !(flags & MS_NOSUID)) {
-			report("sb_mount", path,
-			       "Mounting a filesystem with 'suid' flag requires CAP_SYS_ADMIN in init ns");
-			pr_notice("sb_mount dev=%s type=%s flags=%#lx\n",
-				  dev_name, type, flags);
-			return -EPERM;
-		}
-		if ((required_mnt_flags & MNT_NODEV) && !(flags & MS_NODEV) &&
-		    strcmp(type, "devpts")) {
-			report("sb_mount", path,
-			       "Mounting a filesystem with 'dev' flag requires CAP_SYS_ADMIN in init ns");
-			pr_notice("sb_mount dev=%s type=%s flags=%#lx\n",
-				  dev_name, type, flags);
-			return -EPERM;
-		}
-	}
-#endif
-
 	return 0;
 }
 
@@ -170,46 +59,12 @@ static int chromiumos_security_sb_mount(const char *dev_name,
 static int chromiumos_security_inode_follow_link(struct dentry *dentry,
 						 struct inode *inode, bool rcu)
 {
-	static char accessed_path[PATH_MAX];
-	enum chromiumos_inode_security_policy policy;
-
-	policy = chromiumos_get_inode_security_policy(
-		dentry, inode,
-		CHROMIUMOS_SYMLINK_TRAVERSAL);
-
-	WARN(policy == CHROMIUMOS_INODE_POLICY_BLOCK,
-	     "Blocked symlink traversal for path %x:%x:%s (see https://goo.gl/8xICW6 for context and rationale)\n",
-	     MAJOR(dentry->d_sb->s_dev), MINOR(dentry->d_sb->s_dev),
-	     dentry_path(dentry, accessed_path, PATH_MAX));
-
-	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
+	return 0;
 }
 
 static int chromiumos_security_file_open(struct file *file)
 {
-	static char accessed_path[PATH_MAX];
-	enum chromiumos_inode_security_policy policy;
-	struct dentry *dentry = file->f_path.dentry;
-
-	/* Returns 0 if file is not a FIFO */
-	if (!S_ISFIFO(file->f_inode->i_mode))
-		return 0;
-
-	policy = chromiumos_get_inode_security_policy(
-		dentry, dentry->d_inode,
-		CHROMIUMOS_FIFO_ACCESS);
-
-	/*
-	 * Emit a warning in cases of blocked fifo access attempts. These will
-	 * show up in kernel warning reports collected by the crash reporter,
-	 * so we have some insight on spurious failures that need addressing.
-	 */
-	WARN(policy == CHROMIUMOS_INODE_POLICY_BLOCK,
-	     "Blocked fifo access for path %x:%x:%s\n (see https://goo.gl/8xICW6 for context and rationale)\n",
-	     MAJOR(dentry->d_sb->s_dev), MINOR(dentry->d_sb->s_dev),
-	     dentry_path(dentry, accessed_path, PATH_MAX));
-
-	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
+	return 0;
 }
 
 static int chromiumos_sb_eat_lsm_opts(char *options, void **mnt_opts)
