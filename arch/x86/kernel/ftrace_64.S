@@ -341,6 +341,8 @@ SYM_FUNC_START(return_to_handler)
 	movq %rdx, 8(%rsp)
 	movq %rbp, %rdi
 
+	movq %rax, %rsi
+
 	call ftrace_return_to_handler
 
 	movq %rax, %rdi

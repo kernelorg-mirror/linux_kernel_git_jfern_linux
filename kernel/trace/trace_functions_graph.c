@@ -663,7 +663,7 @@ print_graph_entry_leaf(struct trace_iterator *iter,
 	for (i = 0; i < call->depth * TRACE_GRAPH_INDENT; i++)
 		trace_seq_putc(s, ' ');
 
-	trace_seq_printf(s, "%ps();\n", (void *)call->func);
+	trace_seq_printf(s, "%ps(); ret=%lld\n", (void *)call->func, graph_ret->val);
 
 	print_graph_irq(iter, graph_ret->func, TRACE_GRAPH_RET,
 			cpu, iter->ent->pid, flags);
@@ -949,9 +949,11 @@ print_graph_return(struct ftrace_graph_ret *trace, struct trace_seq *s,
 	 * that if the funcgraph-tail option is enabled.
 	 */
 	if (func_match && !(flags & TRACE_GRAPH_PRINT_TAIL))
-		trace_seq_puts(s, "}\n");
+		trace_seq_puts(s, "}");
 	else
-		trace_seq_printf(s, "} /* %ps */\n", (void *)trace->func);
+		trace_seq_printf(s, "} /* %ps */", (void *)trace->func);
+
+	trace_seq_printf(s, " ret=%lld\n", trace->val);
 
 	/* Overrun */
 	if (flags & TRACE_GRAPH_PRINT_OVERRUN)

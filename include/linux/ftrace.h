@@ -907,6 +907,7 @@ struct ftrace_graph_ret {
 	unsigned int overrun;
 	unsigned long long calltime;
 	unsigned long long rettime;
+	unsigned long long val;
 } __packed;
 
 /* Type of the callback handlers for tracing function graph*/
