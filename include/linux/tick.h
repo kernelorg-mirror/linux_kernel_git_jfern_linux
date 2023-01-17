@@ -14,7 +14,6 @@
 #include <linux/rcupdate.h>
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
-extern int tick_do_timer_cpu __read_mostly;
 extern void __init tick_init(void);
 /* Should be core only, but ARM BL switcher requires it */
 extern void tick_suspend_local(void);
