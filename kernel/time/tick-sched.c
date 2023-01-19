@@ -532,7 +532,7 @@ void __init tick_nohz_full_setup(cpumask_var_t cpumask)
 	tick_nohz_full_running = true;
 }
 
-static int tick_nohz_cpu_down(unsigned int cpu)
+static int tick_nohz_cpu_hotplug_ret(unsigned int cpu)
 {
 	/*
 	 * The tick_do_timer_cpu CPU handles housekeeping duty (unbound
@@ -542,6 +542,16 @@ static int tick_nohz_cpu_down(unsigned int cpu)
 	if (tick_nohz_full_running && tick_do_timer_cpu == cpu)
 		return -EBUSY;
 	return 0;
+}
+
+static int tick_nohz_cpu_down(unsigned int cpu)
+{
+	return tick_nohz_cpu_hotplug_ret(cpu);
+}
+
+bool tick_nohz_cpu_hotpluggable(unsigned int cpu)
+{
+	return tick_nohz_cpu_hotplug_ret(cpu) == 0;
 }
 
 void __init tick_nohz_init(void)
