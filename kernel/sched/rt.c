@@ -1631,9 +1631,16 @@ static struct sched_rt_entity *pick_next_rt_entity(struct rq *rq,
 	struct list_head *queue;
 	int idx;
 
+	// Joel: Modify this code to add a loop such that we find the first
+	// rt_se, who's rt_rq is NULL, or the rt_rq is not throttled.
+	// Otherwise continue searching. This changes the time complexity
+	// of this function from O(1) to O(nr_throttled_rqs).
+
+	// Joel: Add outer loop to goto next idx.
 	idx = sched_find_first_bit(array->bitmap);
 	BUG_ON(idx >= MAX_RT_PRIO);
 
+	// Joel: Add inner loop to goto next task.
 	queue = array->queue + idx;
 	next = list_entry(queue->next, struct sched_rt_entity, run_list);
 
@@ -1658,7 +1665,8 @@ static struct task_struct *pick_task_rt(struct rq *rq)
 {
 	struct task_struct *p;
 
-	if (!sched_rt_runnable(rq))
+	// Joel: The top-level rt_rq may be runnable, but throttled.
+	if (!sched_rt_runnable(rq) || rt_rq_throttled(rt_rq))
 		return NULL;
 
 	p = _pick_next_task_rt(rq);
