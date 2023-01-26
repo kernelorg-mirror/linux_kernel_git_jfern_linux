@@ -105,6 +105,8 @@ void init_rt_rq(struct rt_rq *rt_rq)
 
 	rt_rq->rt_time = 0;
 	rt_rq->rt_throttled = 0;
+	rt_rq->rt_nr_child_throt = 0;
+	rt_rq->rt_nr_child_running = 0;
 	rt_rq->rt_runtime = 0;
 	raw_spin_lock_init(&rt_rq->rt_runtime_lock);
 }
@@ -140,6 +142,13 @@ static inline struct rq *rq_of_rt_se(struct sched_rt_entity *rt_se)
 	struct rt_rq *rt_rq = rt_se->rt_rq;
 
 	return rt_rq->rq;
+}
+
+static inline bool rt_rq_child_throttled(struct rt_rq *rt_rq)
+{
+	return (rt_rq->rt_nr_child_throt
+		&& rt_rq->rt_nr_child_throt
+			== rq_rq->rt_nr_child_running);
 }
 
 void unregister_rt_sched_group(struct task_group *tg)
@@ -257,6 +266,11 @@ static inline struct rt_rq *rt_rq_of_se(struct sched_rt_entity *rt_se)
 	struct rq *rq = rq_of_rt_se(rt_se);
 
 	return &rq->rt;
+}
+
+static inline bool rt_rq_child_throttled(struct rt_rq *rt_rq)
+{
+	return false;
 }
 
 void unregister_rt_sched_group(struct task_group *tg) { }
@@ -575,7 +589,8 @@ static void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return rt_rq->rt_throttled && !rt_rq->rt_nr_boosted;
+	return (rt_rq->rt_throttled || rt_rq_child_throttled(rt_rq))
+		&& !rt_rq->rt_nr_boosted;
 }
 
 static int rt_se_boosted(struct sched_rt_entity *rt_se)
@@ -656,7 +671,8 @@ static inline void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return rt_rq->rt_throttled;
+	if (rt_rq->rt_throttled || rt_rq_child_throttled(rt_rq))
+		return 1;
 }
 
 static inline const struct cpumask *sched_rt_period_mask(void)
@@ -884,7 +900,9 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 	for_each_cpu(i, span) {
 		int enqueue = 0;
 		struct rt_rq *rt_rq = sched_rt_period_rt_rq(rt_b, i);
+		struct task_group *parent_tg = NULL;
 		struct rq *rq = rq_of_rt_rq(rt_rq);
+		struct rt_rq *parent_rt_rq = NULL;
 		struct rq_flags rf;
 		int skip;
 
@@ -904,16 +922,25 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		update_rq_clock(rq);
 
 		if (rt_rq->rt_time) {
+			bool par_throt_reset = false;
+			bool par_throt_before = false;
 			u64 runtime;
 
 			raw_spin_lock(&rt_rq->rt_runtime_lock);
+			if (rt_rq->tg && rt_rq->tg->parent)
+				par_throt_before =
+					rt_rq_child_throttled(rt_rq->tg->parent->rt_se[i]);
+
 			if (rt_rq->rt_throttled)
 				balance_runtime(rt_rq);
 			runtime = rt_rq->rt_runtime;
 			rt_rq->rt_time -= min(rt_rq->rt_time, overrun*runtime);
 			if (rt_rq->rt_throttled && rt_rq->rt_time < runtime) {
 				rt_rq->rt_throttled = 0;
-				enqueue = 1;
+				par_throt_reset = true;
+
+				// Joel: no need to enqueue since we never dequeued.
+				// enqueue = 1;
 
 				/*
 				 * When we're idle and a woken (rt) task is
@@ -925,19 +952,38 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 				if (rt_rq->rt_nr_running && rq->curr == rq->idle)
 					rq_clock_cancel_skipupdate(rq);
 			}
+
+			par_throt_reset = !rt_rq_child_throttled(rt_rq);
+
+			/*
+			 * On unthrottle, reduce the parent group's
+			 * nr_child_throttled count (if there is one)
+			 */
+			if (par_throt_before && par_throt_reset && rt_rq->tg) {
+				parent_tg = rt_rq->tg->parent;
+				if (parent_tg)
+					parent_rt_rq = rq_of_se(parent_tg->rt_se[i]);
+
+				if (parent_rt_rq)
+					parent_rt_rq->rt_nr_child_throt--;
+			}
+
 			if (rt_rq->rt_time || rt_rq->rt_nr_running)
 				idle = 0;
 			raw_spin_unlock(&rt_rq->rt_runtime_lock);
 		} else if (rt_rq->rt_nr_running) {
 			idle = 0;
-			if (!rt_rq_throttled(rt_rq))
-				enqueue = 1;
+			// Joel: no need to enqueue since we never dequeued.
+			// if (!rt_rq_throttled(rt_rq))
+			//	enqueue = 1;
 		}
-		if (rt_rq->rt_throttled)
+
+		if (rt_rq->rt_throttled || rt_rq_child_throttled(rt_rq))
 			throttled = 1;
 
-		if (enqueue)
-			sched_rt_rq_enqueue(rt_rq);
+		// Joel: no need to enqueue since we never dequeued.
+		// if (enqueue)
+		//	sched_rt_rq_enqueue(rt_rq);
 		rq_unlock(rq, &rf);
 	}
 
@@ -993,8 +1039,12 @@ static int sched_rt_runtime_exceeded(struct rt_rq *rt_rq)
 			rt_rq->rt_time = 0;
 		}
 
+		/*
+		 * Do not dequeue an rt_rq queue when it is throttled. We
+		 * will avoid picking it from the pick loop, instead.
+		 */
 		if (rt_rq_throttled(rt_rq)) {
-			sched_rt_rq_dequeue(rt_rq);
+			// sched_rt_rq_dequeue(rt_rq);
 			return 1;
 		}
 	}
@@ -1012,6 +1062,7 @@ static void update_curr_rt(struct rq *rq)
 	struct sched_rt_entity *rt_se = &curr->rt;
 	u64 delta_exec;
 	u64 now;
+	int i;
 
 	if (curr->sched_class != &rt_sched_class)
 		return;
@@ -1035,18 +1086,37 @@ static void update_curr_rt(struct rq *rq)
 
 	for_each_sched_rt_entity(rt_se) {
 		struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
+		struct rt_rq *myq = group_rt_rq(rt_se);
+		bool throt_before, throt_now;
 		int exceeded;
 
+		raw_spin_lock(&rt_rq->rt_runtime_lock);
+		throt_before = rt_rq_throttled(rt_rq);
+
 		if (sched_rt_runtime(rt_rq) != RUNTIME_INF) {
-			raw_spin_lock(&rt_rq->rt_runtime_lock);
 			rt_rq->rt_time += delta_exec;
 			exceeded = sched_rt_runtime_exceeded(rt_rq);
 			if (exceeded)
 				resched_curr(rq);
-			raw_spin_unlock(&rt_rq->rt_runtime_lock);
-			if (exceeded)
-				do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
 		}
+
+		throt_now = rt_rq_throttled(rt_rq);
+
+		/*
+		 * Even if we did not exceed bandwidth, it is possible our
+		 * child groups were throttled, and we do not have any runnable
+		 * tasks as direct children. If so, we have to mark ourselves
+		 * throttled and update our rt_rq's child_throt count.
+		*/
+		if (!throt_now && myq)
+			throt_now = myq->rt_nr_child_throt == myq->rt_nr_child_running;
+
+		if (!throt_before && throt_now)
+			rt_rq->rt_nr_child_throt++;
+
+		raw_spin_unlock(&rt_rq->rt_runtime_lock);
+		if (throt_now)
+			do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
 	}
 }
 
@@ -1277,12 +1347,37 @@ static inline bool move_entity(unsigned int flags)
 	return true;
 }
 
+/*
+ * Needs to be called to adjust parent rt_rq's ->rt_nr_child_throt,
+ * whenever a child rt_rq's ->rt_nr_child_running is changed. This
+ * is because the parent's status may change depending on the child's
+ * throttling status (if a child rt_rq had an enqueue or dequeue).
+ */
+static void adjust_parent_throt_count(struct sched_rt_entity *rt_se, bool before)
+{
+	struct rt_rq* par_rt_rq;
+
+	if (!rt_se->parent)
+		return;
+
+	par_rt_rq = rt_rq_of_se(rt_se->parent);
+	if (before && !rt_rq_child_throttled(rt_rq)) {
+		par_rt_rq->rt_nr_child_throt--;
+	} else if (!before && rt_rq_child_throttled(rt_rq)) {
+		par_rt_rq->rt_nr_child_throt++;
+	}
+}
+
 static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_array *array)
 {
+	bool child_throt_before = rt_rq_child_throttled(rt_rq);
 	list_del_init(&rt_se->run_list);
 
 	if (list_empty(array->queue + rt_se_prio(rt_se)))
 		__clear_bit(rt_se_prio(rt_se), array->bitmap);
+	rt_rq->rt_nr_child_running--;
+
+	adjust_parent_throt_count(rt_se, child_throt_before);
 
 	rt_se->on_list = 0;
 }
@@ -1294,6 +1389,7 @@ static void __enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flag
 	struct rt_rq *group_rq = group_rt_rq(rt_se);
 	struct list_head *queue = array->queue + rt_se_prio(rt_se);
 
+#if 0
 	/*
 	 * Don't enqueue the group if its throttled, or when empty.
 	 * The latter is a consequence of the former when a child group
@@ -1305,13 +1401,28 @@ static void __enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flag
 			__delist_rt_entity(rt_se, array);
 		return;
 	}
+#endif
+	/*
+	 * Allow throttled groups to be enqueued back after the top-down
+	 * dequeue, but dont enqueue back empty groups.
+	 */
+	if (group_rq && !group_rq->rt_nr_running) {
+		if (rt_se->on_list)
+			__delist_rt_entity(rt_se, array);
+		return;
+	}
 
 	if (move_entity(flags)) {
+		bool child_throt_before = rt_rq_child_throttled(rt_rq);
+
 		WARN_ON_ONCE(rt_se->on_list);
 		if (flags & ENQUEUE_HEAD)
 			list_add(&rt_se->run_list, queue);
 		else
 			list_add_tail(&rt_se->run_list, queue);
+		rt_rq->rt_nr_child_running++;
+
+		adjust_parent_throt_count(rt_se, child_throt_before);
 
 		__set_bit(rt_se_prio(rt_se), array->bitmap);
 		rt_se->on_list = 1;
@@ -1617,16 +1728,46 @@ static inline void set_next_task_rt(struct rq *rq, struct task_struct *p, bool f
 static struct sched_rt_entity *pick_next_rt_entity(struct rq *rq,
 						   struct rt_rq *rt_rq)
 {
+	DECLARE_BITMAP(skip_map, MAX_RT_PRIO + 1) = {};
 	struct rt_prio_array *array = &rt_rq->active;
 	struct sched_rt_entity *next = NULL;
 	struct list_head *queue;
+	int skip_count = 0;
 	int idx;
 
-	idx = sched_find_first_bit(array->bitmap);
-	BUG_ON(idx >= MAX_RT_PRIO);
+	// Joel: Modify this code to add a loop such that we find the first
+	// rt_se, who's rt_rq is NULL, or the rt_rq is not throttled.
+	// Otherwise continue searching. This changes the time complexity
+	// of this function from O(1) to O(nr_throttled_rqs).
+	// Vineeth: May be it can be made O(1) if we put throttled queues
+	// on the back of the runlist.
+	//
+	// Joel: Add outer loop to goto next idx.
+	while (!next && skip_count < MAX_RT_PRIO) {
+		idx = sched_find_first_bit_except(array->bitmap, skip_map);
+		BUG_ON(idx >= MAX_RT_PRIO);
 
-	queue = array->queue + idx;
-	next = list_entry(queue->next, struct sched_rt_entity, run_list);
+		// Joel: Add inner loop to goto next task.
+		queue = array->queue + idx;
+		next = list_entry(queue->next, struct sched_rt_entity, run_list);
+
+		// Skip over throttled rt_rqs in the run_list. This needs to be
+		// done only for CONFIG_RT_GROUP_SCHED.
+		while (next) {
+			if (group_rt_rq(next) && rt_rq_throttled(group_rt_rq(next)))
+				next = next->next;
+			else
+				break;
+		}
+
+		// All the rt_rqs in the list are throttled. Try find_first_bit
+		// again, but this time ignore the whole priority since it has only
+		// throttled rt_rqs.
+		if (!next) {
+			__set_bit(idx, skip_map);
+			skip_count++;
+		}
+	}
 
 	return next;
 }
@@ -1637,6 +1778,12 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 	struct rt_rq *rt_rq  = &rq->rt;
 
 	do {
+		// It is possible to have a group that has enough bandwidth but
+		// all its child groups are throttled.  In this case, even
+		// though the parent group is runnable, we will not pic
+		// anything. So rt_se can be null. Worse yet, we need to back
+		// track so we can go to the next parent group in the list, or
+		// the next list.
 		rt_se = pick_next_rt_entity(rq, rt_rq);
 		BUG_ON(!rt_se);
 		rt_rq = group_rt_rq(rt_se);
@@ -1649,7 +1796,8 @@ static struct task_struct *pick_task_rt(struct rq *rq)
 {
 	struct task_struct *p;
 
-	if (!sched_rt_runnable(rq))
+	// Joel: The top-level rt_rq may be runnable, but throttled.
+	if (!sched_rt_runnable(rq) || rt_rq_throttled(&rq->rt))
 		return NULL;
 
 	p = _pick_next_task_rt(rq);

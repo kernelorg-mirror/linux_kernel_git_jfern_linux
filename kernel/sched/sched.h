@@ -637,6 +637,7 @@ static inline int rt_bandwidth_enabled(void)
 struct rt_rq {
 	struct rt_prio_array	active;
 	unsigned int		rt_nr_running;
+	unsigned int		rt_nr_child_running;
 	unsigned int		rr_nr_running;
 #if defined CONFIG_SMP || defined CONFIG_RT_GROUP_SCHED
 	struct {
@@ -656,6 +657,7 @@ struct rt_rq {
 	int			rt_queued;
 
 	int			rt_throttled;
+	unsigned int		rt_nr_child_throttled;
 	u64			rt_time;
 	u64			rt_runtime;
 	/* Nests inside the rq lock: */
