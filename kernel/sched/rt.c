@@ -1626,23 +1626,46 @@ static inline void set_next_task_rt(struct rq *rq, struct task_struct *p, bool f
 static struct sched_rt_entity *pick_next_rt_entity(struct rq *rq,
 						   struct rt_rq *rt_rq)
 {
+	DECLARE_BITMAP(skip_map, MAX_RT_PRIO + 1) = {};
 	struct rt_prio_array *array = &rt_rq->active;
 	struct sched_rt_entity *next = NULL;
 	struct list_head *queue;
+	int skip_count = 0;
 	int idx;
 
 	// Joel: Modify this code to add a loop such that we find the first
 	// rt_se, who's rt_rq is NULL, or the rt_rq is not throttled.
 	// Otherwise continue searching. This changes the time complexity
 	// of this function from O(1) to O(nr_throttled_rqs).
-
+	// Vineeth: May be it can be made O(1) if we put throttled queues
+	// on the back of the runlist.
+	//
 	// Joel: Add outer loop to goto next idx.
-	idx = sched_find_first_bit(array->bitmap);
-	BUG_ON(idx >= MAX_RT_PRIO);
+	while (!next && skip_count < MAX_RT_PRIO) {
+		idx = sched_find_first_bit_except(array->bitmap, skip_map);
+		BUG_ON(idx >= MAX_RT_PRIO);
 
-	// Joel: Add inner loop to goto next task.
-	queue = array->queue + idx;
-	next = list_entry(queue->next, struct sched_rt_entity, run_list);
+		// Joel: Add inner loop to goto next task.
+		queue = array->queue + idx;
+		next = list_entry(queue->next, struct sched_rt_entity, run_list);
+
+		// Skip over throttled rt_rqs in the run_list. This needs to be
+		// done only for CONFIG_RT_GROUP_SCHED.
+		while (next) {
+			if (group_rt_rq(next) && rt_rq_throttled(group_rt_rq(next)))
+				next = next->next;
+			else
+				break;
+		}
+
+		// All the rt_rqs in the list are throttled. Try find_first_bit
+		// again, but this time ignore the whole priority since it has only
+		// throttled rt_rqs.
+		if (!next) {
+			__set_bit(idx, skip_map);
+			skip_count++;
+		}
+	}
 
 	return next;
 }
@@ -1653,6 +1676,12 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 	struct rt_rq *rt_rq  = &rq->rt;
 
 	do {
+		// It is possible to have a group that has enough bandwidth but
+		// all its child groups are throttled.  In this case, even
+		// though the parent group is runnable, we will not pic
+		// anything. So rt_se can be null. Worse yet, we need to back
+		// track so we can go to the next parent group in the list, or
+		// the next list.
 		rt_se = pick_next_rt_entity(rq, rt_rq);
 		BUG_ON(!rt_se);
 		rt_rq = group_rt_rq(rt_se);
@@ -1666,7 +1695,7 @@ static struct task_struct *pick_task_rt(struct rq *rq)
 	struct task_struct *p;
 
 	// Joel: The top-level rt_rq may be runnable, but throttled.
-	if (!sched_rt_runnable(rq) || rt_rq_throttled(rt_rq))
+	if (!sched_rt_runnable(rq) || rt_rq_throttled(&rq->rt))
 		return NULL;
 
 	p = _pick_next_task_rt(rq);
