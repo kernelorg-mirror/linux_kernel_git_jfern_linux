@@ -913,7 +913,8 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 			rt_rq->rt_time -= min(rt_rq->rt_time, overrun*runtime);
 			if (rt_rq->rt_throttled && rt_rq->rt_time < runtime) {
 				rt_rq->rt_throttled = 0;
-				enqueue = 1;
+				// Joel: no need to enqueue since we never dequeued.
+				// enqueue = 1;
 
 				/*
 				 * When we're idle and a woken (rt) task is
@@ -930,14 +931,17 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 			raw_spin_unlock(&rt_rq->rt_runtime_lock);
 		} else if (rt_rq->rt_nr_running) {
 			idle = 0;
-			if (!rt_rq_throttled(rt_rq))
-				enqueue = 1;
+			// Joel: no need to enqueue since we never dequeued.
+			// if (!rt_rq_throttled(rt_rq))
+			//	enqueue = 1;
 		}
+
 		if (rt_rq->rt_throttled)
 			throttled = 1;
 
-		if (enqueue)
-			sched_rt_rq_enqueue(rt_rq);
+		// Joel: no need to enqueue since we never dequeued.
+		// if (enqueue)
+		//	sched_rt_rq_enqueue(rt_rq);
 		rq_unlock(rq, &rf);
 	}
 
@@ -993,10 +997,15 @@ static int sched_rt_runtime_exceeded(struct rt_rq *rt_rq)
 			rt_rq->rt_time = 0;
 		}
 
+		/*
+		 * Do not dequeue an rt_rq queue when it is throttled. We
+		 * will avoid picking it from the pick loop, instead.
 		if (rt_rq_throttled(rt_rq)) {
 			sched_rt_rq_dequeue(rt_rq);
 			return 1;
 		}
+		 *
+		 */
 	}
 
 	return 0;
