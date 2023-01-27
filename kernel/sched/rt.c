@@ -105,6 +105,8 @@ void init_rt_rq(struct rt_rq *rt_rq)
 
 	rt_rq->rt_time = 0;
 	rt_rq->rt_throttled = 0;
+	rt_rq->rt_nr_child_throttled = 0;
+	rt_rq->rt_nr_child_running = 0;
 	rt_rq->rt_runtime = 0;
 	raw_spin_lock_init(&rt_rq->rt_runtime_lock);
 }
@@ -1000,12 +1002,11 @@ static int sched_rt_runtime_exceeded(struct rt_rq *rt_rq)
 		/*
 		 * Do not dequeue an rt_rq queue when it is throttled. We
 		 * will avoid picking it from the pick loop, instead.
+		 */
 		if (rt_rq_throttled(rt_rq)) {
-			sched_rt_rq_dequeue(rt_rq);
+			// sched_rt_rq_dequeue(rt_rq);
 			return 1;
 		}
-		 *
-		 */
 	}
 
 	return 0;
@@ -1044,14 +1045,19 @@ static void update_curr_rt(struct rq *rq)
 
 	for_each_sched_rt_entity(rt_se) {
 		struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
+		bool throttled_before;
 		int exceeded;
 
 		if (sched_rt_runtime(rt_rq) != RUNTIME_INF) {
 			raw_spin_lock(&rt_rq->rt_runtime_lock);
 			rt_rq->rt_time += delta_exec;
 			exceeded = sched_rt_runtime_exceeded(rt_rq);
+			throttled_before = rt_rq_throttled(rt_rq);
 			if (exceeded)
 				resched_curr(rq);
+			if (exceeded && !throttled_before)
+				rt_rq->rt_nr_child_throttled++; // Confirm
+
 			raw_spin_unlock(&rt_rq->rt_runtime_lock);
 			if (exceeded)
 				do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
@@ -1292,6 +1298,7 @@ static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_arr
 
 	if (list_empty(array->queue + rt_se_prio(rt_se)))
 		__clear_bit(rt_se_prio(rt_se), array->bitmap);
+	rt_rq->rt_nr_child_running--;
 
 	rt_se->on_list = 0;
 }
@@ -1321,6 +1328,7 @@ static void __enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flag
 			list_add(&rt_se->run_list, queue);
 		else
 			list_add_tail(&rt_se->run_list, queue);
+		rt_rq->rt_nr_child_running++;
 
 		__set_bit(rt_se_prio(rt_se), array->bitmap);
 		rt_se->on_list = 1;
