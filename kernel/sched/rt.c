@@ -105,7 +105,7 @@ void init_rt_rq(struct rt_rq *rt_rq)
 
 	rt_rq->rt_time = 0;
 	rt_rq->rt_throttled = 0;
-	rt_rq->rt_nr_child_throttled = 0;
+	rt_rq->rt_nr_child_throt = 0;
 	rt_rq->rt_nr_child_running = 0;
 	rt_rq->rt_runtime = 0;
 	raw_spin_lock_init(&rt_rq->rt_runtime_lock);
@@ -577,7 +577,9 @@ static void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return rt_rq->rt_throttled && !rt_rq->rt_nr_boosted;
+	return (rt_rq->rt_throttled ||
+		rt_rq->rt_nr_child_throt == rt_rq->rt_nr_child_running)
+			&& !rt_rq->rt_nr_boosted;
 }
 
 static int rt_se_boosted(struct sched_rt_entity *rt_se)
@@ -658,7 +660,9 @@ static inline void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return rt_rq->rt_throttled;
+	return rt_rq->rt_throttled
+		|| (rt_rq->rt_nr_child_throt ==
+				rt_rq->rt_nr_child_running);
 }
 
 static inline const struct cpumask *sched_rt_period_mask(void)
@@ -1022,6 +1026,7 @@ static void update_curr_rt(struct rq *rq)
 	struct sched_rt_entity *rt_se = &curr->rt;
 	u64 delta_exec;
 	u64 now;
+	int i;
 
 	if (curr->sched_class != &rt_sched_class)
 		return;
@@ -1045,23 +1050,37 @@ static void update_curr_rt(struct rq *rq)
 
 	for_each_sched_rt_entity(rt_se) {
 		struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
-		bool throttled_before;
+		struct rt_rq *myq = group_rt_rq(rt_se);
+		bool throt_before, throt_now;
 		int exceeded;
 
+		raw_spin_lock(&rt_rq->rt_runtime_lock);
+		throt_before = rt_rq_throttled(rt_rq);
+
 		if (sched_rt_runtime(rt_rq) != RUNTIME_INF) {
-			raw_spin_lock(&rt_rq->rt_runtime_lock);
 			rt_rq->rt_time += delta_exec;
 			exceeded = sched_rt_runtime_exceeded(rt_rq);
-			throttled_before = rt_rq_throttled(rt_rq);
 			if (exceeded)
 				resched_curr(rq);
-			if (exceeded && !throttled_before)
-				rt_rq->rt_nr_child_throttled++; // Confirm
-
-			raw_spin_unlock(&rt_rq->rt_runtime_lock);
-			if (exceeded)
-				do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
 		}
+
+		throt_now = rt_rq_throttled(rt_rq);
+
+		/*
+		 * Even if we did not exceed bandwidth, it is possible our
+		 * child groups were throttled, and we do not have any runnable
+		 * tasks as direct children. If so, we have to mark ourselves
+		 * throttled and update our rt_rq's child_throt count.
+		*/
+		if (!throt_now && myq)
+			throt_now = myq->rt_nr_child_throt == myq->rt_nr_child_running;
+
+		if (!throt_before && throt_now)
+			rt_rq->rt_nr_child_throt++;
+
+		raw_spin_unlock(&rt_rq->rt_runtime_lock);
+		if (exceeded)
+			do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
 	}
 }
 
