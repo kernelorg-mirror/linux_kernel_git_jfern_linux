@@ -612,7 +612,8 @@ static void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return rt_rq->rt_bw_throttled && !rt_rq->rt_nr_boosted;
+	return (rt_rq->rt_bw_throttled || rt_rq->rt_cg_throttled)
+		&& !rt_rq->rt_nr_boosted;
 }
 
 static int rt_se_boosted(struct sched_rt_entity *rt_se)
@@ -1073,11 +1074,25 @@ static void update_curr_rt(struct rq *rq)
 		int exceeded;
 
 		if (sched_rt_runtime(rt_rq) != RUNTIME_INF) {
+			bool tbefore;
 			raw_spin_lock(&rt_rq->rt_runtime_lock);
+			tbefore = rt_rq_throttled(rt_rq);
+
 			rt_rq->rt_time += delta_exec;
 			exceeded = sched_rt_runtime_exceeded(rt_rq);
-			if (exceeded)
+			if (exceeded) {
 				resched_curr(rq);
+
+				/*
+				 * Whenever reasons of our parent group's
+				 * throttling change (bw ran out here), we have
+				 * to adjust grandparent's cg throttling state
+				 * and so forth. @rt_se can be a task or group.
+				 */
+				if (!tbefore && rt_se->parent)
+					adjust_cg_throt_update(rt_se->parent, true);
+			}
+
 			raw_spin_unlock(&rt_rq->rt_runtime_lock);
 			if (exceeded)
 				do_start_rt_bandwidth(sched_rt_bandwidth(rt_rq));
@@ -1311,6 +1326,59 @@ static inline bool move_entity(unsigned int flags)
 
 	return true;
 }
+
+#ifdef CONFIG_RT_GROUP_SCHED
+/*
+ * Given a group represented by rt_se, which just had the rt_rq it owns (myq)
+ * throttled or unthrottled (due to bw or boost reasons), we may need to adjust
+ * rt_se's parent's cg throttling status and so forth.
+ *
+ * @rt_se:  The rt_se of the group who's myq's throttling status just changed.
+ *          Could be because its myq's bandwidth ran out or it now has boosted tasks.
+ *
+ * @throt:  Did the myq of the group representing rt_se just got throttled or
+ *          unthrottled (again, due to either bw or boost)?
+ */
+
+// DEBUG: Add comments to clarify how this works. Delete later.
+// 2 levels:
+// rt_rq -> G1 -> rt_rq -> G2 (throttled)-> rt_rq -> task
+// adjust(rt_se = G2, throt=true)
+//  G2->rt_rq->throt++
+//
+// rt_se = G1
+//  G1->rt_rq-> throt++
+//------------------------------------------------------------
+// 1 level:
+// rt_rq -> G2 (throttled)-> rt_rq -> task
+// adjust(rt_se = G2, throt=true)
+// rt_se = G2
+//  G2->rt_rq->throt++
+
+static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt)
+{
+	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
+
+	if (!group_rt_rq(rt_se))
+		return;
+
+	for_each_sched_rt_entity(rt_se) {
+		bool before;
+
+		rt_rq = rt_rq_of_se(rt_se);
+		before = rt_rq_throttled(rt_rq);
+
+		rt_rq->nr_cg_throttled =+ (throt ? 1 : -1);
+
+		if (before == rt_rq_throttled(rt_rq))
+			break;
+
+		throt = (!before && rt_rq_throttled(rt_rq));
+	}
+}
+#else
+static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt) { }
+#endif
 
 static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_array *array)
 {
