@@ -594,22 +594,6 @@ static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 	}
 }
 
-static void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
-{
-	struct sched_rt_entity *rt_se;
-	int cpu = cpu_of(rq_of_rt_rq(rt_rq));
-
-	rt_se = rt_rq->tg->rt_se[cpu];
-
-	if (!rt_se) {
-		dequeue_top_rt_rq(rt_rq, rt_rq->rt_nr_running);
-		/* Kick cpufreq (see the comment in kernel/sched/sched.h). */
-		cpufreq_update_util(rq_of_rt_rq(rt_rq), 0);
-	}
-	else if (on_rt_rq(rt_se))
-		dequeue_rt_entity(rt_se, 0);
-}
-
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
 	return (rt_rq->rt_bw_throttled || rt_rq->rt_cg_throttled)
@@ -685,11 +669,6 @@ static inline void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 
 	enqueue_top_rt_rq(rt_rq);
 	resched_curr(rq);
-}
-
-static inline void sched_rt_rq_dequeue(struct rt_rq *rt_rq)
-{
-	dequeue_top_rt_rq(rt_rq, rt_rq->rt_nr_running);
 }
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
