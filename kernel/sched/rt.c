@@ -879,6 +879,65 @@ static void balance_runtime(struct rt_rq *rt_rq)
 static inline void balance_runtime(struct rt_rq *rt_rq) {}
 #endif /* CONFIG_SMP */
 
+#ifdef CONFIG_RT_GROUP_SCHED
+/*
+ * Given a group represented by rt_se, which just had the rt_rq it owns (myq)
+ * throttled or unthrottled (due to bw or boost reasons), we may need to adjust
+ * rt_se's parent's cg throttling status and so forth.
+ *
+ * @rt_se:  The rt_se of the group who's myq's throttling status just changed.
+ *          Could be because its myq's bandwidth ran out or it now has boosted tasks.
+ *
+ * @throt:  Did the myq of the group representing rt_se just got throttled or
+ *          unthrottled (again, due to either bw or boost)?
+ */
+
+// DEBUG: Add comments to clarify how this works. Delete later.
+// 2 levels:
+// rt_rq -> G1 -> rt_rq -> G2 (throttled)-> rt_rq -> task
+// adjust(rt_se = G2, throt=true)
+//  G2->rt_rq->throt++
+//
+// rt_se = G1
+//  G1->rt_rq-> throt++
+//------------------------------------------------------------
+// 1 level:
+// rt_rq -> G2 (throttled)-> rt_rq -> task
+// adjust(rt_se = G2, throt=true)
+// rt_se = G2
+//  G2->rt_rq->throt++
+
+static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt)
+{
+	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
+
+	if (!group_rt_rq(rt_se))
+		return;
+
+	for_each_sched_rt_entity(rt_se) {
+		bool before;
+
+		rt_rq = rt_rq_of_se(rt_se);
+		before = rt_rq_throttled(rt_rq);
+
+		rt_rq->rt_nr_cg_throttled += (throt ? 1 : -1);
+
+		if (rt_rq->rt_nr_cg_throttled &&
+		    rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running)
+			rt_rq->rt_cg_throttled = 1;
+		else
+			rt_rq->rt_cg_throttled = 0;
+
+		if (before == rt_rq_throttled(rt_rq))
+			break;
+
+		throt = (!before && rt_rq_throttled(rt_rq));
+	}
+}
+#else
+static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt) { }
+#endif
+
 static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 {
 	int i, idle = 1, throttled = 0;
@@ -1217,60 +1276,6 @@ static inline void dec_rt_prio(struct rt_rq *rt_rq, int prio) {}
 
 #ifdef CONFIG_RT_GROUP_SCHED
 
-/*
- * Given a group represented by rt_se, which just had the rt_rq it owns (myq)
- * throttled or unthrottled (due to bw or boost reasons), we may need to adjust
- * rt_se's parent's cg throttling status and so forth.
- *
- * @rt_se:  The rt_se of the group who's myq's throttling status just changed.
- *          Could be because its myq's bandwidth ran out or it now has boosted tasks.
- *
- * @throt:  Did the myq of the group representing rt_se just got throttled or
- *          unthrottled (again, due to either bw or boost)?
- */
-
-// DEBUG: Add comments to clarify how this works. Delete later.
-// 2 levels:
-// rt_rq -> G1 -> rt_rq -> G2 (throttled)-> rt_rq -> task
-// adjust(rt_se = G2, throt=true)
-//  G2->rt_rq->throt++
-//
-// rt_se = G1
-//  G1->rt_rq-> throt++
-//------------------------------------------------------------
-// 1 level:
-// rt_rq -> G2 (throttled)-> rt_rq -> task
-// adjust(rt_se = G2, throt=true)
-// rt_se = G2
-//  G2->rt_rq->throt++
-
-static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt)
-{
-	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
-
-	if (!group_rt_rq(rt_se))
-		return;
-
-	for_each_sched_rt_entity(rt_se) {
-		bool before;
-
-		rt_rq = rt_rq_of_se(rt_se);
-		before = rt_rq_throttled(rt_rq);
-
-		rt_rq->nr_cg_throttled =+ (throt ? 1 : -1);
-
-		if (rt_rq->nr_cg_throttled &&
-		    rt_rq->nr_cg_throttled == rt_rq->rt_se_running)
-			rt_rq->rt_cg_throttled = 1;
-		else
-			rt_rq->rt_cg_throttled = 0;
-
-		if (before == rt_rq_throttled(rt_rq))
-			break;
-
-		throt = (!before && rt_rq_throttled(rt_rq));
-	}
-}
 static void
 inc_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 {
@@ -1305,8 +1310,6 @@ dec_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 }
 
 #else /* CONFIG_RT_GROUP_SCHED */
-
-static void adjust_cg_throt_update(struct sched_rt_entity *rse, bool throt) { }
 
 static void
 inc_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
