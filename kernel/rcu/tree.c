@@ -1983,7 +1983,12 @@ rcu_report_qs_rdp(struct rcu_data *rdp)
 	} else {
 		/*
 		 * This GP can't end until cpu checks in, so all of our
-		 * callbacks can be processed during the next GP.
+		 * callbacks can be processed during the next GP. Do
+		 * the acceleration from here otherwise there may be extra
+		 * grace period delays, as any accelerations from rcu_core()
+		 * or note_gp_changes() may happen only after the GP after the
+		 * current one has already started. Further, rcu_core()
+		 * only accelerates if RCU is idle (no GP in progress).
 		 *
 		 * NOCB kthreads have their own way to deal with that...
 		 */
@@ -1993,6 +1998,12 @@ rcu_report_qs_rdp(struct rcu_data *rdp)
 			/*
 			 * ...but NOCB kthreads may miss or delay callbacks acceleration
 			 * if in the middle of a (de-)offloading process.
+			 *
+			 * Such missed acceleration may cause the callbacks to
+			 * be stranded until RCU is fully de-offloaded, as
+			 * acceleration from rcu_core() and note_gp_changes()
+			 * cannot happen for fully/partially offloaded mode due
+			 * to ordering dependency between rnp lock and nocb_lock.
 			 */
 			needacc = true;
 		}
