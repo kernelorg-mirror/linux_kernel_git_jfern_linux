@@ -596,8 +596,9 @@ static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
-	return (rt_rq->rt_bw_throttled || rt_rq->rt_cg_throttled)
-		&& !rt_rq->rt_nr_boosted;
+	return (rt_rq->rt_bw_throttled
+		|| rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running)
+	       && !rt_rq->rt_nr_boosted;
 }
 
 static int rt_se_boosted(struct sched_rt_entity *rt_se)
@@ -921,12 +922,6 @@ static void adjust_cg_throt_update(struct sched_rt_entity *rt_se, bool throt)
 		before = rt_rq_throttled(rt_rq);
 
 		rt_rq->rt_nr_cg_throttled += (throt ? 1 : -1);
-
-		if (rt_rq->rt_nr_cg_throttled &&
-		    rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running)
-			rt_rq->rt_cg_throttled = 1;
-		else
-			rt_rq->rt_cg_throttled = 0;
 
 		if (before == rt_rq_throttled(rt_rq))
 			break;
@@ -1387,6 +1382,17 @@ static inline bool move_entity(unsigned int flags)
 	return true;
 }
 
+static void update_nr_cg_throttled(struct sched_rt_entity *rt_se, bool dec)
+{
+	struct rt_rq *grq = group_rt_rq(rt_se);
+	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
+
+	if (!grq || !rt_se->parent || !rt_rq_throttled(grq))
+		return;
+
+	rt_rq->rt_nr_cg_throttled += (dec ? -1 : 1);
+}
+
 static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_array *array)
 {
 	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
@@ -1398,12 +1404,13 @@ static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_arr
 		__clear_bit(rt_se_prio(rt_se), array->bitmap);
 
 	rt_rq->rt_se_running--;
+	update_nr_cg_throttled(rt_se, true);
 
 	/*
 	 * A decrement of rt_se_running might make it match rt_se_throttled,
 	 * which may cause the rt_rq to now be throttled. Update parent status.
 	 */
-	WARN_ON_ONCE(tbefore && !rt_rq_throttled(rt_rq));
+	WARN_ON_ONCE(rt_se->parent && tbefore && !rt_rq_throttled(rt_rq));
 	if (!tbefore && rt_rq_throttled(rt_rq) && rt_se->parent)
 		adjust_cg_throt_update(rt_se->parent, true);
 
@@ -1544,12 +1551,13 @@ static void __enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flag
 			list_add_tail(&rt_se->run_list, queue);
 
 		rt_rq->rt_se_running++;
+		update_nr_cg_throttled(rt_se, false);
 
 		/*
 		 * An increment of rt_se_running might make it unmatch from rt_se_throttled,
 		 * which may cause the rt_rq to now be unthrottled. Update parent status.
 		 */
-		WARN_ON_ONCE(!tbefore && rt_rq_throttled(rt_rq));
+		WARN_ON_ONCE(rt_se->parent && !tbefore && rt_rq_throttled(rt_rq));
 		if (tbefore && !rt_rq_throttled(rt_rq) && rt_se->parent)
 			adjust_cg_throt_update(rt_se->parent, false);
 
