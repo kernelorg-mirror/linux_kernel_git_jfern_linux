@@ -28,9 +28,10 @@ Explanation of the Linux-Kernel Memory Consistency Model
   20. THE HAPPENS-BEFORE RELATION: hb
   21. THE PROPAGATES-BEFORE RELATION: pb
   22. RCU RELATIONS: rcu-link, rcu-gp, rcu-rscsi, rcu-order, rcu-fence, and rb
-  23. LOCKING
-  24. PLAIN ACCESSES AND DATA RACES
-  25. ODDS AND ENDS
+  23. SRCU READ-SIDE CRITICAL SECTIONS
+  24. LOCKING
+  25. PLAIN ACCESSES AND DATA RACES
+  26. ODDS AND ENDS
 
 
 
@@ -1856,6 +1857,54 @@ restriction on the srcu-gp and srcu-rscsi links that can appear in an
 rcu-order sequence (the srcu-rscsi links must be paired with srcu-gp
 links having the same SRCU domain with proper nesting); the details
 are relatively unimportant.
+
+
+SRCU READ-SIDE CRITICAL SECTIONS
+--------------------------------
+An SRCU read-side section is modeled with the srcu-rscs relation and
+is different from rcu-rscs in the following respects:
+
+1. SRCU read-side sections are associated with a specific domain and
+are independent of ones in different domains. Each domain has their
+own independent grace-periods.
+
+2. Partitially overlapping SRCU read-side sections cannot fuse. It is
+possible that among 2 partitally overlapping readers, the one that
+starts earlier, starts before a GP started and the later reader starts
+after the same GP started. These 2 readers are to be treated as
+different srcu-rscs even for the same SRCU domain.
+
+3. The srcu_down_read() and srcu_up_read() primitives permit an SRCU
+read-side lock to be acquired on one CPU and released another. While
+this is also true about preemptible RCU, the LKMM does not model
+preemption.  So unlike SRCU, RCU readers are still modeled and
+expected to be locked and unlocked on the same CPU in litmus tests.
+
+To make it easy to model SRCU readers in LKMM with the above 3
+properties, an SRCU lock operation is modeled as a load annotated with
+'srcu-lock' and an SRCU unlock operation is modeled as a store
+annotated with 'srcu-unlock'. This load and store takes the memory
+address of an srcu_struct as an input, and the value returned is the
+SRCU index (value). Thus LKMM creates a data-dependency between them
+by virtue of the load and store memory accesses before performed on
+the same srcu_struct:  R[srcu-lock] ->data W[srcu-unlock].
+This data dependency becomes: R[srcu-lock] ->srcu-rscs W[srcu-unlock].
+
+It is also possible that the data loaded from the R[srcu-lock] is
+stored back into a memory location, and loaded on the same or even
+another CPU, before doing an unlock.
+This becomes:
+  R[srcu-lock] ->data W[once] ->rf R[once] ->data W[srcu-unlock]
+
+The model also treats this chaining of ->data and ->rf relations as:
+  R[srcu-lock] ->srcu-rscs W[srcu-unlock] by the model.
+
+Care must be taken that:
+  R[srcu-lock] ->data W[srcu-unlock] ->rf R[srcu-lock] is not
+considered as a part of the above ->data and ->rf chain, which happens
+because of one reader unlocking and another locking right after it.
+The model excludes these ->rf relations when building the ->srcu-rscs
+relation.
 
 
 LOCKING
