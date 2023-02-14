@@ -1876,18 +1876,31 @@ static inline void set_next_task_rt(struct rq *rq, struct task_struct *p, bool f
 
 static struct sched_rt_entity *pick_next_rt_entity(struct rt_rq *rt_rq)
 {
+	DECLARE_BITMAP(prio_q_map, MAX_RT_PRIO + 1) = {};
 	struct rt_prio_array *array = &rt_rq->active;
-	struct sched_rt_entity *next = NULL;
-	struct list_head *queue;
-	int idx;
 
-	idx = sched_find_first_bit(array->bitmap);
-	BUG_ON(idx >= MAX_RT_PRIO);
+	bitmap_copy(prio_q_map, array->bitmap, MAX_RT_PRIO + 1);
+	while (true) {
+		struct list_head *queue;
+		struct sched_rt_entity *next;
 
-	queue = array->queue + idx;
-	next = list_entry(queue->next, struct sched_rt_entity, run_list);
+		int idx = sched_find_first_bit(prio_q_map);
+		BUG_ON(idx >= MAX_RT_PRIO);
 
-	return next;
+		queue = array->queue + idx;
+		list_for_each_entry(next, queue->next, run_list) {
+			struct rt_rq *grq = group_rt_rq(next);
+			if (grq && rt_rq_throttled(grq))
+				continue;
+
+			return next; /* Found. */
+		}
+
+		/* Try again, but skip this priority */
+		__clear_bit(idx, prio_q_map);
+	}
+
+	return NULL;
 }
 
 static struct task_struct *_pick_next_task_rt(struct rq *rq)
@@ -1908,7 +1921,7 @@ static struct task_struct *pick_task_rt(struct rq *rq)
 {
 	struct task_struct *p;
 
-	if (!sched_rt_runnable(rq))
+	if (!sched_rt_runnable(rq) || rt_rq_throttled(&rq->rt))
 		return NULL;
 
 	p = _pick_next_task_rt(rq);
