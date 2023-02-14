@@ -598,7 +598,8 @@ static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 static inline int rt_rq_throttled(struct rt_rq *rt_rq)
 {
 	return (rt_rq->rt_bw_throttled
-		|| rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running)
+		|| (rt_rq->rt_nr_cg_throttled && 
+			rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running))
 	       && !rt_rq->rt_nr_boosted;
 }
 
@@ -1890,22 +1891,31 @@ static struct sched_rt_entity *pick_next_rt_entity(struct rt_rq *rt_rq)
 	struct rt_prio_array *array = &rt_rq->active;
 
 	bitmap_copy(prio_q_map, array->bitmap, MAX_RT_PRIO + 1);
+
 	while (true) {
 		struct list_head *queue;
 		struct sched_rt_entity *next;
 
 		int idx = sched_find_first_bit(prio_q_map);
+		trace_printk("orig map %lx %lx\n", array->bitmap[0], array->bitmap[1]);
+		trace_printk("pq map   %lx %lx\n", prio_q_map[0], prio_q_map[1]);
+
+		trace_printk("looking in prio %d", idx);
 		BUG_ON(idx >= MAX_RT_PRIO);
 
 		queue = array->queue + idx;
 		list_for_each_entry(next, queue, run_list) {
 			struct rt_rq *grq = group_rt_rq(next);
-			if (grq && rt_rq_throttled(grq))
+			if (grq && rt_rq_throttled(grq)) {
+				trace_printk("grq throt, continue");
 				continue;
+			}
 
+			trace_printk("Found next %p", (void *)next);
 			return next; /* Found. */
 		}
 
+		trace_printk("count not find in prio %d, all child groups in this prio must be throttled.", idx);
 		/* Try again, but skip this priority */
 		__clear_bit(idx, prio_q_map);
 	}
@@ -1919,7 +1929,9 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 	struct rt_rq *rt_rq  = &rq->rt;
 
 	do {
+		trace_printk("Calling pnre");
 		rt_se = pick_next_rt_entity(rt_rq);
+		trace_printk("Called pnre");
 		BUG_ON(!rt_se);
 		rt_rq = group_rt_rq(rt_se);
 	} while (rt_rq);
