@@ -1784,6 +1784,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	ktime_t expires_next, now, entry_time, delta;
 	unsigned long flags;
 	int retries = 0;
+	return;
 
 	BUG_ON(!cpu_base->hres_active);
 	cpu_base->nr_events++;
@@ -1897,6 +1898,7 @@ void hrtimer_run_queues(void)
 	unsigned long flags;
 	ktime_t now;
 
+#if 0
 	if (__hrtimer_hres_active(cpu_base))
 		return;
 
@@ -1911,6 +1913,7 @@ void hrtimer_run_queues(void)
 		hrtimer_switch_to_hres();
 		return;
 	}
+#endif
 
 	raw_spin_lock_irqsave(&cpu_base->lock, flags);
 	now = hrtimer_update_base(cpu_base);
