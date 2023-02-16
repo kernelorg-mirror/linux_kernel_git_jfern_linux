@@ -499,6 +499,8 @@ __next_base(struct hrtimer_cpu_base *cpu_base, unsigned int *active)
 #define for_each_active_base(base, cpu_base, active)	\
 	while ((base = __next_base((cpu_base), &(active))))
 
+enum hrtimer_restart tick_sched_timer(struct hrtimer *timer);
+
 static ktime_t __hrtimer_next_event_base(struct hrtimer_cpu_base *cpu_base,
 					 const struct hrtimer *exclude,
 					 unsigned int active,
@@ -521,7 +523,13 @@ static ktime_t __hrtimer_next_event_base(struct hrtimer_cpu_base *cpu_base,
 
 			timer = container_of(next, struct hrtimer, node);
 		}
+
+		if (timer->function != tick_sched_timer)
+			continue;
+
 		expires = ktime_sub(hrtimer_get_expires(timer), base->offset);
+		trace_printk("Callback: %ps exp: %lld\n", timer->function, expires);
+
 		if (expires < expires_next) {
 			expires_next = expires;
 
@@ -1812,6 +1820,8 @@ retry:
 
 	/* Reevaluate the clock bases for the [soft] next expiry */
 	expires_next = hrtimer_update_next_event(cpu_base);
+
+	trace_printk("exp_next: %lld\n", expires_next);
 	/*
 	 * Store the new expiry value so the migration code can verify
 	 * against it.
@@ -1897,8 +1907,8 @@ void hrtimer_run_queues(void)
 	unsigned long flags;
 	ktime_t now;
 
-	if (__hrtimer_hres_active(cpu_base))
-		return;
+	// if (__hrtimer_hres_active(cpu_base))
+	//	return;
 
 	/*
 	 * This _is_ ugly: We have to check periodically, whether we
@@ -1909,7 +1919,7 @@ void hrtimer_run_queues(void)
 	 */
 	if (tick_check_oneshot_change(!hrtimer_is_hres_enabled())) {
 		hrtimer_switch_to_hres();
-		return;
+		// return;
 	}
 
 	raw_spin_lock_irqsave(&cpu_base->lock, flags);
