@@ -1734,10 +1734,16 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 
 		basenow = ktime_add(now, base->offset);
 
+		trace_printk("start\n");
 		while ((node = timerqueue_getnext(&base->active))) {
 			struct hrtimer *timer;
 
 			timer = container_of(node, struct hrtimer, node);
+
+			trace_printk("hrq: %ps bn:%lld gse: %lld\n",
+					(void *)timer->function,
+					basenow,
+					hrtimer_get_softexpires_tv64(timer));
 
 			/*
 			 * The immediate goal for using the softexpires is
@@ -1754,10 +1760,13 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 			if (basenow < hrtimer_get_softexpires_tv64(timer))
 				break;
 
+			trace_printk("hrq: run: %ps\n", (void *)timer->function);
+
 			__run_hrtimer(cpu_base, base, timer, &basenow, flags);
 			if (active_mask == HRTIMER_ACTIVE_SOFT)
 				hrtimer_sync_wait_running(cpu_base, flags);
 		}
+		trace_printk("end\n");
 	}
 }
 
@@ -1816,12 +1825,13 @@ retry:
 		raise_softirq_irqoff(HRTIMER_SOFTIRQ);
 	}
 
+	trace_printk("hri->__hrq");
 	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 
 	/* Reevaluate the clock bases for the [soft] next expiry */
 	expires_next = hrtimer_update_next_event(cpu_base);
 
-	trace_printk("exp_next: %lld\n", expires_next);
+	trace_printk("hri: exp_next: %lld\n", expires_next);
 	/*
 	 * Store the new expiry value so the migration code can verify
 	 * against it.
@@ -1917,7 +1927,9 @@ void hrtimer_run_queues(void)
 	 * there only sets the check bit in the tick_oneshot code,
 	 * otherwise we might deadlock vs. xtime_lock.
 	 */
-	if (tick_check_oneshot_change(!hrtimer_is_hres_enabled())) {
+	if (!__hrtimer_hres_active(cpu_base)
+	    && tick_check_oneshot_change(!hrtimer_is_hres_enabled())) {
+		trace_printk("switch to hres\n");
 		hrtimer_switch_to_hres();
 		// return;
 	}
@@ -1926,11 +1938,13 @@ void hrtimer_run_queues(void)
 	now = hrtimer_update_base(cpu_base);
 
 	if (!ktime_before(now, cpu_base->softirq_expires_next)) {
+		trace_printk("rsi\n");
 		cpu_base->softirq_expires_next = KTIME_MAX;
 		cpu_base->softirq_activated = 1;
 		raise_softirq_irqoff(HRTIMER_SOFTIRQ);
 	}
 
+	trace_printk("hrq->__hrq\n");
 	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
 }
