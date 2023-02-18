@@ -2274,6 +2274,15 @@ void hrtimer_smp_call(void *info)
 	if (!hres) {
 		trace_printk("smp call: called stn\n");
 
+		/*
+		 * The tick_sched device is no longer going to be an 'hrtimer',
+		 * In 'nohz' mode, the the tick_sched timer's callback function
+		 * is NULL. Not doing this and receiving any hrtimer_interrupt(s)
+		 * will cause null pointer derefs. Make sure the timer is canceled
+		 * since if it may have been a true hrtimer in its past life.
+		 */
+		tick_cancel_sched_timer(smp_processor_id());
+
 		tick_nohz_switch_to_nohz();
 		base->hres_active = 0;
 		hrtimer_resolution = LOW_RES_NSEC;
