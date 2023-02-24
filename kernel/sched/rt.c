@@ -1199,9 +1199,6 @@ enqueue_top_rt_rq(struct rt_rq *rt_rq)
 	if (rt_rq->rt_queued)
 		return;
 
-	if (rt_rq_throttled(rt_rq))
-		return;
-
 	if (rt_rq->rt_nr_running) {
 		add_nr_running(rq, rt_rq->rt_nr_running);
 		rt_rq->rt_queued = 1;
