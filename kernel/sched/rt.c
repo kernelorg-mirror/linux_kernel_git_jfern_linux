@@ -946,6 +946,8 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 		rt_rq->rt_nr_cg_throttled += (throt ? 1 : -1);
 
 		after = rt_rq_throttled(rt_rq);
+		trace_printk("RT_THROT:[actu] rt_rq(%p) : nr_se_running=%d, nr_cg_throttled=%d\n",
+				rt_rq, rt_rq->rt_se_running, rt_rq->rt_nr_cg_throttled);
 
 		if (before == after)
 			break;
@@ -1005,10 +1007,17 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 				balance_runtime(rt_rq);
 			runtime = rt_rq->rt_runtime;
 			rt_rq->rt_time -= min(rt_rq->rt_time, overrun*runtime);
+			trace_printk("RT_THROT:[timer:%d] rt_rq(%p), rt_se(%p), rt_rq->parent_tg(%p), root_task_group(%p), "
+					"runtime(%llu), rt_time(%llu), bw_throttled(%d)\n",
+					i, rt_rq, rt_rq->tg->rt_se[i], rt_rq->tg->parent, &root_task_group,
+					runtime, rt_rq->rt_time, rt_rq->rt_bw_throttled);
 			if (rt_rq->rt_bw_throttled && rt_rq->rt_time < runtime) {
 				bool tbefore = rt_rq_throttled(rt_rq);
 				rt_rq->rt_bw_throttled = 0;
 
+				trace_printk("RT_THROT:[timer] BW unthrottling: se_run=%d, nr_run=%d, nr_cg_thr=%d, nr_boost=%d, q=%d\n",
+						rt_rq->rt_se_running, rt_rq->rt_nr_running, rt_rq->rt_nr_cg_throttled,
+						rt_rq->rt_nr_boosted, rt_rq->rt_queued);
 				/*
 				 * If a prior rt_rq throttled status changed to unthrottled,
 				 * adjust the parent information about throttled child groups.
@@ -1142,6 +1151,9 @@ static void update_curr_rt(struct rq *rq)
 			if (exceeded) {
 				resched_curr(rq);
 
+				trace_printk("RT_THROT:[update-curr] rt_se(%p) - rt_rq(%p), "
+						"BW throttled(rt_running=%d, se_running=%d, cg_throt=%d, bw_throt=%d)!\n",
+						rt_se, rt_rq, rt_rq->rt_nr_running, rt_rq->rt_se_running, rt_rq->rt_nr_cg_throttled, rt_rq->rt_bw_throttled);
 				/*
 				 * Whenever reasons of our parent group's
 				 * throttling change (bw ran out here), we have
@@ -1297,6 +1309,9 @@ inc_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 		bool tbefore = rt_rq_throttled(rt_rq);
 		rt_rq->rt_nr_boosted++;
 
+		trace_printk("inc_rt_group: rt_rq(%p), se_run=%d, nr_run=%d, bw_throt=%d, cg_throt=%d, nr_b=%d\n",
+				rt_rq, rt_rq->rt_se_running, rt_rq->rt_nr_running,
+				rt_rq->rt_bw_throttled, rt_rq->rt_nr_cg_throttled, rt_rq->rt_nr_boosted);
 		/* A transition of nr_boosted from 0 to 1 may unthrottle rt_rq. */
 		WARN_ON_ONCE(!tbefore && rt_rq_throttled(rt_rq));
 		if (tbefore && !rt_rq_throttled(rt_rq))
@@ -1314,6 +1329,9 @@ dec_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 		bool tbefore = rt_rq_throttled(rt_rq);
 		rt_rq->rt_nr_boosted--;
 
+		trace_printk("inc_rt_group: rt_rq(%p), se_run=%d, nr_run=%d, bw_throt=%d, cg_throt=%d, nr_b=%d\n",
+				rt_rq, rt_rq->rt_se_running, rt_rq->rt_nr_running,
+				rt_rq->rt_bw_throttled, rt_rq->rt_nr_cg_throttled, rt_rq->rt_nr_boosted);
 		/* A transition of nr_boosted from 1 to 0 may throttle rt_rq. */
 		WARN_ON_ONCE(tbefore && !rt_rq_throttled(rt_rq));
 		if (!tbefore && rt_rq_throttled(rt_rq))
@@ -1886,6 +1904,8 @@ static struct sched_rt_entity *pick_next_rt_entity(struct rt_rq *rt_rq)
 
 	bitmap_copy(prio_q_map, array->bitmap, MAX_RT_PRIO + 1);
 
+	trace_printk("pnre: rt_rq %p, se_running=%d, nr_g_throttled=%d\n",
+			rt_rq, rt_rq->rt_se_running, rt_rq->rt_nr_cg_throttled);
 	while (true) {
 		struct list_head *queue;
 		struct sched_rt_entity *next;
@@ -1902,7 +1922,8 @@ static struct sched_rt_entity *pick_next_rt_entity(struct rt_rq *rt_rq)
 			struct rt_rq *grq = group_rt_rq(next);
 			trace_printk("grq(%p)\n", grq);
 			if (grq && rt_rq_throttled(grq)) {
-				trace_printk("grq throt, continue\n");
+				trace_printk("grq(%p) se_running=%d, cg_throttled=%d throt, continue\n",
+						grq, grq->rt_se_running, grq->rt_nr_cg_throttled);
 				continue;
 			}
 
@@ -1923,6 +1944,9 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 	struct sched_rt_entity *rt_se;
 	struct rt_rq *rt_rq  = &rq->rt;
 
+	trace_printk("_pntr: cpu=%d, rt_rq: %p, throttled: %d\n",
+			cpu_of(rq), rt_rq, rt_rq_throttled(rt_rq));
+
 	do {
 		trace_printk("Calling pnre\n");
 		rt_se = pick_next_rt_entity(rt_rq);
@@ -1941,6 +1965,7 @@ static struct task_struct *pick_task_rt(struct rq *rq)
 	if (!sched_rt_runnable(rq) || rt_rq_throttled(&rq->rt))
 		return NULL;
 
+	trace_printk("Calling p_t_rt(rq %p, rq_rt %p, cpu %d)\n", rq, &rq->rt, cpu_of(rq));
 	p = _pick_next_task_rt(rq);
 
 	return p;
