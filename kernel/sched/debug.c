@@ -554,6 +554,7 @@ print_task(struct seq_file *m, struct rq *rq, struct task_struct *p)
 	SEQ_printf_task_group_path(m, task_group(p), " %s")
 #endif
 
+	SEQ_printf(m, "task.rt_se: 0x%p\n", &p->rt);
 	SEQ_printf(m, "\n");
 }
 
@@ -662,9 +663,12 @@ void print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 
 void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 {
+	struct rt_prio_array *array = &rt_rq->active;
 #ifdef CONFIG_RT_GROUP_SCHED
 	SEQ_printf(m, "\n");
 	SEQ_printf_task_group_path(m, rt_rq->tg, "rt_rq[%d]:%s\n", cpu);
+	SEQ_printf(m, "rt_rq: 0x%p, tg: 0x%p, se: 0x%p\n",
+			rt_rq, rt_rq->tg, rt_rq->tg->rt_se ? rt_rq->tg->rt_se[cpu] : (void *)0);
 #else
 	SEQ_printf(m, "\n");
 	SEQ_printf(m, "rt_rq[%d]:\n", cpu);
@@ -682,8 +686,12 @@ void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 	PU(rt_nr_migratory);
 #endif
 	P(rt_bw_throttled);
+	P(rt_se_running);
+	P(rt_nr_cg_throttled);
 	PN(rt_time);
 	PN(rt_runtime);
+
+	SEQ_printf(m, "rq bitmap: 0x%lx-0x%lx\n", array->bitmap[1], array->bitmap[0]);
 
 #undef PN
 #undef PU
