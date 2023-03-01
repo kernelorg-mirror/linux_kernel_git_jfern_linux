@@ -920,8 +920,12 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 	 * If this rt_rq is already dequeued, we need not propagate the throttled
 	 * status up the tree.
 	 */
-	if (!rt_rq->rt_nr_running)
+	if (!rt_rq->rt_nr_running) {
+		trace_printk("RT_THROT:[actu] Dequeued rt_rq(%p), nr_running=%d, se_running=%d, bw_throt=%d cg_throt=%d\n",
+				rt_rq, rt_rq->rt_nr_running, rt_rq->rt_se_running,
+				rt_rq->rt_bw_throttled, rt_rq->rt_nr_cg_throttled);
 		return;
+	}
 
 	/*
 	 * The caller had a change in status for bw_throttled or nr_boosted for rt_rq.
