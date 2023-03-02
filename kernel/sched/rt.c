@@ -921,9 +921,9 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 	 * status up the tree.
 	 */
 	if (!rt_rq->rt_nr_running) {
-		trace_printk("RT_THROT:[actu] Dequeued rt_rq(%p),
-				nr_running=%d, se_running=%d, bw_throt=%d
-				cg_throt=%d\n", rt_rq, rt_rq->rt_nr_running,
+		trace_printk("RT_THROT:[actu] Dequeued rt_rq(%p),"
+				" nr_running=%d, se_running=%d, bw_throt=%d,"
+				" cg_throt=%d\n", rt_rq, rt_rq->rt_nr_running,
 				rt_rq->rt_se_running,
 				rt_rq->rt_bw_throttled, rt_rq->rt_nr_cg_throttled);
 		return;
@@ -936,7 +936,7 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 	for (; tg; tg = tg->parent) {
 		bool after;
 		bool before;
-		struct sched_entity *rt_se = tg->rt_se[cpu];
+		struct sched_rt_entity *rt_se = tg->rt_se[cpu];
 
 		rt_rq = tg->rt_rq[cpu];
 		if ((!rt_se && rt_rq->rt_queued == 0) || (rt_se && !on_rt_rq(rt_se)))
