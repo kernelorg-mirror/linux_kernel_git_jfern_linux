@@ -897,32 +897,34 @@ static inline void balance_runtime(struct rt_rq *rt_rq) {}
 
 // DEBUG: Add comments to clarify how this works. Delete later.
 // 2 levels:
-// rt_rq -> G1 -> rt_rq -> G2 (throttled)-> rt_rq -> task
-// adjust(rt_se = G2, throt=true)
-//  G2->rt_rq->throt++
+// ROOTG -> rt_rq (RQ1) -> G1 -> rt_rq (RQ2) -> G2 (just throttled)-> rt_rq -> task
+// adjust(rt_se = RQ2, throt=true)
+//  RQ2->throt++
 //
-// rt_se = G1
-//  G1->rt_rq-> throt++
+// rt_rq = RQ1
+//  RQ1->throt++
+//
+// /* Note RQ1 is the root rt_rq */
 //------------------------------------------------------------
 // 1 level:
-// rt_rq -> G2 (throttled)-> rt_rq -> task
-// adjust(rt_se = G2, throt=true)
-// rt_se = G2
-//  G2->rt_rq->throt++
+// ROOTG -> rt_rq (RQ1) -> G2 (throttled)-> rt_rq (RQ3) -> task
+// adjust(rt_rq = RQ1, throt=true)
+//  RQ1->throt++
 
 static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 {
 	int cpu = cpu_of(rt_rq->rq);
 	struct task_group *tg = rt_rq->tg->parent;
 
-
 	/*
 	 * If this rt_rq is already dequeued, we need not propagate the throttled
 	 * status up the tree.
 	 */
 	if (!rt_rq->rt_nr_running) {
-		trace_printk("RT_THROT:[actu] Dequeued rt_rq(%p), nr_running=%d, se_running=%d, bw_throt=%d cg_throt=%d\n",
-				rt_rq, rt_rq->rt_nr_running, rt_rq->rt_se_running,
+		trace_printk("RT_THROT:[actu] Dequeued rt_rq(%p),
+				nr_running=%d, se_running=%d, bw_throt=%d
+				cg_throt=%d\n", rt_rq, rt_rq->rt_nr_running,
+				rt_rq->rt_se_running,
 				rt_rq->rt_bw_throttled, rt_rq->rt_nr_cg_throttled);
 		return;
 	}
@@ -934,9 +936,11 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 	for (; tg; tg = tg->parent) {
 		bool after;
 		bool before;
+		struct sched_entity *rt_se = tg->rt_se[cpu];
 
 		rt_rq = tg->rt_rq[cpu];
-		BUG_ON(!rt_rq->rt_nr_running);
+		if ((!rt_se && rt_rq->rt_queued == 0) || (rt_se && !on_rt_rq(rt_se)))
+			break;
 
 		before = rt_rq_throttled(rt_rq);
 		rt_rq->rt_nr_cg_throttled += (throt ? 1 : -1);
@@ -1402,7 +1406,7 @@ static void update_nr_cg_throttled(struct sched_rt_entity *rt_se, bool dec)
 	struct rt_rq *grq = group_rt_rq(rt_se);
 	struct rt_rq *rt_rq = rt_rq_of_se(rt_se);
 
-	if (!grq || !rt_se->parent || !rt_rq_throttled(grq))
+	if (!grq || !rt_rq_throttled(grq))
 		return;
 
 	rt_rq->rt_nr_cg_throttled += (dec ? -1 : 1);
@@ -1601,12 +1605,11 @@ static void dequeue_rt_stack(struct sched_rt_entity *rt_se, unsigned int flags)
 
 	rt_nr_running = rt_rq_of_se(back)->rt_nr_running;
 
+	dequeue_top_rt_rq(rt_rq_of_se(back), rt_nr_running);
 	for (rt_se = back; rt_se; rt_se = rt_se->back) {
 		if (on_rt_rq(rt_se))
 			__dequeue_rt_entity(rt_se, flags);
 	}
-
-	dequeue_top_rt_rq(rt_rq_of_se(back), rt_nr_running);
 }
 
 static void enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flags)
