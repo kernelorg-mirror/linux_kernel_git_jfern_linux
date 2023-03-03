@@ -936,11 +936,8 @@ static void adjust_cg_throt_update(struct rt_rq *rt_rq, bool throt)
 	for (; tg; tg = tg->parent) {
 		bool after;
 		bool before;
-		struct sched_rt_entity *rt_se = tg->rt_se[cpu];
 
 		rt_rq = tg->rt_rq[cpu];
-		if ((!rt_se && rt_rq->rt_queued == 0) || (rt_se && !on_rt_rq(rt_se)))
-			break;
 
 		before = rt_rq_throttled(rt_rq);
 		rt_rq->rt_nr_cg_throttled += (throt ? 1 : -1);
@@ -1440,14 +1437,6 @@ static void __delist_rt_entity(struct sched_rt_entity *rt_se, struct rt_prio_arr
 	rt_rq->rt_se_running--;
 	update_nr_cg_throttled(rt_se, true);
 
-	/*
-	 * A decrement of rt_se_running might make it match rt_se_throttled,
-	 * which may cause the rt_rq to now be throttled. Update parent status.
-	 */
-	WARN_ON_ONCE(rt_se->parent && tbefore && !rt_rq_throttled(rt_rq));
-	if (!tbefore && rt_rq_throttled(rt_rq))
-		adjust_cg_throt_update(rt_rq, true);
-
 	rt_se->on_list = 0;
 }
 
@@ -1573,14 +1562,6 @@ static void __enqueue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flag
 
 		rt_rq->rt_se_running++;
 		update_nr_cg_throttled(rt_se, false);
-
-		/*
-		 * An increment of rt_se_running might make it unmatch from rt_se_throttled,
-		 * which may cause the rt_rq to now be unthrottled. Update parent status.
-		 */
-		WARN_ON_ONCE(rt_se->parent && !tbefore && rt_rq_throttled(rt_rq));
-		if (tbefore && !rt_rq_throttled(rt_rq))
-			adjust_cg_throt_update(rt_rq, false);
 
 		__set_bit(rt_se_prio(rt_se), array->bitmap);
 		rt_se->on_list = 1;
