@@ -254,13 +254,17 @@ static void rcu_end_inkernel_boot_locked(void)
 {
 	rcu_boot_end_called = true;
 
-	if (rcu_boot_ended)
+	if (rcu_boot_ended) {
+		pr_err("boot already ended joel\n");
 		return;
+	}
+	pr_err("rcu_boot_end_delay = %d\n", rcu_boot_end_delay);
 
 	if (rcu_boot_end_delay) {
 		u64 boot_ms = div_u64(ktime_get_boot_fast_ns(), 1000000UL);
 
 		if (boot_ms < rcu_boot_end_delay) {
+			pr_err("schedule delayed work joel\n");
 			schedule_delayed_work(&rcu_boot_end_work,
 					rcu_boot_end_delay - boot_ms);
 			return;
@@ -273,6 +277,7 @@ static void rcu_end_inkernel_boot_locked(void)
 	if (rcu_normal_after_boot)
 		WRITE_ONCE(rcu_normal, 1);
 	rcu_boot_ended = true;
+	pr_err("boot ended joel\n");
 }
 
 void rcu_end_inkernel_boot(void)
@@ -289,13 +294,23 @@ static int param_set_rcu_boot_end(const char *val, const struct kernel_param *kp
 
 	if (ret)
 		return ret;
+
+	pr_err("param called joel\n");
 	/*
 	 * rcu_end_inkernel_boot() should be called at least once during init
 	 * before we can allow param changes to end the boot.
 	 */
 	mutex_lock(&rcu_boot_end_lock);
 	rcu_boot_end_delay = end_ms;
+	if (rcu_boot_ended)
+		pr_err("boot already ended joel 2\n");
+
+	if (!rcu_boot_end_called)
+		pr_err("param called too early joel\n");
+
+
 	if (!rcu_boot_ended && rcu_boot_end_called) {
+		pr_err("sys calling boot ended\n");
 		rcu_end_inkernel_boot_locked();
 	}
 	mutex_unlock(&rcu_boot_end_lock);
