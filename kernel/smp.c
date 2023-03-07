@@ -104,6 +104,13 @@ void __init call_function_init(void)
 	smpcfd_prepare_cpu(smp_processor_id());
 }
 
+static __always_inline void
+send_call_function_ipi_mask(const struct cpumask *mask)
+{
+	trace_ipi_send_cpumask(mask, _RET_IP_, NULL);
+	arch_send_call_function_ipi_mask(mask);
+}
+
 #ifdef CONFIG_CSD_LOCK_WAIT_DEBUG
 
 static DEFINE_PER_CPU(call_single_data_t *, cur_csd);
@@ -687,7 +694,7 @@ static void smp_call_function_many_cond(const struct cpumask *mask,
 	}
 
 	/* Send a message to all CPUs in the map */
-	arch_send_call_function_ipi_mask(cfd->cpumask_ipi);
+	send_call_function_ipi_mask(cfd->cpumask_ipi);
 
 	if (wait) {
 		for_each_cpu(cpu, cfd->cpumask) {
