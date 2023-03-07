@@ -67,6 +67,8 @@
 
 #include <linux/kvm_dirty_ring.h>
 
+#include <trace/events/ipi.h>
+
 /* Worst case buffer size needed for holding an integer. */
 #define ITOA_MAX_LEN 12
 
