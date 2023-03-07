@@ -25,6 +25,10 @@
 #include <linux/nmi.h>
 #include <linux/sched/debug.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/ipi.h>
+#undef CREATE_TRACE_POINTS
+
 #include "smpboot.h"
 #include "sched/smp.h"
 
