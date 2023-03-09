@@ -1039,8 +1039,11 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		} else if (rt_rq->rt_nr_running) {
 			idle = 0;
 		}
-		if (rt_rq->rt_bw_throttled)
+		if (rt_rq->rt_bw_throttled || (rt_rq->rt_nr_cg_throttled == rt_rq->rt_se_running))
 			throttled = 1;
+		else if (rt_rq->highest_prio.curr < rq->curr->prio)
+			resched_curr(rq);
+
 
 		rq_unlock(rq, &rf);
 	}
