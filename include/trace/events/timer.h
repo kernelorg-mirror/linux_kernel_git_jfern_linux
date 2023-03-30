@@ -242,17 +242,20 @@ TRACE_EVENT(hrtimer_expire_entry,
 		__field( void *,	hrtimer	)
 		__field( s64,		now	)
 		__field( void *,	function)
+		__field( s64, remaining )
 	),
 
 	TP_fast_assign(
 		__entry->hrtimer	= hrtimer;
 		__entry->now		= *now;
 		__entry->function	= hrtimer->function;
+                __entry->remaining      = hrtimer_expires_remaining(hrtimer);
 	),
 
-	TP_printk("hrtimer=%p function=%ps now=%llu",
+	TP_printk("hrtimer=%p function=%ps now=%llu remaining=%llu",
 		  __entry->hrtimer, __entry->function,
-		  (unsigned long long) __entry->now)
+		  (unsigned long long) __entry->now,
+		  (unsigned long long) __entry->remaining)
 );
 
 DECLARE_EVENT_CLASS(hrtimer_class,
