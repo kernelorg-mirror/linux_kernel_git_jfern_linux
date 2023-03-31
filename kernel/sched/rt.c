@@ -1313,6 +1313,7 @@ inc_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 		WARN_ON_ONCE(!tbefore && rt_rq_throttled(rt_rq));
 		if (tbefore && !rt_rq_throttled(rt_rq))
 			adjust_cg_throt_update(rt_rq, false);
+			// TODO, delete above line and update to following instead? update_nr_cg_throttled(rt_se, false);
 	}
 
 	if (rt_rq->tg)
@@ -1333,6 +1334,7 @@ dec_rt_group(struct sched_rt_entity *rt_se, struct rt_rq *rt_rq)
 		WARN_ON_ONCE(tbefore && !rt_rq_throttled(rt_rq));
 		if (!tbefore && rt_rq_throttled(rt_rq))
 			adjust_cg_throt_update(rt_rq, true);
+			// TODO: Confirm if going up the tree is needed during dequeue but I think it is..
 	}
 
 	WARN_ON(!rt_rq->rt_nr_running && rt_rq->rt_nr_boosted);
