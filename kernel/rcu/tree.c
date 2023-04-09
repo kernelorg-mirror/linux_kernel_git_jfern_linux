@@ -17,56 +17,7 @@
 
 #define pr_fmt(fmt) "rcu: " fmt
 
-#include <linux/types.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
-#include <linux/spinlock.h>
-#include <linux/smp.h>
-#include <linux/rcupdate_wait.h>
-#include <linux/interrupt.h>
-#include <linux/sched.h>
-#include <linux/sched/debug.h>
-#include <linux/nmi.h>
-#include <linux/atomic.h>
-#include <linux/bitops.h>
-#include <linux/export.h>
-#include <linux/completion.h>
-#include <linux/moduleparam.h>
-#include <linux/panic.h>
-#include <linux/panic_notifier.h>
-#include <linux/percpu.h>
-#include <linux/notifier.h>
-#include <linux/cpu.h>
-#include <linux/mutex.h>
-#include <linux/time.h>
-#include <linux/kernel_stat.h>
-#include <linux/wait.h>
-#include <linux/kthread.h>
-#include <uapi/linux/sched/types.h>
-#include <linux/prefetch.h>
-#include <linux/delay.h>
-#include <linux/random.h>
-#include <linux/trace_events.h>
-#include <linux/suspend.h>
-#include <linux/ftrace.h>
-#include <linux/tick.h>
-#include <linux/sysrq.h>
-#include <linux/kprobes.h>
-#include <linux/gfp.h>
-#include <linux/oom.h>
-#include <linux/smpboot.h>
-#include <linux/jiffies.h>
-#include <linux/slab.h>
-#include <linux/sched/isolation.h>
-#include <linux/sched/clock.h>
-#include <linux/vmalloc.h>
-#include <linux/mm.h>
-#include <linux/kasan.h>
-#include <linux/context_tracking.h>
-#include "../time/tick-internal.h"
-
-#include "tree.h"
-#include "rcu.h"
+#include "tree_includes.h"
 
 #ifdef MODULE_PARAM_PREFIX
 #undef MODULE_PARAM_PREFIX
@@ -145,7 +96,6 @@ static int rcu_scheduler_fully_active __read_mostly;
 static void rcu_report_qs_rnp(unsigned long mask, struct rcu_node *rnp,
 			      unsigned long gps, unsigned long flags);
 static void rcu_boost_kthread_setaffinity(struct rcu_node *rnp, int outgoingcpu);
-static void invoke_rcu_core(void);
 static void rcu_report_exp_rdp(struct rcu_data *rdp);
 static void sync_sched_exp_online_cleanup(int cpu);
 static void check_cb_ovld_locked(struct rcu_data *rdp, struct rcu_node *rnp);

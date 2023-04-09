@@ -1,3 +1,26 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Read-Copy Update mechanism for mutual exclusion (tree-based version)
+ *
+ * Copyright IBM Corporation, 2008
+ *
+ * Authors: Dipankar Sarma <dipankar@in.ibm.com>
+ *	    Manfred Spraul <manfred@colorfullife.com>
+ *	    Paul E. McKenney <paulmck@linux.ibm.com>
+ *
+ * Based on the original work by Paul McKenney <paulmck@linux.ibm.com>
+ * and inputs from Rusty Russell, Andrea Arcangeli and Andi Kleen.
+ *
+ * For detailed explanation of Read-Copy Update mechanism see -
+ *	Documentation/RCU
+ */
+
+#include "linux/compiler_attributes.h"
+#define pr_fmt(fmt) "rcu: " fmt
+
+#include "tree_includes.h"
+
+#include "tree_plugin.h"
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Read-Copy Update mechanism for mutual exclusion (tree-based version)
@@ -161,7 +184,7 @@ static void rcu_nocb_lock(struct rcu_data *rdp)
  * Release the specified rcu_data structure's ->nocb_lock, but only
  * if it corresponds to a no-CBs CPU.
  */
-static void rcu_nocb_unlock(struct rcu_data *rdp)
+static void __maybe_unused rcu_nocb_unlock(struct rcu_data *rdp)
 {
 	if (rcu_rdp_is_offloaded(rdp)) {
 		lockdep_assert_irqs_disabled();
@@ -196,17 +219,17 @@ static void rcu_lockdep_assert_cblist_protected(struct rcu_data *rdp)
  * Wake up any no-CBs CPUs' kthreads that were waiting on the just-ended
  * grace period.
  */
-static void rcu_nocb_gp_cleanup(struct swait_queue_head *sq)
+static void __maybe_unused rcu_nocb_gp_cleanup(struct swait_queue_head *sq)
 {
 	swake_up_all(sq);
 }
 
-static struct swait_queue_head *rcu_nocb_gp_get(struct rcu_node *rnp)
+static struct swait_queue_head __maybe_unused *rcu_nocb_gp_get(struct rcu_node *rnp)
 {
 	return &rnp->nocb_gp_wq[rcu_seq_ctr(rnp->gp_seq) & 0x1];
 }
 
-static void rcu_init_one_nocb(struct rcu_node *rnp)
+static void __maybe_unused rcu_init_one_nocb(struct rcu_node *rnp)
 {
 	init_swait_queue_head(&rnp->nocb_gp_wq[0]);
 	init_swait_queue_head(&rnp->nocb_gp_wq[1]);
@@ -412,7 +435,7 @@ static void rcu_nocb_try_flush_bypass(struct rcu_data *rdp, unsigned long j)
  * which, there is no point in worrying about lock contention while
  * there is only one CPU in operation.
  */
-static bool rcu_nocb_try_bypass(struct rcu_data *rdp, struct rcu_head *rhp,
+static bool __maybe_unused rcu_nocb_try_bypass(struct rcu_data *rdp, struct rcu_head *rhp,
 				bool *was_alldone, unsigned long flags,
 				bool lazy)
 {
@@ -1419,7 +1442,7 @@ void __init rcu_init_nohz(void)
 }
 
 /* Initialize per-rcu_data variables for no-CBs CPUs. */
-static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
+static void __maybe_unused __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
 {
 	init_swait_queue_head(&rdp->nocb_cb_wq);
 	init_swait_queue_head(&rdp->nocb_gp_wq);
@@ -1438,7 +1461,7 @@ static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
  * rcuo CB kthread, spawn it.  Additionally, if the rcuo GP kthread
  * for this CPU's group has not yet been created, spawn it as well.
  */
-static void rcu_spawn_cpu_nocb_kthread(int cpu)
+static void __maybe_unused rcu_spawn_cpu_nocb_kthread(int cpu)
 {
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 	struct rcu_data *rdp_gp;
@@ -1603,7 +1626,7 @@ static void show_rcu_nocb_gp_state(struct rcu_data *rdp)
 }
 
 /* Dump out nocb kthread state for the specified rcu_data structure. */
-static void show_rcu_nocb_state(struct rcu_data *rdp)
+static void __maybe_unused show_rcu_nocb_state(struct rcu_data *rdp)
 {
 	char bufw[20];
 	char bufr[20];
