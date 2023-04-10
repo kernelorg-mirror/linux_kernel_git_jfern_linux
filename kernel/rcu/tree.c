@@ -146,7 +146,6 @@ int rcu_scheduler_fully_active __read_mostly;
 static void rcu_report_qs_rnp(unsigned long mask, struct rcu_node *rnp,
 			      unsigned long gps, unsigned long flags);
 static void rcu_boost_kthread_setaffinity(struct rcu_node *rnp, int outgoingcpu);
-static void invoke_rcu_core(void);
 static void rcu_report_exp_rdp(struct rcu_data *rdp);
 static void sync_sched_exp_online_cleanup(int cpu);
 static void check_cb_ovld_locked(struct rcu_data *rdp, struct rcu_node *rnp);

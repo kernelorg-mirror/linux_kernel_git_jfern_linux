@@ -24,35 +24,6 @@
 // from both tree.c and tree_nocb.c
 bool rcu_rdp_is_offloaded(struct rcu_data *rdp);
 
-// These are defined in tree.c
-extern struct rcu_state rcu_state;
-
-extern int kthread_prio;
-
-extern long qhimark;
-
-extern int rcu_scheduler_fully_active __read_mostly;
-
-extern bool dump_tree;
-
-void rcu_gp_kthread_wake(void);
-
-bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp);
-
-void rcu_advance_cbs_nowake(struct rcu_node *rnp,
-						  struct rcu_data *rdp);
-
-void trace_rcu_this_gp(struct rcu_node *rnp, struct rcu_data *rdp,
-			      unsigned long gp_seq_req, const char *s);
-
-void rcu_do_batch(struct rcu_data *rdp);
-
-void invoke_rcu_core(void);
-
-// Declare rcu_data which is defined in tree.c as
-// DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data)
-DECLARE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data);
-
 #ifdef CONFIG_RCU_NOCB_CPU
 static cpumask_var_t rcu_nocb_mask; /* CPUs to have callbacks offloaded. */
 static bool __read_mostly rcu_nocb_poll;    /* Offload kthread are to poll. */

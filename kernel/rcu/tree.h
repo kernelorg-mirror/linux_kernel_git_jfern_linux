@@ -454,3 +454,37 @@ do {								\
 #else /* #ifdef CONFIG_RCU_NOCB_CPU */
 #define rcu_nocb_lock_irqsave(rdp, flags) local_irq_save(flags)
 #endif /* #else #ifdef CONFIG_RCU_NOCB_CPU */
+
+/*
+ * These definitions are defined in tree.c and called from other
+ * translation units in kernel/rcu/.
+ */
+extern struct rcu_state rcu_state;
+
+extern int kthread_prio;
+
+extern long qhimark;
+
+extern int rcu_scheduler_fully_active __read_mostly;
+
+extern bool dump_tree;
+
+void rcu_gp_kthread_wake(void);
+
+bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp);
+
+void rcu_advance_cbs_nowake(struct rcu_node *rnp,
+						  struct rcu_data *rdp);
+
+void trace_rcu_this_gp(struct rcu_node *rnp, struct rcu_data *rdp,
+			      unsigned long gp_seq_req, const char *s);
+
+void rcu_do_batch(struct rcu_data *rdp);
+
+void invoke_rcu_core(void);
+
+/*
+ * Declare rcu_data which is defined in tree.c as
+ * DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data)
+ */
+DECLARE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data);
