@@ -13,7 +13,7 @@
 
 #include "../locking/rtmutex_common.h"
 
-static bool rcu_rdp_is_offloaded(struct rcu_data *rdp)
+bool rcu_rdp_is_offloaded(struct rcu_data *rdp)
 {
 	/*
 	 * In order to read the offloaded state of an rdp in a safe

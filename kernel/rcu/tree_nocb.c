@@ -11,7 +11,47 @@
  * Author: Ingo Molnar <mingo@elte.hu>
  *	   Paul E. McKenney <paulmck@linux.ibm.com>
  *	   Frederic Weisbecker <frederic@kernel.org>
+ *	   Joel Fernandes <joel@joelfernandes.org>
  */
+
+#include <uapi/linux/sched/types.h>
+#include <linux/trace_events.h>
+
+#include "tree.h"
+#include "rcu.h"
+
+// This is defined in tree_plugin.h and called
+// from both tree.c and tree_nocb.c
+bool rcu_rdp_is_offloaded(struct rcu_data *rdp);
+
+// These are defined in tree.c
+extern struct rcu_state rcu_state;
+
+extern int kthread_prio;
+
+extern long qhimark;
+
+extern int rcu_scheduler_fully_active __read_mostly;
+
+extern bool dump_tree;
+
+void rcu_gp_kthread_wake(void);
+
+bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp);
+
+void rcu_advance_cbs_nowake(struct rcu_node *rnp,
+						  struct rcu_data *rdp);
+
+void trace_rcu_this_gp(struct rcu_node *rnp, struct rcu_data *rdp,
+			      unsigned long gp_seq_req, const char *s);
+
+void rcu_do_batch(struct rcu_data *rdp);
+
+void invoke_rcu_core(void);
+
+// Declare rcu_data which is defined in tree.c as
+// DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data)
+DECLARE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data);
 
 #ifdef CONFIG_RCU_NOCB_CPU
 static cpumask_var_t rcu_nocb_mask; /* CPUs to have callbacks offloaded. */
@@ -159,9 +199,10 @@ static void rcu_nocb_lock(struct rcu_data *rdp)
 
 /*
  * Release the specified rcu_data structure's ->nocb_lock, but only
- * if it corresponds to a no-CBs CPU.
+ * if it corresponds to a no-CBs CPU. It is defined __maybe_unused
+ * as it is not called from this file.
  */
-static void rcu_nocb_unlock(struct rcu_data *rdp)
+static void __maybe_unused rcu_nocb_unlock(struct rcu_data *rdp)
 {
 	if (rcu_rdp_is_offloaded(rdp)) {
 		lockdep_assert_irqs_disabled();
@@ -195,18 +236,20 @@ static void rcu_lockdep_assert_cblist_protected(struct rcu_data *rdp)
 /*
  * Wake up any no-CBs CPUs' kthreads that were waiting on the just-ended
  * grace period.
+ * It is marked as __maybe_unused as this translation unit doesn't use it.
+ * Ditto for the next few functions as well.
  */
-static void rcu_nocb_gp_cleanup(struct swait_queue_head *sq)
+void __maybe_unused rcu_nocb_gp_cleanup(struct swait_queue_head *sq)
 {
 	swake_up_all(sq);
 }
 
-static struct swait_queue_head *rcu_nocb_gp_get(struct rcu_node *rnp)
+struct swait_queue_head __maybe_unused *rcu_nocb_gp_get(struct rcu_node *rnp)
 {
 	return &rnp->nocb_gp_wq[rcu_seq_ctr(rnp->gp_seq) & 0x1];
 }
 
-static void rcu_init_one_nocb(struct rcu_node *rnp)
+void __maybe_unused rcu_init_one_nocb(struct rcu_node *rnp)
 {
 	init_swait_queue_head(&rnp->nocb_gp_wq[0]);
 	init_swait_queue_head(&rnp->nocb_gp_wq[1]);
@@ -411,8 +454,10 @@ static void rcu_nocb_try_flush_bypass(struct rcu_data *rdp, unsigned long j)
  * as doing so would confuse the auto-initialization code.  Besides
  * which, there is no point in worrying about lock contention while
  * there is only one CPU in operation.
+ *
+ * It is marked __maybe_unused because it is not called from this file.
  */
-static bool rcu_nocb_try_bypass(struct rcu_data *rdp, struct rcu_head *rhp,
+static bool __maybe_unused rcu_nocb_try_bypass(struct rcu_data *rdp, struct rcu_head *rhp,
 				bool *was_alldone, unsigned long flags,
 				bool lazy)
 {
@@ -1418,8 +1463,11 @@ void __init rcu_init_nohz(void)
 	rcu_organize_nocb_kthreads();
 }
 
-/* Initialize per-rcu_data variables for no-CBs CPUs. */
-static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
+/*
+ * Initialize per-rcu_data variables for no-CBs CPUs.
+ * It is marked __maybe_unused as it is called from tree.c and not here.
+ */
+static void __init __maybe_unused rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
 {
 	init_swait_queue_head(&rdp->nocb_cb_wq);
 	init_swait_queue_head(&rdp->nocb_gp_wq);
@@ -1437,8 +1485,9 @@ static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
  * If the specified CPU is a no-CBs CPU that does not already have its
  * rcuo CB kthread, spawn it.  Additionally, if the rcuo GP kthread
  * for this CPU's group has not yet been created, spawn it as well.
+ * It is marked __maybe_unused as it is called from tree.c and not here.
  */
-static void rcu_spawn_cpu_nocb_kthread(int cpu)
+static void __maybe_unused rcu_spawn_cpu_nocb_kthread(int cpu)
 {
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 	struct rcu_data *rdp_gp;
@@ -1602,8 +1651,10 @@ static void show_rcu_nocb_gp_state(struct rcu_data *rdp)
 		show_rcu_should_be_on_cpu(rdp->nocb_gp_kthread));
 }
 
-/* Dump out nocb kthread state for the specified rcu_data structure. */
-static void show_rcu_nocb_state(struct rcu_data *rdp)
+/* Dump out nocb kthread state for the specified rcu_data structure.
+ * It is defined as __maybe_unused as it is not called from this file.
+ */
+static void __maybe_unused show_rcu_nocb_state(struct rcu_data *rdp)
 {
 	char bufw[20];
 	char bufr[20];

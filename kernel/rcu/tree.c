@@ -75,13 +75,13 @@
 
 /* Data structures. */
 
-static DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data) = {
+DEFINE_PER_CPU_SHARED_ALIGNED(struct rcu_data, rcu_data) = {
 	.gpwrap = true,
 #ifdef CONFIG_RCU_NOCB_CPU
 	.cblist.flags = SEGCBLIST_RCU_CORE,
 #endif
 };
-static struct rcu_state rcu_state = {
+struct rcu_state rcu_state = {
 	.level = { &rcu_state.node[0] },
 	.gp_state = RCU_GP_IDLE,
 	.gp_seq = (0UL - 300UL) << RCU_SEQ_CTR_SHIFT,
@@ -95,7 +95,7 @@ static struct rcu_state rcu_state = {
 };
 
 /* Dump rcu_node combining tree at boot to verify correct setup. */
-static bool dump_tree;
+bool dump_tree;
 module_param(dump_tree, bool, 0444);
 /* By default, use RCU_SOFTIRQ instead of rcuc kthreads. */
 static bool use_softirq = !IS_ENABLED(CONFIG_PREEMPT_RT);
@@ -140,7 +140,7 @@ EXPORT_SYMBOL_GPL(rcu_scheduler_active);
  * early boot to take responsibility for these callbacks, but one step at
  * a time.
  */
-static int rcu_scheduler_fully_active __read_mostly;
+int rcu_scheduler_fully_active __read_mostly;
 
 static void rcu_report_qs_rnp(unsigned long mask, struct rcu_node *rnp,
 			      unsigned long gps, unsigned long flags);
@@ -160,7 +160,7 @@ static void rcu_init_new_rnp(struct rcu_node *rnp_leaf);
  * real-time priority(enabling/disabling) is controlled by
  * the extra CONFIG_RCU_NOCB_CPU_CB_BOOST configuration.
  */
-static int kthread_prio = IS_ENABLED(CONFIG_RCU_BOOST) ? 1 : 0;
+int kthread_prio = IS_ENABLED(CONFIG_RCU_BOOST) ? 1 : 0;
 module_param(kthread_prio, int, 0444);
 
 /* Delay in jiffies for grace-period initialization delays, debug only. */
@@ -197,6 +197,11 @@ module_param(rcu_min_cached_objs, int, 0444);
 // drain their caches.
 static int rcu_delay_page_cache_fill_msec = 5000;
 module_param(rcu_delay_page_cache_fill_msec, int, 0444);
+
+// These are defined in tree_nocb.c.
+void rcu_nocb_gp_cleanup(struct swait_queue_head *sq);
+struct swait_queue_head *rcu_nocb_gp_get(struct rcu_node *rnp);
+void rcu_init_one_nocb(struct rcu_node *rnp);
 
 /* Retrieve RCU kthreads priority for rcutorture */
 int rcu_get_gp_kthreads_prio(void)
@@ -378,7 +383,7 @@ static int rcu_is_cpu_rrupt_from_idle(void)
 #define DEFAULT_MAX_RCU_BLIMIT 10000 // ... even during callback flood.
 static long blimit = DEFAULT_RCU_BLIMIT;
 #define DEFAULT_RCU_QHIMARK 10000 // If this many pending, ignore blimit.
-static long qhimark = DEFAULT_RCU_QHIMARK;
+long qhimark = DEFAULT_RCU_QHIMARK;
 #define DEFAULT_RCU_QLOMARK 100   // Once only this many pending, use blimit.
 static long qlowmark = DEFAULT_RCU_QLOMARK;
 #define DEFAULT_RCU_QOVLD_MULT 2
@@ -890,7 +895,7 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 }
 
 /* Trace-event wrapper function for trace_rcu_future_grace_period.  */
-static void trace_rcu_this_gp(struct rcu_node *rnp, struct rcu_data *rdp,
+void trace_rcu_this_gp(struct rcu_node *rnp, struct rcu_data *rdp,
 			      unsigned long gp_seq_req, const char *s)
 {
 	trace_rcu_future_grace_period(rcu_state.name, READ_ONCE(rnp->gp_seq),
@@ -1017,7 +1022,7 @@ static bool rcu_future_gp_cleanup(struct rcu_node *rnp)
  * pre-sleep check of the awaken condition.  In this case, a wakeup really
  * is required, and is therefore supplied.
  */
-static void rcu_gp_kthread_wake(void)
+void rcu_gp_kthread_wake(void)
 {
 	struct task_struct *t = READ_ONCE(rcu_state.gp_kthread);
 
@@ -1117,7 +1122,7 @@ static void rcu_accelerate_cbs_unlocked(struct rcu_node *rnp,
  *
  * The caller must hold rnp->lock with interrupts disabled.
  */
-static bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp)
+bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp)
 {
 	rcu_lockdep_assert_cblist_protected(rdp);
 	raw_lockdep_assert_held_rcu_node(rnp);
@@ -1140,7 +1145,7 @@ static bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp)
  * Move and classify callbacks, but only if doing so won't require
  * that the RCU grace-period kthread be awakened.
  */
-static void __maybe_unused rcu_advance_cbs_nowake(struct rcu_node *rnp,
+void __maybe_unused rcu_advance_cbs_nowake(struct rcu_node *rnp,
 						  struct rcu_data *rdp)
 {
 	rcu_lockdep_assert_cblist_protected(rdp);
@@ -2047,7 +2052,7 @@ rcu_check_quiescent_state(struct rcu_data *rdp)
  * Invoke any RCU callbacks that have made it to the end of their grace
  * period.  Throttle as specified by rdp->blimit.
  */
-static void rcu_do_batch(struct rcu_data *rdp)
+void rcu_do_batch(struct rcu_data *rdp)
 {
 	int div;
 	bool __maybe_unused empty;
@@ -2415,7 +2420,7 @@ static void invoke_rcu_core_kthread(void)
 /*
  * Wake up this CPU's rcuc kthread to do RCU core processing.
  */
-static void invoke_rcu_core(void)
+void invoke_rcu_core(void)
 {
 	if (!cpu_online(smp_processor_id()))
 		return;
