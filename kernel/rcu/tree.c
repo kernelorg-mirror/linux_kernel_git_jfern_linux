@@ -66,6 +66,7 @@
 #include "../time/tick-internal.h"
 
 #include "tree.h"
+#include "tree_funcs.h"
 #include "rcu.h"
 
 #ifdef MODULE_PARAM_PREFIX
