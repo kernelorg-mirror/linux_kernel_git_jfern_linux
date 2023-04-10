@@ -478,6 +478,20 @@ static void rcu_nocb_unlock(struct rcu_data *rdp);
 static void rcu_nocb_unlock_irqrestore(struct rcu_data *rdp,
 				       unsigned long flags);
 static void rcu_lockdep_assert_cblist_protected(struct rcu_data *rdp);
+
+static void rcu_bind_gp_kthread(void);
+static bool rcu_nohz_full_cpu(void);
+
+/* Forward declarations for tree_stall.h */
+static void record_gp_stall_check_time(void);
+static void rcu_iw_handler(struct irq_work *iwp);
+static void check_cpu_stall(struct rcu_data *rdp);
+static void rcu_check_gp_start_stall(struct rcu_node *rnp, struct rcu_data *rdp,
+				     const unsigned long gpssdelay);
+
+/* Forward declarations for tree_exp.h. */
+static void sync_rcu_do_polled_gp(struct work_struct *wp);
+
 #ifdef CONFIG_RCU_NOCB_CPU
 static void __init rcu_organize_nocb_kthreads(void);
 
@@ -494,16 +508,3 @@ do {								\
 #else /* #ifdef CONFIG_RCU_NOCB_CPU */
 #define rcu_nocb_lock_irqsave(rdp, flags) local_irq_save(flags)
 #endif /* #else #ifdef CONFIG_RCU_NOCB_CPU */
-
-static void rcu_bind_gp_kthread(void);
-static bool rcu_nohz_full_cpu(void);
-
-/* Forward declarations for tree_stall.h */
-static void record_gp_stall_check_time(void);
-static void rcu_iw_handler(struct irq_work *iwp);
-static void check_cpu_stall(struct rcu_data *rdp);
-static void rcu_check_gp_start_stall(struct rcu_node *rnp, struct rcu_data *rdp,
-				     const unsigned long gpssdelay);
-
-/* Forward declarations for tree_exp.h. */
-static void sync_rcu_do_polled_gp(struct work_struct *wp);
