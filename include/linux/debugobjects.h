@@ -31,6 +31,7 @@ struct debug_obj {
 	unsigned int		astate;
 	void			*object;
 	const struct debug_obj_descr *descr;
+	char			obj_data[CONFIG_DEBUG_OBJECTS_EXTRA_SIZE];
 };
 
 /**
@@ -73,6 +74,8 @@ extern void debug_object_destroy   (void *addr, const struct debug_obj_descr *de
 extern void debug_object_free      (void *addr, const struct debug_obj_descr *descr);
 extern void debug_object_assert_init(void *addr, const struct debug_obj_descr *descr);
 
+extern void *debug_object_get_data(void *addr);
+
 /*
  * Active state:
  * - Set at 0 upon initialization.
@@ -100,6 +103,7 @@ debug_object_free      (void *addr, const struct debug_obj_descr *descr) { }
 static inline void
 debug_object_assert_init(void *addr, const struct debug_obj_descr *descr) { }
 
+static inline void *debug_object_get_data(void *addr) { return NULL; }
 static inline void debug_objects_early_init(void) { }
 static inline void debug_objects_mem_init(void) { }
 #endif

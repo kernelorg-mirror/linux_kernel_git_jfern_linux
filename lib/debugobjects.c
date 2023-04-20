@@ -959,6 +959,34 @@ debug_object_active_state(void *addr, const struct debug_obj_descr *descr,
 }
 EXPORT_SYMBOL_GPL(debug_object_active_state);
 
+/**
+ * debug_object_get_data - given an @addr of an object, return
+ * the obj_data pointer for it.
+ * @addr: the address of the object
+ */
+void *debug_object_get_data(void *addr)
+{
+	struct debug_bucket *db;
+	struct debug_obj *obj;
+	unsigned long flags;
+	void *ret;
+
+	if (!debug_objects_enabled || CONFIG_DEBUG_OBJECTS_EXTRA_SIZE == 0)
+		return NULL;
+
+	db = get_bucket((unsigned long)addr);
+	raw_spin_lock_irqsave(&db->lock, flags);
+	obj = lookup_object(addr, db);
+	if (!obj) {
+		raw_spin_unlock_irqrestore(&db->lock, flags);
+		return NULL;
+	}
+
+	ret = obj->obj_data;
+	raw_spin_unlock_irqrestore(&db->lock, flags);
+	return ret;
+}
+
 #ifdef CONFIG_DEBUG_OBJECTS_FREE
 static void __debug_check_no_obj_freed(const void *address, unsigned long size)
 {

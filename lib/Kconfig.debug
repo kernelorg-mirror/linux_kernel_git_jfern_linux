@@ -728,6 +728,17 @@ config DEBUG_OBJECTS_RCU_HEAD
 	help
 	  Enable this to turn on debugging of RCU list heads (call_rcu() usage).
 
+config DEBUG_OBJECTS_EXTRA_SIZE
+	int
+	depends on DEBUG_OBJECTS
+	default 16 if DEBUG_OBJECTS_RCU_HEAD
+	default 0
+	help
+	  This option allows to add extra data to the debug objects.
+	  The extra data is not used by the debug objects code itself,
+	  but can be used by the debug objects users to store additional
+	  information about the objects.
+
 config DEBUG_OBJECTS_PERCPU_COUNTER
 	bool "Debug percpu counter objects"
 	depends on DEBUG_OBJECTS
