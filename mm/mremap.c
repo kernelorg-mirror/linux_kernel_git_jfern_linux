@@ -488,6 +488,12 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 	struct mmu_notifier_range range;
 	pmd_t *old_pmd, *new_pmd;
 	pud_t *old_pud, *new_pud;
+	MA_STATE(mas, &vma->vm_mm->mm_mt, vma->vm_start, vma->vm_start);
+	MA_STATE(mas_new, &new_vma->vm_mm->mm_mt, new_vma->vm_start, new_vma->vm_start);
+	struct vm_area_struct *prev, *prev_new;
+
+	prev = mas_prev(&mas, 0);
+	prev_new = mas_prev(&mas_new, 0);
 
 	if (!len)
 		return 0;
@@ -497,6 +503,23 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 	if (is_vm_hugetlb_page(vma))
 		return move_hugetlb_page_tables(vma, new_vma, old_addr,
 						new_addr, len);
+
+	/*
+	 * Check if old_addr and new_addr are at the same offset within a 2MB
+	 * range. If so, and if the previous VMA of both old and new don't
+	 * share the old/new 2MB range, then we can start moving from the
+	 * beginning of the 2MB range itself, than at an offset at it. This
+	 * does a much faster move at PMD-level and also prevents issues where
+	 * we have an overlapping move down of the stack at execve() time.
+	 */
+	if ((old_addr & ~PMD_MASK) &&
+	    (old_addr & ~PMD_MASK) == (new_addr & ~PMD_MASK)) {
+		if ((!prev_new|| prev_new->vm_end < (new_addr & PMD_MASK))
+		    && (!prev || prev->vm_end     < (old_addr & PMD_MASK))) {
+			old_addr &= PMD_MASK;
+			new_addr &= PMD_MASK;
+		}
+	}
 
 	flush_cache_range(vma, old_addr, old_end);
 	mmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, vma->vm_mm,
