@@ -255,25 +255,8 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 	 * One alternative might be to just unmap the target pmd at
 	 * this point, and verify that it really is empty. We'll see.
 	 */
-	if (unlikely(!pmd_none(*new_pmd))) {
-		// Check if any ptes in the pmd are non-empty. Doing this here
-		// is ok since this is not a fast path.
-		bool pmd_empty = true;
-		unsigned long tmp_addr = new_addr;
-		pte_t* check_pte = pte_offset_map(new_pmd, new_addr);
-
-		new_ptl = pte_lockptr(mm, new_pmd);
-		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
-		for (; tmp_addr < new_addr + PMD_SIZE; check_pte++, tmp_addr += PAGE_SIZE) {
-			if (!pte_none(*check_pte)) {
-				pmd_empty = false;
-				break;
-			}
-		}
-
-		WARN_ON_ONCE(!pmd_empty);
-		spin_unlock(new_ptl);
-	}
+	if (WARN_ON_ONCE(!pmd_none(*new_pmd)))
+		return false;
 
 	/*
 	 * We don't have to worry about the ordering of src and dst
