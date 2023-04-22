@@ -801,8 +801,13 @@ static unsigned long mremap_to(unsigned long addr, unsigned long old_len,
 	if (new_len > TASK_SIZE || new_addr > TASK_SIZE - new_len)
 		goto out;
 
-	/* Ensure the old/new locations do not overlap */
-	if (addr + old_len > new_addr && new_addr + new_len > addr)
+	/*
+	 * Ensure the old/new locations do not overlap for forward moves.
+	 * Backward overlapping moves are still OK as we do them for the stack
+	 * during execve() anyway.
+	 */
+	if ((new_addr > addr) &&
+	    (addr + old_len > new_addr && new_addr + new_len > addr))
 		goto out;
 
 	/*
@@ -823,7 +828,13 @@ static unsigned long mremap_to(unsigned long addr, unsigned long old_len,
 		return -ENOMEM;
 
 	if (flags & MREMAP_FIXED) {
-		ret = do_munmap(mm, new_addr, new_len, uf_unmap_early);
+		unsigned long unmap_len = new_len;
+
+		/* For a backward overlapping move, unmap only non-overlapping part. */
+		if ((new_addr < addr) && new_addr + new_len > addr)
+			unmap_len -= (addr - new_addr);
+
+		ret = do_munmap(mm, new_addr, unmap_len, uf_unmap_early);
 		if (ret)
 			goto out;
 	}
