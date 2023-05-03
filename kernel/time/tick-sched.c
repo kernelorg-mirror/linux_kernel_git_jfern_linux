@@ -929,10 +929,8 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 	if (unlikely(expires == KTIME_MAX)) {
 		if (ts->nohz_mode == NOHZ_MODE_HIGHRES)
 			hrtimer_cancel(&ts->sched_timer);
-		else {
-			trace_printk("tick_program_event: %d: %lld\n", __LINE__, KTIME_MAX);
+		else
 			tick_program_event(KTIME_MAX, 1);
-		}
 		return;
 	}
 
@@ -940,11 +938,6 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 		hrtimer_start(&ts->sched_timer, tick,
 			      HRTIMER_MODE_ABS_PINNED_HARD);
 	} else {
-		/*
-		 * JOEL: Why do we need to do this, if the timer is ticking,
-		 * let it continue to tick. This is weird.
-		 */
-		trace_printk("tick_program_event: %d: %lld\n", __LINE__, tick);
 		hrtimer_set_expires(&ts->sched_timer, tick);
 		tick_program_event(tick, 1);
 	}
@@ -1389,7 +1382,6 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 		 * clock event device to ONESHOT_STOPPED to avoid spurious
 		 * interrupts on devices which might not be truly one shot.
 		 */
-		trace_printk("tick_program_event: %d: %lld\n", __LINE__, KTIME_MAX);
 		tick_program_event(KTIME_MAX, 1);
 		return;
 	}
@@ -1397,7 +1389,7 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
 	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
 
-	trace_printk("tick_program_event: %d: %lld\n", __LINE__, hrtimer_get_expires(&ts->sched_timer));
+	trace_printk("Calling tick_program_event for next event\n");
 	tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 }
 
@@ -1443,7 +1435,6 @@ void tick_nohz_switch_to_nohz(void)
 
 	hrtimer_set_expires(&ts->sched_timer, next);
 	hrtimer_forward_now(&ts->sched_timer, TICK_NSEC);
-	trace_printk("tick_program_event: %d: %lld\n", __LINE__, hrtimer_get_expires(&ts->sched_timer));
 	tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 	tick_nohz_activate(ts, NOHZ_MODE_LOWRES);
 }
