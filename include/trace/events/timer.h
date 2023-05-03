@@ -419,6 +419,59 @@ TRACE_EVENT(tick_stop,
 );
 #endif
 
+/*
+ * tick_event_program: Trace all places where tick_program_event is called.
+ * @reason: A string describing the reason for the event.
+ * @expires: The next event expiry time in nanoseconds.
+ * @force: A boolean indicating whether the event was forced.
+ * @nohz_mode: A string describing the current nohz mode, values: "lowres", "highres".
+ */
+TRACE_EVENT(tick_event_program,
+	TP_PROTO(const char *reason, unsigned long long expires, bool force,
+			 const char *nohz_mode),
+
+	TP_ARGS(reason, expires, force, nohz_mode),
+
+	TP_STRUCT__entry(
+		__field( const char *,		reason	  )
+		__field( unsigned long long,	expires   )
+		__field( bool,			force	  )
+		__field( const char *,		nohz_mode )
+	),
+
+	TP_fast_assign(
+		__entry->reason		= reason;
+		__entry->expires	= expires;
+		__entry->force		= force;
+		__entry->nohz_mode	= nohz_mode;
+	),
+
+	TP_printk("reason=%s expires=%llu force=%d nohz_mode=%s",
+		  __entry->reason, __entry->expires, __entry->force,
+		  __entry->nohz_mode)
+);
+
+/*
+ * tick_event_handle: Trace all places where the programmed tick event
+ * handler is called.
+ * @nohz_mode: A string describing the current nohz mode, values: "lowres", "highres".
+ */
+TRACE_EVENT(tick_event_handle,
+	TP_PROTO(const char *nohz_mode),
+
+	TP_ARGS(nohz_mode),
+
+	TP_STRUCT__entry(
+		__field( const char *, nohz_mode )
+	),
+
+	TP_fast_assign(
+		__entry->nohz_mode = nohz_mode;
+	),
+
+	TP_printk("nohz_mode=%s", __entry->nohz_mode)
+);
+
 #endif /*  _TRACE_TIMER_H */
 
 /* This part must be outside protection */
