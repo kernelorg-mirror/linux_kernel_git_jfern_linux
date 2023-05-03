@@ -34,6 +34,13 @@
 #include <trace/events/timer.h>
 
 /*
+ * Strings used in tracepoints need to be exported via the
+ * tracing system such that tools like perf and trace-cmd can
+ * translate the string address pointers to actual text.
+ */
+#define TPS(x)  tracepoint_string(x)
+
+/*
  * Per-CPU nohz control structure
  */
 static DEFINE_PER_CPU(struct tick_sched, tick_cpu_sched);
@@ -767,6 +774,9 @@ static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 		hrtimer_start_expires(&ts->sched_timer,
 				      HRTIMER_MODE_ABS_PINNED_HARD);
 	} else {
+		trace_tick_event_program(TPS("Restart"),
+					 hrtimer_get_expires(&ts->sched_timer), 1,
+					 TPS("lowres"));
 		tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 	}
 
@@ -925,10 +935,12 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 	 * the tick timer.
 	 */
 	if (unlikely(expires == KTIME_MAX)) {
-		if (ts->nohz_mode == NOHZ_MODE_HIGHRES)
+		if (ts->nohz_mode == NOHZ_MODE_HIGHRES) {
 			hrtimer_cancel(&ts->sched_timer);
-		else
+		} else {
+			trace_tick_event_program(TPS("CancelFromStopTick"), 0, 1, TPS("lowres"));
 			tick_program_event(KTIME_MAX, 1);
+		}
 		return;
 	}
 
@@ -936,6 +948,8 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 		hrtimer_start(&ts->sched_timer, tick,
 			      HRTIMER_MODE_ABS_PINNED_HARD);
 	} else {
+		trace_tick_event_program(TPS("NextEventFromStopTick"), tick, 1,
+								 TPS("lowres"));
 		hrtimer_set_expires(&ts->sched_timer, tick);
 		tick_program_event(tick, 1);
 	}
@@ -1360,6 +1374,8 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 	struct pt_regs *regs = get_irq_regs();
 	ktime_t now = ktime_get();
 
+	trace_tick_event_handle(TPS("lowres"));
+
 	dev->next_event = KTIME_MAX;
 
 	tick_sched_do_timer(ts, now);
@@ -1373,12 +1389,18 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 		 * clock event device to ONESHOT_STOPPED to avoid spurious
 		 * interrupts on devices which might not be truly one shot.
 		 */
+		trace_tick_event_program(TPS("CancelFromHandler"), 0, 1, TPS("lowres"));
 		tick_program_event(KTIME_MAX, 1);
 		return;
 	}
 
 	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
 	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
+
+	trace_tick_event_program(TPS("Continue"),
+				 hrtimer_get_expires(&ts->sched_timer), 1,
+				 TPS("lowres"));
+
 	tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 }
 
@@ -1416,6 +1438,9 @@ void tick_nohz_switch_to_nohz(void)
 
 	hrtimer_set_expires(&ts->sched_timer, next);
 	hrtimer_forward_now(&ts->sched_timer, TICK_NSEC);
+	trace_tick_event_program(TPS("Switch"),
+				 hrtimer_get_expires(&ts->sched_timer), 1,
+				 TPS("lowres"));
 	tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 	tick_nohz_activate(ts, NOHZ_MODE_LOWRES);
 }
