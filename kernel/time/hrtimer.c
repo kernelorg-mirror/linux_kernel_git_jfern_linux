@@ -1785,6 +1785,8 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	unsigned long flags;
 	int retries = 0;
 
+	trace_printk("hrtimer_interrupt called: hres_active=%d\n", cpu_base->hres_active);
+
 	if (!cpu_base->hres_active)
 		return;
 	cpu_base->nr_events++;
@@ -2272,7 +2274,7 @@ void hrtimer_smp_call(void *info)
 		return;
 
 	if (!hres) {
-		trace_printk("smp call: called stn\n");
+		trace_printk("smp call: Switching to lowres\n");
 
 		/*
 		 * The tick_sched device is no longer going to be an 'hrtimer',
@@ -2309,7 +2311,14 @@ static int hrtimer_hres_handler(struct ctl_table *table, int write,
 		else
 			printk("Trying to switch to low res\n");
 
+		trace_printk("Doing smp call: Switching to %s\n",
+			     hres ? "highres" : "lowres");
+
 		smp_call_function(hrtimer_smp_call, &hres, true);
+
+		trace_printk("Done smp call: Switching to %s\n",
+			     hres ? "highres" : "lowres");
+
 		hrtimer_hres_enabled = hres;
 	}
 

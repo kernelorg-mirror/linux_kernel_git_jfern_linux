@@ -764,9 +764,11 @@ static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
 
 	if (ts->nohz_mode == NOHZ_MODE_HIGHRES) {
+		trace_printk("NOHZ: Restarting highres mode\n");
 		hrtimer_start_expires(&ts->sched_timer,
 				      HRTIMER_MODE_ABS_PINNED_HARD);
 	} else {
+		trace_printk("NOHZ: Restarting lowres mode\n");
 		tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 	}
 
@@ -1156,7 +1158,9 @@ void tick_nohz_idle_enter(void)
 
 	WARN_ON_ONCE(ts->timer_expires_base);
 
+	trace_printk("Entering and setting inidle to 1\n");
 	ts->inidle = 1;
+
 	tick_nohz_start_idle(ts);
 
 	local_irq_enable();
@@ -1330,11 +1334,14 @@ void tick_nohz_idle_exit(void)
 	bool idle_active, tick_stopped;
 	ktime_t now;
 
+        trace_printk("ts->in_idle %d\n", ts->inidle);
+
 	local_irq_disable();
 
 	WARN_ON_ONCE(!ts->inidle);
 	WARN_ON_ONCE(ts->timer_expires_base);
 
+	trace_printk("Setting inidle to 0\n");
 	ts->inidle = 0;
 	idle_active = ts->idle_active;
 	tick_stopped = ts->tick_stopped;
@@ -1360,6 +1367,8 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 	struct pt_regs *regs = get_irq_regs();
 	ktime_t now = ktime_get();
 
+	trace_printk("Enter tick_nohz_handler\n");
+
 	dev->next_event = KTIME_MAX;
 
 	tick_sched_do_timer(ts, now);
@@ -1379,13 +1388,19 @@ static void tick_nohz_handler(struct clock_event_device *dev)
 
 	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
 	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
+
+	trace_printk("Calling tick_program_event for next event\n");
 	tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
 }
 
 static inline void tick_nohz_activate(struct tick_sched *ts, int mode)
 {
-	if (!tick_nohz_enabled)
+	if (!tick_nohz_enabled) {
+		trace_printk("tick_nohz_activate: Not enabled\n");
 		return;
+	}
+
+	trace_printk("tick_nohz_activate: Setting mode %d\n", mode);
 	ts->nohz_mode = mode;
 	/* One update is enough */
 	if (!test_and_set_bit(0, &tick_nohz_active))
@@ -1400,11 +1415,15 @@ void tick_nohz_switch_to_nohz(void)
 	struct tick_sched *ts = this_cpu_ptr(&tick_cpu_sched);
 	ktime_t next;
 
-	if (!tick_nohz_enabled)
+	if (!tick_nohz_enabled) {
+		trace_printk("tick_nohz_activate: Not enabled\n");
 		return;
+	}
 
-	if (tick_switch_to_oneshot(tick_nohz_handler))
+	if (tick_switch_to_oneshot(tick_nohz_handler)) {
+		trace_printk("tick_nohz_switch_to_nohz: Switching to oneshot failed\n");
 		return;
+	}
 
 	/*
 	 * Recycle the hrtimer in ts, so we can share the
