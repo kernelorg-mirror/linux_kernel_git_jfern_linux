@@ -459,17 +459,19 @@ TRACE_EVENT(tick_stop,
  * @nohz_mode: A string describing the current nohz mode, values: "lowres", "highres".
  */
 TRACE_EVENT(tick_event_program,
-	TP_PROTO(const char *reason, unsigned long long expires, bool force,
-			 const char *nohz_mode),
+	TP_PROTO(const char *reason, unsigned long long expires,
+			 unsigned long long old_expires, bool force, const char *nohz_mode),
 
-	TP_ARGS(reason, expires, force, nohz_mode),
+	TP_ARGS(reason, expires, old_expires, force, nohz_mode),
 
 	TP_STRUCT__entry(
 		__field( const char *,		 reason	   )
 		__field( unsigned long long, expires   )
+		__field( unsigned long long, old_expires   )
 		__field( bool,				 force     )
 		__field( const char *,		 nohz_mode )
 		__array( char,			 	 exp_us, 32    )
+		__array( char,			 	 old_exp_us, 32    )
 		
 	),
 
@@ -479,10 +481,11 @@ TRACE_EVENT(tick_event_program,
 		__entry->force		= force;
 		__entry->nohz_mode	= nohz_mode;
 		ns_to_string(__entry->exp_us, __entry->expires);
+		ns_to_string(__entry->old_exp_us, __entry->old_expires);
 	),
 
-	TP_printk("reason=%s expires_us=[%s] force=%d nohz_mode=%s",
-		  __entry->reason, __entry->exp_us, __entry->force,
+	TP_printk("reason=%s old_expires_us=[%s] expires_us=[%s] force=%d nohz_mode=%s",
+		  __entry->reason, __entry->old_exp_us, __entry->exp_us, __entry->force,
 		  __entry->nohz_mode)
 );
 
@@ -507,6 +510,30 @@ TRACE_EVENT(tick_event_handle,
 	),
 
 	TP_printk("nohz_mode=%s now_us=[%s]", __entry->nohz_mode, __entry->now_us)
+);
+
+/*
+ * Add a tracepoint that is called at the end of tick_nohz_next_event()
+ * and which accepts a timestamp in nanoseconds. Print the timestamp
+ * using the ns_to_string function.
+ */
+TRACE_EVENT(tick_event_next,
+
+	TP_PROTO(unsigned long long ts_timer_expires),
+
+	TP_ARGS(ts_timer_expires),
+
+	TP_STRUCT__entry(
+		__field( unsigned long long, ts_timer_expires )
+		__array( char,			 exp_us, 32 )
+	),
+
+	TP_fast_assign(
+		__entry->ts_timer_expires = ts_timer_expires;
+		ns_to_string(__entry->exp_us, __entry->ts_timer_expires);
+	),
+
+	TP_printk("ts_timer_expires=[%s]", __entry->exp_us)
 );
 
 #endif /*  _TRACE_TIMER_H */
