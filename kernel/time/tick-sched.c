@@ -872,6 +872,13 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 
 	ts->timer_expires = min_t(u64, expires, next_tick);
 
+	/*
+	 * If the timer tick event of the tick_sched timer is lower than what
+	 * the hrtimer resolution permits, cap the ts->timer_expires to the resolution.
+	 */
+	delta = ktime_sub(ts->timer_expires, hrtimer_get_expires(&ts->sched_timer));
+	if (delta > 0 && delta < hrtimer_resolution)
+		ts->timer_expires = hrtimer_get_expires(&ts->sched_timer) + hrtimer_resolution;
 out:
 	trace_tick_event_next(ts->timer_expires);
 	return ts->timer_expires;
