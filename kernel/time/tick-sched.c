@@ -798,6 +798,9 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	u64 basemono, next_tick, delta, expires;
 	unsigned long basejiff;
 	unsigned int seq;
+	ktime_t old_ts_timer_expires = 0, old_hrtimer_expires = 0;
+
+	old_ts_timer_expires = ts->timer_expires;
 
 	/* Read jiffies and the time when jiffies were updated last */
 	do {
@@ -876,11 +879,14 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	 * If the timer tick event of the tick_sched timer is lower than what
 	 * the hrtimer resolution permits, cap the ts->timer_expires to the resolution.
 	 */
+	old_ts_timer_expires = ts->timer_expires;
+	old_hrtimer_expires = hrtimer_get_expires(&ts->sched_timer);
+
 	delta = ktime_sub(ts->timer_expires, hrtimer_get_expires(&ts->sched_timer));
 	if (delta > 0 && delta < hrtimer_resolution)
 		ts->timer_expires = hrtimer_get_expires(&ts->sched_timer) + hrtimer_resolution;
 out:
-	trace_tick_event_next(ts->timer_expires);
+	trace_tick_event_next(ts->timer_expires, old_ts_timer_expires, old_hrtimer_expires);
 	return ts->timer_expires;
 }
 

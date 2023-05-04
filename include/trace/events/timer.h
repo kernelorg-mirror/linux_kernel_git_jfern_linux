@@ -519,21 +519,27 @@ TRACE_EVENT(tick_event_handle,
  */
 TRACE_EVENT(tick_event_next,
 
-	TP_PROTO(unsigned long long ts_timer_expires),
+	TP_PROTO(unsigned long long ts_timer_expires, unsigned long long old_ts_timer_expires,
+	unsigned long long old_hrtimer_expires),
 
-	TP_ARGS(ts_timer_expires),
+	TP_ARGS(ts_timer_expires, old_ts_timer_expires, old_hrtimer_expires),
 
 	TP_STRUCT__entry(
 		__field( unsigned long long, ts_timer_expires )
-		__array( char,			 exp_us, 32 )
+		__array( char,			 exp_us, 16 )
+		__array( char,			 old_ts_exp_us, 16 )
+		__array( char,			 old_hrt_exp_us, 16 )
 	),
 
 	TP_fast_assign(
 		__entry->ts_timer_expires = ts_timer_expires;
 		ns_to_string(__entry->exp_us, __entry->ts_timer_expires);
+		ns_to_string(__entry->old_ts_exp_us, old_ts_timer_expires);
+		ns_to_string(__entry->old_hrt_exp_us, old_hrtimer_expires);
 	),
 
-	TP_printk("ts_timer_expires=[%s]", __entry->exp_us)
+	TP_printk("ts_timer_expires=[%s], old_ts_exp_us=[%s], old_hrt_exp_us=[%s]",
+		  __entry->exp_us, __entry->old_ts_exp_us, __entry->old_hrt_exp_us)
 );
 
 #endif /*  _TRACE_TIMER_H */
