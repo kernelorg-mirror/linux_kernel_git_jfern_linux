@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include "linux/compiler_attributes.h"
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM timer
 
@@ -419,6 +420,37 @@ TRACE_EVENT(tick_stop,
 );
 #endif
 
+#ifndef US_TO_STR
+#define US_TO_STR
+/*
+ * given a char array and a unsigned long long value in nanoseconds,
+ * Convert the value to micro seconds, and print it to the char array
+ * in the format as follows: 1234567us becomes 1,234,567
+ */
+ static void __maybe_unused ns_to_string(char arr[32], unsigned long long ns)
+ {
+ 	unsigned long long us = ns / NSEC_PER_USEC;
+ 	int i = 0, j = 0;
+ 
+ 	do {
+ 		if (i && !(i % 3))
+ 			arr[j++] = ',';
+ 		arr[j++] = '0' + us % 10;
+ 		us /= 10;
+ 		i++;
+ 	} while (us);
+ 
+ 	arr[j] = '\0';
+ 
+ 	/* reverse the string */
+ 	for (i = 0, j--; i < j; i++, j--) {
+ 		char tmp = arr[i];
+ 		arr[i] = arr[j];
+ 		arr[j] = tmp;
+ 	}
+ }
+ #endif
+
 /*
  * tick_event_program: Trace all places where tick_program_event is called.
  * @reason: A string describing the reason for the event.
@@ -433,10 +465,12 @@ TRACE_EVENT(tick_event_program,
 	TP_ARGS(reason, expires, force, nohz_mode),
 
 	TP_STRUCT__entry(
-		__field( const char *,		reason	  )
-		__field( unsigned long long,	expires   )
-		__field( bool,			force	  )
-		__field( const char *,		nohz_mode )
+		__field( const char *,		 reason	   )
+		__field( unsigned long long, expires   )
+		__field( bool,				 force     )
+		__field( const char *,		 nohz_mode )
+		__array( char,			 	 exp_us, 32    )
+		
 	),
 
 	TP_fast_assign(
@@ -444,10 +478,11 @@ TRACE_EVENT(tick_event_program,
 		__entry->expires	= expires;
 		__entry->force		= force;
 		__entry->nohz_mode	= nohz_mode;
+		ns_to_string(__entry->exp_us, __entry->expires);
 	),
 
-	TP_printk("reason=%s expires=%llu force=%d nohz_mode=%s",
-		  __entry->reason, __entry->expires, __entry->force,
+	TP_printk("reason=%s expires_us=[%s] force=%d nohz_mode=%s",
+		  __entry->reason, __entry->exp_us, __entry->force,
 		  __entry->nohz_mode)
 );
 
@@ -462,14 +497,16 @@ TRACE_EVENT(tick_event_handle,
 	TP_ARGS(nohz_mode),
 
 	TP_STRUCT__entry(
-		__field( const char *, nohz_mode )
+		__field( const char *, nohz_mode  )
+		__array( char,		   now_us, 32 )
 	),
 
 	TP_fast_assign(
 		__entry->nohz_mode = nohz_mode;
+		ns_to_string(__entry->now_us, ktime_get());
 	),
 
-	TP_printk("nohz_mode=%s", __entry->nohz_mode)
+	TP_printk("nohz_mode=%s now_us=[%s]", __entry->nohz_mode, __entry->now_us)
 );
 
 #endif /*  _TRACE_TIMER_H */
