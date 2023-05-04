@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include "asm-generic/bug.h"
 #include "linux/compiler_attributes.h"
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM timer
@@ -427,14 +428,17 @@ TRACE_EVENT(tick_stop,
  * Convert the value to micro seconds, and print it to the char array
  * in the format as follows: 1234567us becomes 1,234,567
  */
- static void __maybe_unused ns_to_string(char arr[32], unsigned long long ns)
+ static void __maybe_unused ns_to_string(char arr[16], unsigned long long ns)
  {
  	unsigned long long us = ns / NSEC_PER_USEC;
  	int i = 0, j = 0;
  
  	do {
+		BUG_ON(j == 16);
  		if (i && !(i % 3))
  			arr[j++] = ',';
+
+		BUG_ON(j == 16);
  		arr[j++] = '0' + us % 10;
  		us /= 10;
  		i++;
