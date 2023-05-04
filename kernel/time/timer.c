@@ -1675,6 +1675,9 @@ static u64 cmp_next_hrtimer_event(u64 basem, u64 expires)
 	 *
 	 * Use DIV_ROUND_UP_ULL to prevent gcc calling __divdi3
 	 */
+
+	trace_printk("nextevt = %llu, rounded = %llu\n", nextevt, DIV_ROUND_UP_ULL(nextevt, TICK_NSEC) * TICK_NSEC);
+
 	return DIV_ROUND_UP_ULL(nextevt, TICK_NSEC) * TICK_NSEC;
 }
 
