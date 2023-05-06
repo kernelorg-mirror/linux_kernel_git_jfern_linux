@@ -884,6 +884,7 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 	u64 basemono = ts->timer_expires_base;
 	u64 expires = ts->timer_expires;
 	ktime_t tick = expires;
+	ktime_t old_exp;
 
 	/* Make sure we won't be trying to stop it twice in a row. */
 	ts->timer_expires_base = 0;
@@ -951,11 +952,12 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 		hrtimer_start(&ts->sched_timer, tick,
 			      HRTIMER_MODE_ABS_PINNED_HARD);
 	} else {
-		trace_tick_event_program(TPS("NextEventFromStopTick"),
-								 tick, hrtimer_get_expires(&ts->sched_timer), 1,
-								 TPS("lowres"));
+		old_exp = hrtimer_get_expires(&ts->sched_timer);
 		hrtimer_forward(&ts->sched_timer, tick, TICK_NSEC);
 		tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
+		trace_tick_event_program(TPS("NextEventFromStopTick"),
+					 hrtimer_get_expires(&ts->sched_timer), old_exp,
+					 1, TPS("lowres"));
 	}
 }
 
