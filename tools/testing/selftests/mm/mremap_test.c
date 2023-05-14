@@ -18,6 +18,7 @@
 #define EXPECT_FAILURE 1
 #define NON_OVERLAPPING 0
 #define OVERLAPPING 1
+#define OVERLAPPING_BACKWARD 2
 #define NS_PER_SEC 1000000000ULL
 #define VALIDATION_DEFAULT_THRESHOLD 4	/* 4MB */
 #define VALIDATION_NO_THRESHOLD 0	/* Verify the entire region */
@@ -44,6 +45,7 @@ enum {
 	_1MB = 1ULL << 20,
 	_2MB = 2ULL << 20,
 	_4MB = 4ULL << 20,
+	_5MB = 5ULL << 20,
 	_1GB = 1ULL << 30,
 	_2GB = 2ULL << 30,
 	PMD = _2MB,
@@ -301,10 +303,18 @@ static long long remap_region(struct config c, unsigned int threshold_mb,
 
 	/* Mask to zero out lower bits of address for alignment */
 	align_mask = ~(c.dest_alignment - 1);
-	/* Offset of destination address from the end of the source region */
+
+	/* Offset of destination address from source region (beginning or end
+	 * depending on kind of overlap) */
 	offset = (c.overlapping) ? -c.dest_alignment : c.dest_alignment;
-	addr = (void *) (((unsigned long long) src_addr + c.region_size
-			  + offset) & align_mask);
+
+	if (c.overlapping == OVERLAPPING_BACKWARD) {
+		addr = (void *) (((unsigned long long) src_addr - c.region_size
+				  - offset) & align_mask);
+	} else {
+		addr = (void *) (((unsigned long long) src_addr + c.region_size
+				  + offset) & align_mask);
+	}
 
 	/* See comment in get_source_mapping() */
 	if (!((unsigned long long) addr & c.dest_alignment))
@@ -434,7 +444,7 @@ static int parse_args(int argc, char **argv, unsigned int *threshold_mb,
 	return 0;
 }
 
-#define MAX_TEST 13
+#define MAX_TEST 14
 #define MAX_PERF_TEST 3
 int main(int argc, char **argv)
 {
@@ -499,6 +509,9 @@ int main(int argc, char **argv)
 				   "2GB mremap - Source PUD-aligned, Destination PMD-aligned");
 	test_cases[12] = MAKE_TEST(PUD, PUD, _2GB, NON_OVERLAPPING, EXPECT_SUCCESS,
 				   "2GB mremap - Source PUD-aligned, Destination PUD-aligned");
+
+	test_cases[13] = MAKE_TEST(_1MB, _1MB, _5MB, OVERLAPPING_BACKWARD, EXPECT_SUCCESS,
+				  "5MB mremap backward - Source and Destination 1MB-aligned");
 
 	perf_test_cases[0] =  MAKE_TEST(page_size, page_size, _1GB, NON_OVERLAPPING, EXPECT_SUCCESS,
 					"1GB mremap - Source PTE-aligned, Destination PTE-aligned");
