@@ -257,6 +257,8 @@ static void *get_source_mapping(struct config c)
 
 	mmap_min_addr = get_mmap_min_addr();
 
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+		mmap_min_addr += (4 * c.region_size);
 retry:
 	addr += c.src_alignment;
 	if (addr < mmap_min_addr)
