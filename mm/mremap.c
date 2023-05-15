@@ -877,8 +877,10 @@ static unsigned long mremap_to(unsigned long addr, unsigned long old_len,
 
 	ret = move_vma(vma, addr, old_len, new_len, new_addr, locked, flags, uf,
 		       uf_unmap);
+	printk("move_vma ret=%ld\n", ret);
 
 out:
+	printk("3 ret=%ld\n", ret);
 	return ret;
 }
 

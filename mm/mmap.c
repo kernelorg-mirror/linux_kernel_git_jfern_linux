@@ -3134,8 +3134,15 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 	}
 
 	new_vma = find_vma_prev(mm, addr, &prev);
-	if (new_vma && new_vma->vm_start < addr + len)
+	if (new_vma)
+		printk("Called find_vma_prev with params: %lx and got new_vma with addr=%lx\n", addr, new_vma->vm_start);
+
+	if (new_vma && new_vma->vm_start < addr + len) {
+		printk("Line and file: %d, %s\n", __LINE__, __FILE__);
+		printk("found a new VMA with start address %lx (new addr=%lx, new len=%lx)\n",
+			new_vma->vm_start, addr, len);
 		return NULL;	/* should never get here */
+	}
 
 	new_vma = vma_merge(&vmi, mm, prev, addr, addr + len, vma->vm_flags,
 			    vma->anon_vma, vma->vm_file, pgoff, vma_policy(vma),
