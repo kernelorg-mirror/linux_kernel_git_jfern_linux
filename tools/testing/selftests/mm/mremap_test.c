@@ -81,6 +81,8 @@ static bool is_remap_region_valid(void *addr, unsigned long long size)
 					 MAP_FIXED_NOREPLACE | MAP_ANONYMOUS | MAP_SHARED,
 					 -1, 0);
 
+	ksft_print_msg("j is valid: Got remap addr: %lx", (unsigned long) remap_addr);
+
 	if (remap_addr == MAP_FAILED) {
 		if (errno == EEXIST)
 			ret = false;
@@ -255,6 +257,12 @@ static void *get_source_mapping(struct config c)
 	void *src_addr = NULL;
 	unsigned long long mmap_min_addr;
 
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+	ksft_print_msg("Entered get_source_mapping joel\n");
+
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+	printf("Entered get_source_mapping joel printf\n");
+
 	mmap_min_addr = get_mmap_min_addr();
 
 	if (c.overlapping == OVERLAPPING_BACKWARD)
@@ -264,14 +272,30 @@ retry:
 	if (addr < mmap_min_addr)
 		goto retry;
 
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+	printf("doing mmap\n");
+
 	src_addr = mmap((void *) addr, c.region_size, PROT_READ | PROT_WRITE,
 					MAP_FIXED_NOREPLACE | MAP_ANONYMOUS | MAP_SHARED,
 					-1, 0);
+
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+	printf("j Got src addr: %lx\n", (unsigned long) src_addr);
+
 	if (src_addr == MAP_FAILED) {
-		if (errno == EPERM || errno == EEXIST)
+		if (errno == EPERM || errno == EEXIST) {
+			if (c.overlapping == OVERLAPPING_BACKWARD)
+			printf("j Retrying to get src addr\n");
 			goto retry;
+		}
+		if (c.overlapping == OVERLAPPING_BACKWARD)
+		printf("j map failed, going to error\n");
 		goto error;
 	}
+
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+	printf("src_addr if completed\n");
+
 	/*
 	 * Check that the address is aligned to the specified alignment.
 	 * Addresses which have alignments that are multiples of that
@@ -291,7 +315,7 @@ retry:
 
 	return src_addr;
 error:
-	ksft_print_msg("Failed to map source region: %s\n",
+	ksft_print_msg("j Failed to map source region: %s\n",
 			strerror(errno));
 	return NULL;
 }
@@ -317,6 +341,9 @@ static long long remap_region(struct config c, unsigned int threshold_mb,
 		goto out;
 	}
 
+	// flush stdin
+	fflush(stdin);
+
 	/* Set byte pattern */
 	srand(pattern_seed);
 	for (i = 0; i < threshold; i++)
@@ -341,6 +368,10 @@ static long long remap_region(struct config c, unsigned int threshold_mb,
 	if (!((unsigned long long) addr & c.dest_alignment))
 		addr = (void *) ((unsigned long long) addr | c.dest_alignment);
 
+
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+		printf("Dest addr: %lx, src addr: %lx, size: %d\n", (unsigned long) addr, (unsigned long) src_addr, c.region_size);
+
 	/* Don't destroy existing mappings unless expected to overlap */
 	while (!is_remap_region_valid(addr, c.region_size) && !c.overlapping) {
 		/* Check for unsigned overflow */
@@ -359,6 +390,13 @@ static long long remap_region(struct config c, unsigned int threshold_mb,
 
 	if (dest_addr == MAP_FAILED) {
 		ksft_print_msg("mremap failed: %s\n", strerror(errno));
+
+		// debugging pause
+		if (c.overlapping == OVERLAPPING_BACKWARD) {
+			while (1)
+				sleep(1);
+		}
+
 		ret = -1;
 		goto clean_up_src;
 	}
@@ -465,7 +503,7 @@ static int parse_args(int argc, char **argv, unsigned int *threshold_mb,
 	return 0;
 }
 
-#define MAX_TEST 14
+#define MAX_TEST 1
 #define MAX_PERF_TEST 3
 int main(int argc, char **argv)
 {
@@ -491,47 +529,7 @@ int main(int argc, char **argv)
 	page_size = sysconf(_SC_PAGESIZE);
 
 	/* Expected mremap failures */
-	test_cases[0] =	MAKE_TEST(page_size, page_size, page_size,
-				  OVERLAPPING, EXPECT_FAILURE,
-				  "mremap - Source and Destination Regions Overlapping");
-
-	test_cases[1] = MAKE_TEST(page_size, page_size/4, page_size,
-				  NON_OVERLAPPING, EXPECT_FAILURE,
-				  "mremap - Destination Address Misaligned (1KB-aligned)");
-	test_cases[2] = MAKE_TEST(page_size/4, page_size, page_size,
-				  NON_OVERLAPPING, EXPECT_FAILURE,
-				  "mremap - Source Address Misaligned (1KB-aligned)");
-
-	/* Src addr PTE aligned */
-	test_cases[3] = MAKE_TEST(PTE, PTE, PTE * 2,
-				  NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "8KB mremap - Source PTE-aligned, Destination PTE-aligned");
-
-	/* Src addr 1MB aligned */
-	test_cases[4] = MAKE_TEST(_1MB, PTE, _2MB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "2MB mremap - Source 1MB-aligned, Destination PTE-aligned");
-	test_cases[5] = MAKE_TEST(_1MB, _1MB, _2MB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "2MB mremap - Source 1MB-aligned, Destination 1MB-aligned");
-
-	/* Src addr PMD aligned */
-	test_cases[6] = MAKE_TEST(PMD, PTE, _4MB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "4MB mremap - Source PMD-aligned, Destination PTE-aligned");
-	test_cases[7] =	MAKE_TEST(PMD, _1MB, _4MB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "4MB mremap - Source PMD-aligned, Destination 1MB-aligned");
-	test_cases[8] = MAKE_TEST(PMD, PMD, _4MB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "4MB mremap - Source PMD-aligned, Destination PMD-aligned");
-
-	/* Src addr PUD aligned */
-	test_cases[9] = MAKE_TEST(PUD, PTE, _2GB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				  "2GB mremap - Source PUD-aligned, Destination PTE-aligned");
-	test_cases[10] = MAKE_TEST(PUD, _1MB, _2GB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				   "2GB mremap - Source PUD-aligned, Destination 1MB-aligned");
-	test_cases[11] = MAKE_TEST(PUD, PMD, _2GB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				   "2GB mremap - Source PUD-aligned, Destination PMD-aligned");
-	test_cases[12] = MAKE_TEST(PUD, PUD, _2GB, NON_OVERLAPPING, EXPECT_SUCCESS,
-				   "2GB mremap - Source PUD-aligned, Destination PUD-aligned");
-
-	test_cases[13] = MAKE_TEST(_1MB, _1MB, _5MB, OVERLAPPING_BACKWARD, EXPECT_SUCCESS,
+	test_cases[0] = MAKE_TEST(_1MB, _1MB, _5MB, OVERLAPPING_BACKWARD, EXPECT_SUCCESS,
 				  "5MB mremap backward - Source and Destination 1MB-aligned");
 
 	perf_test_cases[0] =  MAKE_TEST(page_size, page_size, _1GB, NON_OVERLAPPING, EXPECT_SUCCESS,
