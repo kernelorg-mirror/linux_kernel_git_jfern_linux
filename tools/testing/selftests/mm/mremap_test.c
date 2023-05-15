@@ -226,6 +226,25 @@ out:
 		ksft_test_result_fail("%s\n", test_name);
 }
 
+static void *get_source_addr(struct config c)
+{
+	unsigned long long addr = 0ULL;
+	void *src_addr = NULL;
+	unsigned long long mmap_min_addr;
+
+
+	mmap_min_addr = get_mmap_min_addr();
+
+	if (c.overlapping == OVERLAPPING_BACKWARD)
+		mmap_min_addr += (2 * c.region_size);
+retry:
+	addr += c.src_alignment;
+	if (addr < mmap_min_addr)
+		goto retry;
+
+	return addr;
+}
+
 /*
  * Returns the start address of the mapping on success, else returns
  * NULL on failure.
