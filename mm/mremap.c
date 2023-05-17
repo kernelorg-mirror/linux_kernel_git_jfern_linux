@@ -478,6 +478,51 @@ static bool move_pgt_entry(enum pgt_entry entry, struct vm_area_struct *vma,
 	return moved;
 }
 
+/*
+ * A helper to check if a previous mapping exists. Required for
+ * move_page_tables() and realign_addr() to determine if a previous mapping
+ * exists before we can do realignment optimizations.
+ */
+static bool check_addr_in_prev(struct vm_area_struct *vma, unsigned long addr,
+			       unsigned long mask)
+{
+	int addr_masked = addr & mask;
+	struct vm_area_struct *prev = NULL, *cur = NULL;
+
+	/* If the masked address is within vma, there is no prev mapping of concern. */
+	if (vma->vm_start <= addr_masked)
+		return false;
+
+	/*
+	 * Attempt to find vma before prev that contains the address.
+	 * On any issue, assume the address is within a previous mapping.
+	 * @mmap write lock is held here, so the lookup is safe.
+	 */
+	cur = find_vma_prev(vma->vm_mm, vma->vm_start, &prev);
+	if (!cur || cur != vma || !prev)
+		return true;
+
+	/* The masked address fell within a previous mapping. */
+	if (prev->vm_end > addr_masked)
+		return true;
+
+	return false;
+}
+
+/* Opportunistically realign to specified boundary for faster copy. */
+static void realign_addr(unsigned long *old_addr, struct vm_area_struct *old_vma,
+			 unsigned long *new_addr, struct vm_area_struct *new_vma,
+			 unsigned long mask)
+{
+	if ((*old_addr & ~mask) &&
+	    (*old_addr & ~mask) == (*new_addr & ~mask) &&
+	    !check_addr_in_prev(old_vma, *old_addr, mask) &&
+	    !check_addr_in_prev(new_vma, *new_addr, mask)) {
+		*old_addr = *old_addr & mask;
+		*new_addr = *new_addr & mask;
+	}
+}
+
 unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
 		unsigned long new_addr, unsigned long len,
@@ -492,6 +537,10 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		return 0;
 
 	old_end = old_addr + len;
+
+	/* If possible, realign addresses to PMD boundary for faster copy. */
+	if (len >= PMD_SIZE)
+		realign_addr(&old_addr, vma, &new_addr, new_vma, PMD_MASK);
 
 	if (is_vm_hugetlb_page(vma))
 		return move_hugetlb_page_tables(vma, new_vma, old_addr,
