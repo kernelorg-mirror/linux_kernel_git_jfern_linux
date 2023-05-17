@@ -478,6 +478,53 @@ static bool move_pgt_entry(enum pgt_entry entry, struct vm_area_struct *vma,
 	return moved;
 }
 
+/*
+ * A helper to check if a previous mapping exists. Required for
+ * move_page_tables() and realign_addr() to determine if a previous mapping
+ * exists before we can do realignment optimizations.
+ */
+static bool can_align_down(struct vm_area_struct *vma, unsigned long addr_to_align,
+			       unsigned long mask)
+{
+	unsigned long addr_masked = addr_to_align & mask;
+	struct vm_area_struct *prev = NULL, *cur = NULL;
+
+	/* If the masked address is within vma, we cannot align the address down. */
+	if (vma->vm_start <= addr_masked)
+		return false;
+
+	/*
+	 * Attempt to find vma before prev that contains the address.
+	 * On any issue finding prev, assume there is a mapping and return false
+	 * which will turn off any optimizations. Yes, we're conservative!
+	 * @mmap write lock is held here, so the lookup is safe.
+	 */
+	cur = find_vma_prev(vma->vm_mm, vma->vm_start, &prev);
+	if (!cur || cur != vma || !prev)
+		return false;
+
+	/* The masked address fell within some previous mapping. */
+	if (prev->vm_end > addr_masked)
+		return false;
+
+	return true;
+}
+
+/* Opportunistically realign to specified boundary for faster copy. */
+static void realign_addr(unsigned long *old_addr, struct vm_area_struct *old_vma,
+			 unsigned long *new_addr, struct vm_area_struct *new_vma,
+			 unsigned long mask)
+{
+	bool mutually_aligned = (*old_addr & ~mask) == (*new_addr & ~mask);
+
+	if ((*old_addr & ~mask) && mutually_aligned
+	    && can_align_down(old_vma, *old_addr, mask)
+	    && can_align_down(new_vma, *new_addr, mask)) {
+		*old_addr = *old_addr & mask;
+		*new_addr = *new_addr & mask;
+	}
+}
+
 unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
 		unsigned long new_addr, unsigned long len,
@@ -492,6 +539,15 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		return 0;
 
 	old_end = old_addr + len;
+
+	/*
+	 * If possible, realign addresses to PMD boundary for faster copy.
+	 * Don't align for intra-VMA moves as we may destroy existing mappings.
+	 */
+	if ((vma != new_vma)
+		&& (len >= PMD_SIZE - (old_addr & ~PMD_MASK))) {
+		realign_addr(&old_addr, vma, &new_addr, new_vma, PMD_MASK);
+	}
 
 	if (is_vm_hugetlb_page(vma))
 		return move_hugetlb_page_tables(vma, new_vma, old_addr,
@@ -564,6 +620,13 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 	}
 
 	mmu_notifier_invalidate_range_end(&range);
+
+	/*
+	 * Prevent negative return values when {old,new}_addr was realigned
+	 * but we broke out of the above loop for the first PMD itself.
+	 */
+	if (len + old_addr < old_end)
+		return 0;
 
 	return len + old_addr - old_end;	/* how much done */
 }
