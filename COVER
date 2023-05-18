@@ -1,0 +1,37 @@
+Hello,
+
+Here is v2 of the mremap start address optimization / fix for exec warning.
+
+v1->v2:
+1. Trigger the optimization for mremaps smaller than a PMD. I tested by tracing
+that it works correctly.
+
+2. Fix issue with bogus return value found by Linus if we broke out of the
+above loop for the first PMD itself.
+
+Description of patches:
+These patches optimizes the start addresses in move_page_tables() and tests the
+changes. It addresses a warning [1] that occurs due to a downward, overlapping
+move on a mutually-aligned offset within a PMD during exec. By initiating the
+copy process at the PMD level when such alignment is present, we can prevent
+this warning and speed up the copying process at the same time. Linus Torvalds
+suggested this idea.
+
+Please check the individual patches for more details.
+
+thanks,
+
+ - Joel
+
+[1] https://lore.kernel.org/all/ZB2GTBD%2FLWTrkOiO@dhcp22.suse.cz/
+
+Cc: Vlastimil Babka <vbabka@suse.cz>
+Cc: Michal Hocko <mhocko@suse.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Lorenzo Stoakes <lstoakes@gmail.com>
+Cc: Kirill A Shutemov <kirill@shutemov.name>
+Cc: Liam R. Howlett <liam.howlett@oracle.com>
+Cc: Paul E. McKenney <paulmck@kernel.org>
+
+option-subject Optimize mremap during mutual alignment within PMD
+option-prefix PATCH v2
