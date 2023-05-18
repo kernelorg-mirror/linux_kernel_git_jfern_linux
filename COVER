@@ -1,0 +1,29 @@
+Hello,
+
+I am posting this as an RFC for any feedback. I have tested them suitably and I
+am continuing to test them.
+
+These patches optimizes the start addresses in move_page_tables(). It addresses a
+warning [1] that occurs due to a downward, overlapping move on a mutually-aligned
+offset within a PMD during exec. By initiating the copy process at the PMD
+level when such alignment is present, we can prevent this warning and speed up
+the copying process at the same time. Linus Torvalds suggested this idea.
+
+Please check the individual patches for more details.
+
+thanks,
+
+ - Joel
+
+[1] https://lore.kernel.org/all/ZB2GTBD%2FLWTrkOiO@dhcp22.suse.cz/
+
+Cc: Vlastimil Babka <vbabka@suse.cz>
+Cc: Michal Hocko <mhocko@suse.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Lorenzo Stoakes <lstoakes@gmail.com>
+Cc: Kirill A Shutemov <kirill@shutemov.name>
+Cc: Liam R. Howlett <liam.howlett@oracle.com>
+Cc: Paul E. McKenney <paulmck@kernel.org>
+
+option-subject Optimize mremap during mutual alignment within PMD
+option-prefix PATCH RFC
