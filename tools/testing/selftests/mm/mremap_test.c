@@ -406,6 +406,11 @@ static long long remap_region(struct config c, unsigned int threshold_mb,
 		}
 		addr += c.dest_alignment;
 	}
+/* 
+	// print the pid of the current process
+	printf("pid: %d\n", getpid());
+	while(1)
+		sleep(1); */
 
 	if (c.dest_preamble_size) {
 		dest_preamble_addr = mmap((void *) addr - c.dest_preamble_size, c.dest_preamble_size,

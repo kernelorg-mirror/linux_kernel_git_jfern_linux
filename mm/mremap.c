@@ -522,6 +522,17 @@ static void realign_addr(unsigned long *old_addr, struct vm_area_struct *old_vma
 {
 	bool mutually_aligned = (*old_addr & ~mask) == (*new_addr & ~mask);
 
+	if ((*old_addr & ~mask) &&
+	    (*old_addr & ~mask) == (*new_addr & ~mask)) {
+		printk("can_align_down(old_vma->vm_start=%lx, old_addr=%lx, mask=%ld, for_stack=%d): %d\n",
+			old_vma->vm_start, *old_addr, mask, for_stack,
+			can_align_down(old_vma, *old_addr, mask, for_stack));
+
+		printk("can_align_down(new_vma->vm_start=%lx, new_addr=%lx, mask=%ld, for_stack=%d): %d\n",
+			new_vma->vm_start, *new_addr, mask, for_stack,
+			can_align_down(new_vma, *new_addr, mask, for_stack));
+	}
+
 	if ((*old_addr & ~mask) && mutually_aligned
 	    && can_align_down(old_vma, *old_addr, mask, for_stack)
 	    && can_align_down(new_vma, *new_addr, mask, for_stack)) {
@@ -544,10 +555,19 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		return 0;
 
 	old_end = old_addr + len;
+    /* debug */ 
+	if (len >= PMD_SIZE - (old_addr & ~PMD_MASK))
+		printk("Old/New Address before: %lx/%lx\n", old_addr, new_addr);
 
 	/* If possible, realign addresses to PMD boundary for faster copy. */
 	if (len >= PMD_SIZE - (old_addr & ~PMD_MASK))
 		realign_addr(&old_addr, vma, &new_addr, new_vma, PMD_MASK, for_stack);
+	else
+	 	printk("Not realigning addresses\n");
+
+    /* debug */ 
+	if (len >= PMD_SIZE - (old_addr & ~PMD_MASK))
+		printk("Old/New Address after: %lx/%lx\n", old_addr, new_addr);
 
 	if (is_vm_hugetlb_page(vma))
 		return move_hugetlb_page_tables(vma, new_vma, old_addr,
@@ -558,6 +578,7 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 				old_addr, old_end);
 	mmu_notifier_invalidate_range_start(&range);
 
+	printk("=== Starting move_page_tables ===\n");
 	for (; old_addr < old_end; old_addr += extent, new_addr += extent) {
 		cond_resched();
 		/*
@@ -580,7 +601,8 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 				continue;
 			}
 		} else if (IS_ENABLED(CONFIG_HAVE_MOVE_PUD) && extent == PUD_SIZE) {
-
+			printk("Doing PUD move for %lx -> %lx of extent=%lx\n",
+				old_addr, new_addr, extent);
 			if (move_pgt_entry(NORMAL_PUD, vma, old_addr, new_addr,
 					   old_pud, new_pud, true))
 				continue;
@@ -604,6 +626,8 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 				continue;
 		} else if (IS_ENABLED(CONFIG_HAVE_MOVE_PMD) &&
 			   extent == PMD_SIZE) {
+			printk("Doing PUD move for %lx -> %lx of extent=%lx\n",
+				old_addr, new_addr, extent);
 			/*
 			 * If the extent is PMD-sized, try to speed the move by
 			 * moving at the PMD level if possible.
@@ -615,6 +639,8 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 
 		if (pte_alloc(new_vma->vm_mm, new_pmd))
 			break;
+		printk("Doing move_ptes for %lx -> %lx of extent=%lx\n",
+			  old_addr, new_addr, extent);
 		move_ptes(vma, old_pmd, old_addr, old_addr + extent, new_vma,
 			  new_pmd, new_addr, need_rmap_locks);
 	}
