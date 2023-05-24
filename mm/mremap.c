@@ -480,7 +480,9 @@ static bool move_pgt_entry(enum pgt_entry entry, struct vm_area_struct *vma,
 
 /*
  * A helper to check if aligning down is OK. The aligned address should fall
- * on *no mapping* unless the destination is aligning down into the source.
+ * on *no mapping*. For the stack moving down, that's a special move
+ * within VMA that is created to span the source and destination of the move,
+ * so we make an exception for it.
  */
 static bool can_align_down(struct vm_area_struct *vma, unsigned long addr_to_align,
 			    unsigned long mask, bool for_stack)
@@ -490,17 +492,17 @@ static bool can_align_down(struct vm_area_struct *vma, unsigned long addr_to_ali
 
 	/*
 	 * Other than for stack moves, if the alignment causes the address to be within
-	 * its own @vma, we can't align down Or we will destroy the current mapping.
+	 * its own @vma, we can't align down or we will destroy the current mapping.
 	 * In other words for non-stack moves, the masked addr has to fall on no mapping.
 	 */
 	if (!for_stack && vma->vm_start <= addr_masked)
 		return false;
 
 	/*
-	 * Attempt to find vma before prev that contains the address.
+	 * Attempt to find a VMA before prev that contains the address.
 	 * On any issue finding prev, assume there is a mapping and return false
 	 * which will turn off any optimizations. Yes, we're conservative!
-	 * @mmap write lock is held here, so the lookup is safe.
+	 * The mmap write lock is held here, so the lookup is safe.
 	 */
 	cur = find_vma_prev(vma->vm_mm, vma->vm_start, &prev);
 	if (!cur || cur != vma || !prev)
