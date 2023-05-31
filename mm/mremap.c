@@ -479,18 +479,23 @@ static bool move_pgt_entry(enum pgt_entry entry, struct vm_area_struct *vma,
 }
 
 /*
- * A helper to check if a previous mapping exists. Required for
- * move_page_tables() and realign_addr() to determine if a previous mapping
- * exists before we can do realignment optimizations.
+ * A helper to check if aligning down is OK. The aligned address should fall
+ * on *no mapping*. For the stack moving down, that's a special move within
+ * the VMA that is created to span the source and destination of the move,
+ * so we make an exception for it.
  */
 static bool can_align_down(struct vm_area_struct *vma, unsigned long addr_to_align,
-			       unsigned long mask)
+			    unsigned long mask, bool for_stack)
 {
 	unsigned long addr_masked = addr_to_align & mask;
 	struct vm_area_struct *prev = NULL, *cur = NULL;
 
-	/* If the masked address is within vma, we cannot align the address down. */
-	if (vma->vm_start != addr_masked)
+	/*
+	 * Other than for stack moves, if the alignment causes the address to be within
+	 * its own @vma, we can't align down or we will destroy the current mapping.
+	 * In other words for non-stack moves, the masked addr has to fall on no mapping.
+	 */
+	if (!for_stack && vma->vm_start != addr_masked)
 		return false;
 
 	/*
@@ -513,13 +518,13 @@ static bool can_align_down(struct vm_area_struct *vma, unsigned long addr_to_ali
 /* Opportunistically realign to specified boundary for faster copy. */
 static void realign_addr(unsigned long *old_addr, struct vm_area_struct *old_vma,
 			 unsigned long *new_addr, struct vm_area_struct *new_vma,
-			 unsigned long mask)
+			 unsigned long mask, bool for_stack)
 {
 	bool mutually_aligned = (*old_addr & ~mask) == (*new_addr & ~mask);
 
 	if ((*old_addr & ~mask) && mutually_aligned
-	    && can_align_down(old_vma, *old_addr, mask)
-	    && can_align_down(new_vma, *new_addr, mask)) {
+	    && can_align_down(old_vma, *old_addr, mask, for_stack)
+	    && can_align_down(new_vma, *new_addr, mask, for_stack)) {
 		*old_addr = *old_addr & mask;
 		*new_addr = *new_addr & mask;
 	}
@@ -528,7 +533,7 @@ static void realign_addr(unsigned long *old_addr, struct vm_area_struct *old_vma
 unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
 		unsigned long new_addr, unsigned long len,
-		bool need_rmap_locks)
+		bool need_rmap_locks, bool for_stack)
 {
 	unsigned long extent, old_end;
 	struct mmu_notifier_range range;
@@ -540,14 +545,9 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 
 	old_end = old_addr + len;
 
-	/*
-	 * If possible, realign addresses to PMD boundary for faster copy.
-	 * Don't align for intra-VMA moves as we may destroy existing mappings.
-	 */
-	if ((vma != new_vma)
-		&& (len >= PMD_SIZE - (old_addr & ~PMD_MASK))) {
-		realign_addr(&old_addr, vma, &new_addr, new_vma, PMD_MASK);
-	}
+	/* If possible, realign addresses to PMD boundary for faster copy. */
+	if (len >= PMD_SIZE - (old_addr & ~PMD_MASK))
+		realign_addr(&old_addr, vma, &new_addr, new_vma, PMD_MASK, for_stack);
 
 	if (is_vm_hugetlb_page(vma))
 		return move_hugetlb_page_tables(vma, new_vma, old_addr,
@@ -696,7 +696,7 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 	}
 
 	moved_len = move_page_tables(vma, old_addr, new_vma, new_addr, old_len,
-				     need_rmap_locks);
+				     need_rmap_locks, false);
 	if (moved_len < old_len) {
 		err = -ENOMEM;
 	} else if (vma->vm_ops && vma->vm_ops->mremap) {
@@ -710,7 +710,7 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 		 * and then proceed to unmap new area instead of old.
 		 */
 		move_page_tables(new_vma, new_addr, vma, old_addr, moved_len,
-				 true);
+				 true, false);
 		vma = new_vma;
 		old_len = new_len;
 		old_addr = new_addr;
