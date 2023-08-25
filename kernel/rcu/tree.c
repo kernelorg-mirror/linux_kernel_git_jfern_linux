@@ -5007,7 +5007,9 @@ void __init rcu_init(void)
 	rcu_test_sync_prims();
 }
 
+#ifndef ED
 #include "tree_stall.h"
 #include "tree_exp.h"
 #include "tree_nocb.h"
 #include "tree_plugin.h"
+#endif

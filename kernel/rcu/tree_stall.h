@@ -8,6 +8,8 @@
  */
 
 #include <linux/kvm_para.h>
+#define ED
+#include "tree.c"
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -1054,3 +1056,6 @@ static int __init rcu_sysrq_init(void)
 	return 0;
 }
 early_initcall(rcu_sysrq_init);
+#include "tree_exp.h"
+#include "tree_nocb.h"
+#include "tree_plugin.h"
