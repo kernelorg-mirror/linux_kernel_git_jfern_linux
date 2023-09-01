@@ -172,6 +172,9 @@ module_param(gp_init_delay, int, 0444);
 static int gp_cleanup_delay;
 module_param(gp_cleanup_delay, int, 0444);
 
+static int enable_cs_bug;
+module_param(enable_cs_bug, int, 0444);
+
 // Add delay to rcu_read_unlock() for strict grace periods.
 static int rcu_unlock_delay;
 #ifdef CONFIG_RCU_STRICT_GRACE_PERIOD

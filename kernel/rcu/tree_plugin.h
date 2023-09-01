@@ -309,11 +309,25 @@ static void rcu_qs(void)
  *
  * Caller must disable interrupts.
  */
+
+int inc_this;
 void rcu_note_context_switch(bool preempt)
 {
 	struct task_struct *t = current;
 	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
 	struct rcu_node *rnp;
+	static int nr_cs;
+	int i;
+
+	// Every 1000 context switches, spin for 5ms
+	// Only do this if we are 5 seconds past boot.
+	if (enable_cs_bug && nr_cs++ % 1000 == 0 && ktime_get_boottime_ns() > 5000000000UL) {
+		pr_info("Context switch exceeded %d\n", nr_cs);
+		for (i = 0; i < 110000000UL; i++) {
+			WRITE_ONCE(inc_this, i);
+			cpu_relax();
+		}
+	}
 
 	trace_rcu_utilization(TPS("Start context switch"));
 	lockdep_assert_irqs_disabled();
