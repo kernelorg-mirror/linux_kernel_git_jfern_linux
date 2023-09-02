@@ -1,0 +1,24 @@
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index c52c2eba7c73..0fd99798c274 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -6588,6 +6588,8 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
+  *
+  * WARNING: must be called with preemption disabled!
+  */
++static int rcu_tort_ds;
++
+ static void __sched notrace __schedule(unsigned int sched_mode)
+ {
+ 	struct task_struct *prev, *next;
+@@ -6638,6 +6640,10 @@ static void __sched notrace __schedule(unsigned int sched_mode)
+ 	 * that we form a control dependency vs deactivate_task() below.
+ 	 */
+ 	prev_state = READ_ONCE(prev->__state);
++	 // Dump stack for uninterruptible every 10 stacks.
++	if (prev_state & TASK_UNINTERRUPTIBLE && ((rcu_tort_ds++ % 10) == 0)) {
++		trace_dump_stack(0);
++	}
+ 	if (!(sched_mode & SM_MASK_PREEMPT) && prev_state) {
+ 		if (signal_pending_state(prev_state, prev)) {
+ 			WRITE_ONCE(prev->__state, TASK_RUNNING);
