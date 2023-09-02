@@ -40,6 +40,7 @@ static int send_ipis(void *data) {
 }
 
 static int __init my_module_init(void) {
+    // WARN_ON_ONCE(true);
     printk(KERN_INFO "Loading module to continuously send IPIs...\n");
 
     target_cpu = (smp_processor_id() + 1) % nr_cpu_ids; // Choose the next CPU as target
