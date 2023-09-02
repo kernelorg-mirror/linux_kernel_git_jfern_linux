@@ -1,0 +1,34 @@
+diff --git a/kernel/rcu/tree_plugin.h b/kernel/rcu/tree_plugin.h
+index 65a73cd62a7d..54a3e43cea29 100644
+--- a/kernel/rcu/tree_plugin.h
++++ b/kernel/rcu/tree_plugin.h
+@@ -319,6 +319,8 @@ void rcu_note_context_switch(bool preempt)
+ 	static int nr_cs;
+ 	int i;
+ 
++	trace_printk("We are here: (%s) (%d)\n", __FILE__, __LINE__);
++
+ 	// Every 1000 context switches, spin for 5ms
+ 	// Only do this if we are 5 seconds past boot.
+ 	if (enable_cs_bug && nr_cs++ % 1000 == 0 && ktime_get_boottime_ns() > 5000000000UL) {
+@@ -328,12 +330,20 @@ void rcu_note_context_switch(bool preempt)
+ 			cpu_relax();
+ 		}
+ 	}
++	trace_printk("We are here: (%s) (%d)\n", __FILE__, __LINE__);
++
+ 
+ 	trace_rcu_utilization(TPS("Start context switch"));
++	trace_printk("We are here: (%s) (%d)\n", __FILE__, __LINE__);
++
+ 	lockdep_assert_irqs_disabled();
+ 	WARN_ONCE(!preempt && rcu_preempt_depth() > 0, "Voluntary context switch within RCU read-side critical section!");
++	trace_printk("We are here: (%s) (%d)\n", __FILE__, __LINE__);
++
+ 	if (rcu_preempt_depth() > 0 &&
+ 	    !t->rcu_read_unlock_special.b.blocked) {
++	trace_printk("We are here: (%s) (%d)\n", __FILE__, __LINE__);
++
+ 
+ 		/* Possibly blocking in an RCU read-side critical section. */
+ 		rnp = rdp->mynode;
