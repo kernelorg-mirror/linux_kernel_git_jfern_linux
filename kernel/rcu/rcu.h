@@ -121,6 +121,10 @@ static inline void rcu_seq_end(unsigned long *sp)
  * current time. This value is the current grace-period number plus two to the
  * power of the number of low-order bits reserved for state, then rounded up to
  * the next value in which the state bits are all zero.
+ *
+ * Basically, if any of the bits are set in the state portion of the sequence
+ * number, then return (COUNTER_PORTION + 2) << RCU_SEQ_CTR_SHIFT.
+ * Otherwise, return (COUNTER_PORTION + 1) << RCU_SEQ_CTR_SHIFT.
  */
 static inline unsigned long rcu_seq_snap(unsigned long *sp)
 {
