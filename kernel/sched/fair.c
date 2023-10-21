@@ -57,6 +57,31 @@
 #include "stats.h"
 #include "autogroup.h"
 
+static void num_to_comma_string(char arr[32], unsigned long num) {
+    int i = 0, j = 0;
+
+	// Truncate all bits about 20 in num
+	num &= 0xfffff;
+
+    do {
+        if (i && !(i % 3)) {
+            arr[j++] = ',';
+        }
+        arr[j++] = '0' + (num % 10);
+        num /= 10;
+        i++;
+    } while (num);
+
+    arr[j] = '\0';
+
+    // Reverse the string
+    for (i = 0, j--; i < j; i++, j--) {
+        char tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+}
+
 /*
  * The initial- and re-scaling of tunables is configurable
  *
@@ -6606,8 +6631,15 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	sub_nr_running(rq, 1);
 
 	/* balance early to pull high priority tasks */
-	if (unlikely(!was_sched_idle && sched_idle_rq(rq)))
+	if (unlikely(!was_sched_idle && sched_idle_rq(rq))) {
+		char jiffies_str[32], next_balance_str[32];
+		num_to_comma_string(jiffies_str, jiffies);
+		num_to_comma_string(next_balance_str, rq->next_balance);
+		trace_printk(
+			"dequeue: set rq->next_balance = jiffies. rq->next_balance[cpu=%d]: %s -> %s\n",
+			cpu_of(rq), next_balance_str, jiffies_str);
 		rq->next_balance = jiffies;
+	}
 
 dequeue_throttle:
 	util_est_update(&rq->cfs, p, task_sleep);
@@ -11496,9 +11528,18 @@ out:
 	 * When the cpu is attached to null domain for ex, it will not be
 	 * updated.
 	 */
-	if (likely(update_next_balance))
-		rq->next_balance = next_balance;
+	if (likely(update_next_balance)) {
+		char jiffies_str[32], next_balance_str[32], rq_next_balance_str[32];
+		num_to_comma_string(jiffies_str, jiffies);
+		num_to_comma_string(next_balance_str, next_balance);
+		num_to_comma_string(rq_next_balance_str, rq->next_balance);
 
+		trace_printk(
+			"%s: rq[cpu=%d]->next_balance: %s -> %s (jiffies=%s)\n",
+			__func__, cpu, rq_next_balance_str, next_balance_str,
+			jiffies_str);
+		rq->next_balance = next_balance;
+	}
 }
 
 static inline int on_null_domain(struct rq *rq)
@@ -12139,8 +12180,17 @@ static int newidle_balance(struct rq *this_rq, struct rq_flags *rf)
 
 out:
 	/* Move the next balance forward */
-	if (time_after(this_rq->next_balance, next_balance))
+	if (time_after(this_rq->next_balance, next_balance)) {
+		char jiffies_str[32], next_balance_str[32], rq_next_balance_str[32];
+		num_to_comma_string(jiffies_str, jiffies);
+		num_to_comma_string(next_balance_str, next_balance);
+		num_to_comma_string(rq_next_balance_str, this_rq->next_balance);
+		trace_printk(
+			"%s: this_rq[cpu=%d]->next_balance: %s -> %s (jiffies=%s)\n",
+			__func__, this_cpu, rq_next_balance_str, next_balance_str,
+			jiffies_str);
 		this_rq->next_balance = next_balance;
+	}
 
 	if (pulled_task)
 		this_rq->idle_stamp = 0;
@@ -12190,10 +12240,18 @@ void trigger_load_balance(struct rq *rq)
 	if (unlikely(on_null_domain(rq) || !cpu_active(cpu_of(rq))))
 		return;
 
-	if (time_after_eq(jiffies, rq->next_balance))
+	if (time_after_eq(jiffies, rq->next_balance)) {
+		char jiffies_str[32];
+		char next_balance_str[32];
+		num_to_comma_string(jiffies_str, jiffies);
+		num_to_comma_string(next_balance_str, rq->next_balance);
+		trace_printk(
+			"trigger_load_balance(cpu=%d): time_after_eq(jiffies=%s, rq->next_balance=%s) = 1\n",
+			cpu_of(rq), jiffies_str, next_balance_str);
 		raise_softirq(SCHED_SOFTIRQ);
 
-	nohz_balancer_kick(rq);
+		nohz_balancer_kick(rq);
+	}
 }
 
 static void rq_online_fair(struct rq *rq)
