@@ -2325,11 +2325,12 @@ static struct task_struct *pick_next_task_dl(struct rq *rq)
 	if (!p)
 		return p;
 
-	if (!p->dl_server)
+	if (!p->dl_server) {
 		set_next_task_dl(rq, p, true);
 
-	if (hrtick_enabled(rq))
-		start_hrtick_dl(rq, &p->dl);
+		if (hrtick_enabled(rq))
+			start_hrtick_dl(rq, &p->dl);
+	}
 
 	return p;
 }
