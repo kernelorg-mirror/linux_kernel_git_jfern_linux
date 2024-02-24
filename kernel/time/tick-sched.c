@@ -857,7 +857,7 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	 * If the tick is due in the next period, keep it ticking or
 	 * force prod the timer.
 	 */
-	if (delta <= (u64)TICK_NSEC || delta_hr <= (u64)TICK_NSEC) {
+	if (delta <= (u64)TICK_NSEC) { // TODO: Turn this on with a boot param for testing || delta_hr <= (u64)TICK_NSEC) {
 		/*
 		 * Tell the timer code that the base is not idle, i.e. undo
 		 * the effect of get_next_timer_interrupt():
