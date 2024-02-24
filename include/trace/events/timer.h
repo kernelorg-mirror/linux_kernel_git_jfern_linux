@@ -467,6 +467,29 @@ TRACE_EVENT(tick_restart,
 			__entry->expiry / NSEC_PER_SEC, (__entry->expiry % NSEC_PER_SEC) / NSEC_PER_USEC)
 );
 #endif /* CONFIG_NO_HZ_COMMON */
+/*
+ * Useful for tracing the periodic occurence of the low level
+ * tick handler.
+ */
+TRACE_EVENT(tick_sched_do_timer,
+
+	TP_PROTO(int do_timer_cpu, int idle_tick),
+
+	TP_ARGS(do_timer_cpu, idle_tick),
+
+	TP_STRUCT__entry(
+		__field(int, do_timer_cpu)
+		__field(int, idle_tick)
+	),
+
+	TP_fast_assign(
+		__entry->do_timer_cpu = do_timer_cpu;
+		__entry->idle_tick = idle_tick;
+	),
+
+	TP_printk("do_timer_cpu=%d idle_tick=%d", __entry->do_timer_cpu,
+			  __entry->idle_tick)
+);
 
 #endif /*  _TRACE_TIMER_H */
 

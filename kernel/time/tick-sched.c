@@ -227,6 +227,8 @@ static void tick_sched_do_timer(struct tick_sched *ts, ktime_t now)
 
 	if (ts->inidle)
 		ts->got_idle_tick = 1;
+
+	trace_tick_sched_do_timer(tick_do_timer_cpu, ts->inidle);
 }
 
 static void tick_sched_handle(struct tick_sched *ts, struct pt_regs *regs)
