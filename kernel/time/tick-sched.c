@@ -801,7 +801,7 @@ static inline bool local_timer_softirq_pending(void)
 
 static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 {
-	u64 basemono, next_tick, delta, expires;
+	u64 basemono, next_tick, delta, delta_hr, expires, next_hr_wo;
 	unsigned long basejiff;
 	unsigned int seq;
 
@@ -843,12 +843,21 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	if (WARN_ON_ONCE(basemono > next_tick))
 		next_tick = basemono;
 
+	delta = next_tick - basemono;
+
+	next_hr_wo = hrtimer_next_event_without(&ts->sched_timer);
+	delta_hr = next_hr_wo - basemono;
+
+	if (delta > (s64)TICK_NSEC && delta_hr <= (s64)TICK_NSEC) {
+		trace_printk("HR before next tick. Keep on. now: %llu, next_hr: %llu next_tick: %llu\n",
+				basemono, next_hr_wo, next_tick);
+	}
+
 	/*
 	 * If the tick is due in the next period, keep it ticking or
 	 * force prod the timer.
 	 */
-	delta = next_tick - basemono;
-	if (delta <= (u64)TICK_NSEC) {
+	if (delta <= (u64)TICK_NSEC || delta_hr <= (u64)TICK_NSEC) {
 		/*
 		 * Tell the timer code that the base is not idle, i.e. undo
 		 * the effect of get_next_timer_interrupt():
@@ -859,6 +868,7 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 		 * next period, so no point in stopping it either, bail.
 		 */
 		if (!ts->tick_stopped) {
+			trace_printk("Tick was not ->tick_stopped. Leaving it on\n");
 			ts->timer_expires = 0;
 			goto out;
 		}
@@ -1130,6 +1140,7 @@ void tick_nohz_idle_stop_tick(void)
 	if (expires > 0LL) {
 		int was_stopped = ts->tick_stopped;
 
+		trace_printk("Stopping tick. Expires: %llu\n", expires);
 		tick_nohz_stop_tick(ts, cpu);
 
 		ts->idle_sleeps++;
@@ -1140,6 +1151,7 @@ void tick_nohz_idle_stop_tick(void)
 			nohz_balance_enter_idle(cpu);
 		}
 	} else {
+		trace_printk("Retaining tick.\n");
 		tick_nohz_retain_tick(ts);
 	}
 }
