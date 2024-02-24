@@ -432,17 +432,41 @@ TRACE_EVENT(tick_stop,
 	TP_STRUCT__entry(
 		__field( int ,		success	)
 		__field( int ,		dependency )
+		__field( s64,		now	)
 	),
 
 	TP_fast_assign(
 		__entry->success	= success;
 		__entry->dependency	= dependency;
+		__entry->now		= ktime_get();	// TODO: Look into using ktime_get_ts64 however this is not what tick-sched does.
 	),
 
-	TP_printk("success=%d dependency=%s",  __entry->success, \
-			show_tick_dep_name(__entry->dependency))
+	TP_printk("now=%llu.%06lu success=%d dependency=%s",
+			__entry->now / NSEC_PER_SEC, (__entry->now % NSEC_PER_SEC) / NSEC_PER_USEC,
+			__entry->success, show_tick_dep_name(__entry->dependency))
 );
-#endif
+
+TRACE_EVENT(tick_restart,
+
+	TP_PROTO(s64 expiry),
+
+	TP_ARGS(expiry),
+
+	TP_STRUCT__entry(
+		__field( s64,		now	)
+		__field( s64,		expiry	)
+	),
+
+	TP_fast_assign(
+		__entry->now	= ktime_get();
+		__entry->expiry	= expiry;
+	),
+
+	TP_printk("now=%llu.%06lu expiry=%llu.%06lu",
+			__entry->now / NSEC_PER_SEC, (__entry->now % NSEC_PER_SEC) / NSEC_PER_USEC,
+			__entry->expiry / NSEC_PER_SEC, (__entry->expiry % NSEC_PER_SEC) / NSEC_PER_USEC)
+);
+#endif /* CONFIG_NO_HZ_COMMON */
 
 #endif /*  _TRACE_TIMER_H */
 

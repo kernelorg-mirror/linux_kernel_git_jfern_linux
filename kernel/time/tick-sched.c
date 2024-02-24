@@ -779,6 +779,7 @@ static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 
 	/* Forward the time to expire in the future */
 	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
+	trace_tick_restart(hrtimer_get_expires(&ts->sched_timer));
 
 	if (ts->nohz_mode == NOHZ_MODE_HIGHRES) {
 		hrtimer_start_expires(&ts->sched_timer,
@@ -849,8 +850,12 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	delta_hr = next_hr_wo - basemono;
 
 	if (delta > (s64)TICK_NSEC && delta_hr <= (s64)TICK_NSEC) {
-		trace_printk("HR before next tick. Keep on. now: %llu, next_hr: %llu next_tick: %llu\n",
-				basemono, next_hr_wo, next_tick);
+		ktime_t now = ktime_get();
+		trace_printk("HR before next tick! now=%llu.%06llu basemono=%llu.%06llu next_hr=%llu.%06llu next_tick=%llu.%06llu\n",
+				now / NSEC_PER_SEC, (now % NSEC_PER_SEC) / 1000,
+				basemono / NSEC_PER_SEC, (basemono % NSEC_PER_SEC) / 1000,
+				next_hr_wo / NSEC_PER_SEC, (next_hr_wo % NSEC_PER_SEC) / 1000,
+				next_tick / NSEC_PER_SEC, (next_tick % NSEC_PER_SEC) / 1000);
 	}
 
 	/*
@@ -868,7 +873,7 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 		 * next period, so no point in stopping it either, bail.
 		 */
 		if (!ts->tick_stopped) {
-			trace_printk("Tick was not ->tick_stopped. Leaving it on\n");
+			trace_printk("Tick not ->tick_stopped. Leaving on\n");
 			ts->timer_expires = 0;
 			goto out;
 		}
@@ -1138,20 +1143,27 @@ void tick_nohz_idle_stop_tick(void)
 	ts->idle_calls++;
 
 	if (expires > 0LL) {
+		ktime_t now = ktime_get();
 		int was_stopped = ts->tick_stopped;
 
-		trace_printk("Stopping tick. Expires: %llu\n", expires);
 		tick_nohz_stop_tick(ts, cpu);
 
 		ts->idle_sleeps++;
 		ts->idle_expires = expires;
+
+		trace_printk("Called stop_tick. now=%llu.%06llu expires=%llu.%06llu ts_stopped=%d->%d\n",
+				now / NSEC_PER_SEC, (now % NSEC_PER_SEC) / 1000,
+				expires / NSEC_PER_SEC, (expires % NSEC_PER_SEC) / 1000,
+				was_stopped, ts->tick_stopped);
 
 		if (!was_stopped && ts->tick_stopped) {
 			ts->idle_jiffies = ts->last_jiffies;
 			nohz_balance_enter_idle(cpu);
 		}
 	} else {
-		trace_printk("Retaining tick.\n");
+		trace_printk("Retaining tick. now=%llu.%06llu\n",
+				ktime_get() / NSEC_PER_SEC,
+				(ktime_get() % NSEC_PER_SEC) / 1000);
 		tick_nohz_retain_tick(ts);
 	}
 }
