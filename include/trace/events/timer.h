@@ -459,6 +459,20 @@ TRACE_EVENT(tick_restart,
 
 	TP_fast_assign(
 		__entry->now	= ktime_get();
+
+		/*
+		 * Validate that the mono time (used by ftrace trace_clock=mono
+		 * is close to ktime_get() which the tick-sched code uses).
+		 * The reason for this validation is to be sure that the ftrace
+		 * clock can be relied upon and then we can get rid of
+		 * __entry->now.
+		 */
+		if (__entry->now > ktime_get_mono_fast_ns()) {
+			WARN_ON_ONCE(__entry->now - ktime_get_mono_fast_ns() > 4000);
+		} else {
+			WARN_ON_ONCE(ktime_get_mono_fast_ns() - __entry->now > 4000);
+		}
+
 		__entry->expiry	= expiry;
 	),
 
