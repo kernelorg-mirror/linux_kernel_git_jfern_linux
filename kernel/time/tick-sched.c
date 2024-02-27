@@ -804,20 +804,70 @@ static inline bool local_timer_softirq_pending(void)
 	return local_softirq_pending() & BIT(TIMER_SOFTIRQ);
 }
 
+/*
+ * Based on the last known programmed value of the tick-sched timer (which is
+ * saved in ->last_tick by either the tick-sched handler, or by
+ * tick_nohz_stop_tick(), calculate what the time will be at the next tick
+ * period, considering that the tick is (re)started or left turned on.
+ *
+ * NOTE 1: We avoid ktime_get() for getting 'now' and instead rely on the
+ * last_jiffies_update passed into this function. This is OK because the last
+ * jiffies update would have happened at most TICK_NSEC ago. Thus using it as a
+ * reference for the next tick period is OK. (TODO: Add tracing to confirm now and last_jiffies is atmost TICK_NSEC apart)
+ *
+ * NOTE 2: In order to determine the next period, using ts->last_tick as a
+ * starting point for reference is way better than purely depending on the
+ * last_jiffies_update. In the worst case, if last_jiffies_update is not updated
+ * for a long time say due to issues on the do_timer CPU, at least we are going
+ * to consider the next->period to be at ts->last_tick at a minimum (ts->last_tick
+ * could have been updated by the local timer event).
+ */
+static ktime_t tick_nohz_get_next_period(struct tick_sched *ts, ktime_t now)
+{
+	ktime_t next_tick, delta;
+	u64 orun;
+
+	if (ts->last_tick > now)
+		return ts->last_tick; // TODO, does ->last_tick boot as 0 ? Can this func be called before
+
+	delta = ktime_sub(now, ts->last_tick);
+	if (delta < TICK_NSEC)
+		return ktime_add_ns(ts->last_tick, TICK_NSEC);
+
+	orun = ktime_divns(delta, TICK_NSEC);
+	next_tick = ktime_add_ns(ts->last_tick, TICK_NSEC * orun);
+	if (next_tick > now)
+		return next_tick;
+	return ktime_add_ns(next_tick, TICK_NSEC);
+}
+
 static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 {
 	u64 basemono, next_tick, delta, delta_hr, expires, next_hr_wo;
+	u64 next_period, last_jiffies_update_read;
 	unsigned long basejiff;
 	unsigned int seq;
 
 	/* Read jiffies and the time when jiffies were updated last */
 	do {
 		seq = read_seqcount_begin(&jiffies_seq);
-		basemono = last_jiffies_update;
+		last_jiffies_update_read = last_jiffies_update;
 		basejiff = jiffies;
 	} while (read_seqcount_retry(&jiffies_seq, seq));
 	ts->last_jiffies = basejiff;
+
+	/*
+	 * Find the next time the tick-sched timer will fire if the tick is
+	 * (re)started or left running.
+	 */
+	next_period = tick_nohz_get_next_period(ts, last_jiffies_update_read);
+
+	/* The basemono is set to the last time a tick event has or would have fired. */
+	basemono = next_period - TICK_NSEC;
 	ts->timer_expires_base = basemono;
+
+	// TODO: Delete if not possible. Or convert to if() and correct next_period.
+	WARN_ON_ONCE(last_jiffies_update_read + TICK_NSEC > next_period);
 
 	/*
 	 * Keep the periodic tick, when RCU, architecture or irq_work
@@ -831,7 +881,7 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	 */
 	if (rcu_needs_cpu() || arch_needs_cpu() ||
 	    irq_work_needs_cpu() || local_timer_softirq_pending()) {
-		next_tick = basemono + TICK_NSEC;
+		next_tick = next_period;
 	} else {
 		/*
 		 * Get the next pending timer. If high resolution
@@ -1439,17 +1489,29 @@ static void tick_nohz_lowres_handler(struct clock_event_device *dev)
 	tick_sched_do_timer(ts, now);
 	tick_sched_handle(ts, regs);
 
-	ts->last_tick = now;
-
 	/*
 	 * In dynticks mode, tick reprogram is deferred:
 	 * - to the idle task if in dynticks-idle
 	 * - to IRQ exit if in full-dynticks.
 	 */
 	if (likely(!ts->tick_stopped)) {
-		hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
+		/*
+		 * In lowres mode, program the tick to fire at TICK_NSEC.
+		 * This effectively coalesces timer expiries.
+		 */
+		hrtimer_set_expires(&ts->sched_timer, now);
 		hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
-		tick_program_event(hrtimer_get_expires(&ts->sched_timer), 1);
+
+		/*
+		 * The tick itself might have caused a wake up from nohz and
+		 * will cause a tick restart shortly. Make sure
+		 * tick_nohz_restart() sees the latest value of the timer
+		 * expiry. In case an IRQ other than the tick caused a wake up,
+		 * tick_nohz_restart() will read the ->last_tick that
+		 * tick_nohz_stop_tick() set instead.
+		 */
+		ts->last_tick = hrtimer_get_expires(&ts->sched_timer);
+		tick_program_event(ts->last_tick, 1);
 	}
 }
 
