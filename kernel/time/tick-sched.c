@@ -777,6 +777,8 @@ EXPORT_SYMBOL_GPL(get_cpu_iowait_time_us);
 static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 {
 	hrtimer_cancel(&ts->sched_timer);
+	trace_printk("Restarting tick. Read ->last_tick=%llu.%06llu before forward.\n",
+			ts->last_tick / NSEC_PER_SEC, (ts->last_tick % NSEC_PER_SEC) / 1000);
 	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
 
 	/* Forward the time to expire in the future */
@@ -951,6 +953,8 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 		quiet_vmstat();
 
 		ts->last_tick = hrtimer_get_expires(&ts->sched_timer);
+		trace_printk("tick_stopped 1->0, setting ts->last_tick=%llu.%06llu\n",
+				ts->last_tick / NSEC_PER_SEC, (ts->last_tick % NSEC_PER_SEC) / 1000);
 		ts->tick_stopped = 1;
 		trace_tick_stop(1, TICK_DEP_MASK_NONE);
 	}
@@ -1426,6 +1430,9 @@ static void tick_nohz_lowres_handler(struct clock_event_device *dev)
 	struct tick_sched *ts = this_cpu_ptr(&tick_cpu_sched);
 	struct pt_regs *regs = get_irq_regs();
 	ktime_t now = ktime_get();
+
+	trace_printk("TICK: tick_nohz_lowres_handler, now=%llu.%06llu\n",
+			now / NSEC_PER_SEC, (now % NSEC_PER_SEC) / 1000);
 
 	dev->next_event = KTIME_MAX;
 
