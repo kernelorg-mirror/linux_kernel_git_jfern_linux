@@ -60,6 +60,7 @@ pub mod print;
 pub mod rbtree;
 pub mod revocable;
 pub mod sizes;
+pub mod scatterlist;
 mod static_assert;
 #[doc(hidden)]
 pub mod std_vendor;
