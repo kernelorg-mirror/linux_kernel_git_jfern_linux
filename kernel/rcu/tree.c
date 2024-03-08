@@ -1917,7 +1917,22 @@ static noinline_for_stack bool rcu_gp_init(void)
 		trace_rcu_grace_period_init(rcu_state.name, rnp->gp_seq,
 					    rnp->level, rnp->grplo,
 					    rnp->grphi, rnp->qsmask);
-		/* Quiescent states for tasks on any now-offline CPUs. */
+		/*
+		 * === Quiescent states for tasks on any now-offline CPUs. ===
+		 *
+		 * QS reporting for now-offline CPUs should only be performed from
+		 * either here, i.e., gp_init() or from rcutree_report_cpu_dead().
+		 *
+		 * Note that, when reporting quiescent states for now-offline CPUs,
+		 * the sequence of code doing those reports while also accessing
+		 * ->qsmask and ->qsmaskinitnext, has to be an atomic sequence so
+		 * that QS reporting is not missed! Otherwise it possible that
+		 * rcu_implicit_dyntick_qs() screams. This is ensured by keeping
+		 * the rnp->lock acquired throughout these QS-reporting
+		 * sequences, which is also acquired in
+		 * rcutree_report_cpu_dead(), so, acquiring ofl_lock is not
+		 * necessary here to synchronize with that function.
+		 */
 		mask = rnp->qsmask & ~rnp->qsmaskinitnext;
 		rnp->rcu_gp_init_mask = mask;
 		if ((mask || rnp->wait_blkd_tasks) && rcu_is_leaf_node(rnp))
@@ -5116,6 +5131,25 @@ void rcutree_report_cpu_dead(void)
 	raw_spin_lock_irqsave_rcu_node(rnp, flags); /* Enforce GP memory-order guarantee. */
 	rdp->rcu_ofl_gp_seq = READ_ONCE(rcu_state.gp_seq);
 	rdp->rcu_ofl_gp_state = READ_ONCE(rcu_state.gp_state);
+
+	/*
+	 * === Quiescent state reporting for now-offline CPUs. ===
+	 *
+	 * QS reporting for now-offline CPUs should only be performed from
+	 * either here, i.e. rcutree_report_cpu_dead(), or gp_init().
+	 *
+	 * Note that, when reporting quiescent states for now-offline CPUs,
+	 * the sequence of code doing those reports while also accessing
+	 * ->qsmask and ->qsmaskinitnext, has to be an atomic sequence so
+	 * that QS reporting is not missed! Otherwise it possible that
+	 * rcu_implicit_dyntick_qs() screams. This is ensured by keeping
+	 * the rnp->lock acquired throughout these QS-reporting sequences, which
+	 * is also acquired in gp_init().
+	 * One slight change to this rule is below, where we release and
+	 * reacquire the lock after a QS report, but before we clear the
+	 * ->qsmaskinitnext bit. That is OK to do, because gp_init() report a
+	 * QS again, if it acquired the rnp->lock before we reacquired below.
+	 */
 	if (rnp->qsmask & mask) { /* RCU waiting on outgoing CPU? */
 		/* Report quiescent state -before- changing ->qsmaskinitnext! */
 		rcu_disable_urgency_upon_qs(rdp);
