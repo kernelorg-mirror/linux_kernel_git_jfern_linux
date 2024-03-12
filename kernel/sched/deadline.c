@@ -1053,7 +1053,7 @@ static int start_dl_timer(struct sched_dl_entity *dl_se)
 	struct dl_rq *dl_rq = dl_rq_of_se(dl_se);
 	struct rq *rq = rq_of_dl_rq(dl_rq);
 	ktime_t now, act;
-	s64 delta;
+	s64 delta, time_since_stop, time_till_act;
 
 	lockdep_assert_rq_held(rq);
 
@@ -1071,6 +1071,17 @@ static int start_dl_timer(struct sched_dl_entity *dl_se)
 	if (dl_se->dl_defer_armed) {
 		WARN_ON_ONCE(!dl_se->dl_throttled);
 		act = ns_to_ktime(dl_se->deadline - dl_se->runtime);
+
+		/*
+		 * If the server was recently stopped and started within the
+		 * last period, queue it soon.
+		 */
+		if (dl_se->server_last_stopped) {
+			time_since_stop = rq_clock(rq) - dl_se->server_last_stopped;
+			if (time_since_stop < dl_se->dl_period) {
+				act = rq_clock(rq);
+			}
+		}
 	} else {
 		act = ns_to_ktime(dl_next_period(dl_se));
 	}
@@ -1508,6 +1519,7 @@ void dl_server_stop(struct sched_dl_entity *dl_se)
 	hrtimer_try_to_cancel(&dl_se->dl_timer);
 	dl_se->dl_defer_armed = 0;
 	dl_se->dl_throttled = 0;
+	dl_se->server_last_stopped = rq_clock(dl_se->rq);
 }
 
 void dl_server_init(struct sched_dl_entity *dl_se, struct rq *rq,

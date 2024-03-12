@@ -682,6 +682,7 @@ struct sched_dl_entity {
 	dl_server_has_tasks_f		server_has_tasks;
 	dl_server_pick_f		server_pick_next;
 	dl_server_pick_f		server_pick_task;
+	u64				server_last_stopped;
 
 #ifdef CONFIG_RT_MUTEXES
 	/*
