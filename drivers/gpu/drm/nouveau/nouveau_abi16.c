@@ -439,13 +439,13 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	 */
 	switch (device->info.family) {
 	case NV_DEVICE_INFO_V0_VOLTA:
-		ret = nvif_object_ctor(&chan->chan->user, "abi16CeWar", 0, VOLTA_DMA_COPY_A,
+		ret = nvif_object_ctor(&chan->chan->chan.object, "abi16CeWar", 0, VOLTA_DMA_COPY_A,
 				       NULL, 0, &chan->ce);
 		if (ret)
 			goto done;
 		break;
 	case NV_DEVICE_INFO_V0_TURING:
-		ret = nvif_object_ctor(&chan->chan->user, "abi16CeWar", 0, TURING_DMA_COPY_A,
+		ret = nvif_object_ctor(&chan->chan->chan.object, "abi16CeWar", 0, TURING_DMA_COPY_A,
 				       NULL, 0, &chan->ce);
 		if (ret)
 			goto done;
@@ -533,7 +533,7 @@ nouveau_abi16_ioctl_grobj_alloc(ABI16_IOCTL_ARGS)
 	if (!chan)
 		return nouveau_abi16_put(abi16, -ENOENT);
 
-	ret = nvif_object_sclass_get(&chan->chan->user, &sclass);
+	ret = nvif_object_sclass_get(&chan->chan->chan.object, &sclass);
 	if (ret < 0)
 		return nouveau_abi16_put(abi16, ret);
 
@@ -592,7 +592,7 @@ nouveau_abi16_ioctl_grobj_alloc(ABI16_IOCTL_ARGS)
 
 	list_add(&ntfy->head, &chan->notifiers);
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16EngObj", init->handle,
+	ret = nvif_object_ctor(&chan->chan->chan.object, "abi16EngObj", init->handle,
 			       oclass, NULL, 0, &ntfy->object);
 
 	if (ret)
@@ -655,7 +655,7 @@ nouveau_abi16_ioctl_notifierobj_alloc(ABI16_IOCTL_ARGS)
 		args.limit += chan->ntfy->offset;
 	}
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16Ntfy", info->handle,
+	ret = nvif_object_ctor(&chan->chan->chan.object, "abi16Ntfy", info->handle,
 			       NV_DMA_IN_MEMORY, &args, sizeof(args),
 			       &ntfy->object);
 	if (ret)
@@ -781,7 +781,7 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16EngObj", args->handle, args->oclass,
+	ret = nvif_object_ctor(&chan->chan->chan.object, "abi16EngObj", args->handle, args->oclass,
 			       NULL, 0, &obj->engobj);
 	if (ret)
 		nouveau_abi16_obj_del(obj);
@@ -809,7 +809,7 @@ nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *io
 	if (!chan)
 		return -EINVAL;
 
-	ret = nvif_object_sclass_get(&chan->chan->user, &sclass);
+	ret = nvif_object_sclass_get(&chan->chan->chan.object, &sclass);
 	if (ret < 0)
 		return ret;
 
