@@ -318,7 +318,7 @@ static int
 get_fp_strap(struct drm_device *dev, struct nvbios *bios)
 {
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 
 	/*
 	 * The fp strap is normally dictated by the "User Strap" in
@@ -332,10 +332,10 @@ get_fp_strap(struct drm_device *dev, struct nvbios *bios)
 	if (bios->major_version < 5 && bios->data[0x48] & 0x4)
 		return NVReadVgaCrtc5758(dev, 0, 0xf) & 0xf;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_MAXWELL)
+	if (device->impl->family >= NVIF_DEVICE_MAXWELL)
 		return nvif_rd32(device, 0x001800) & 0x0000000f;
 	else
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (device->impl->family >= NVIF_DEVICE_TESLA)
 		return (nvif_rd32(device, NV_PEXTDEV_BOOT_0) >> 24) & 0xf;
 	else
 		return (nvif_rd32(device, NV_PEXTDEV_BOOT_0) >> 16) & 0xf;
@@ -1251,7 +1251,7 @@ olddcb_table(struct drm_device *dev)
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	u8 *dcb = NULL;
 
-	if (drm->client.device.info.family > NV_DEVICE_INFO_V0_TNT)
+	if (drm->device.impl->family > NVIF_DEVICE_TNT)
 		dcb = ROMPTR(dev, drm->vbios.data[0x36]);
 	if (!dcb) {
 		NV_WARN(drm, "No DCB data found in VBIOS\n");
@@ -2066,7 +2066,7 @@ nouveau_bios_posted(struct drm_device *dev)
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	unsigned htotal;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA)
 		return true;
 
 	htotal  = NVReadVgaCrtc(dev, 0, 0x06);
@@ -2092,7 +2092,7 @@ nouveau_bios_init(struct drm_device *dev)
 	if (!NVInitVBIOS(dev))
 		return -ENODEV;
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA) {
 		ret = parse_dcb_table(dev, bios);
 		if (ret)
 			return ret;
