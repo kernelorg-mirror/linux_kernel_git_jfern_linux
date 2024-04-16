@@ -183,7 +183,6 @@ nouveau_cli_fini(struct nouveau_cli *cli)
 	nouveau_vmm_fini(&cli->svm);
 	nouveau_vmm_fini(&cli->vmm);
 	nvif_mmu_dtor(&cli->mmu);
-	cli->device.object.map.ptr = NULL;
 	nvif_device_dtor(&cli->device);
 	nvif_client_dtor(&cli->base);
 }
@@ -213,8 +212,6 @@ nouveau_cli_init(struct nouveau_drm *drm, const char *sname,
 		NV_PRINTK(err, cli, "Device allocation failed: %d\n", ret);
 		goto done;
 	}
-
-	cli->device.object.map.ptr = drm->device.object.map.ptr;
 
 	ret = nvif_mmu_ctor(&cli->device, "drmMmu", &cli->mmu);
 	if (ret) {
@@ -556,7 +553,7 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 	 * better fix is found - assuming there is one...
 	 */
 	if (drm->device.impl->chipset == 0xc1)
-		nvif_mask(&drm->client.device.object, 0x00088080, 0x00000800, 0x00000000);
+		nvif_mask(&drm->device, 0x00088080, 0x00000800, 0x00000000);
 
 	nouveau_vga_init(drm);
 
@@ -1059,7 +1056,6 @@ nouveau_pmops_runtime_resume(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct nouveau_drm *drm = pci_get_drvdata(pdev);
-	struct nvif_device *device = &drm->client.device;
 	int ret;
 
 	if (!nouveau_pmops_runtime()) {
@@ -1081,7 +1077,7 @@ nouveau_pmops_runtime_resume(struct device *dev)
 	}
 
 	/* do magic */
-	nvif_mask(&device->object, 0x088488, (1 << 25), (1 << 25));
+	nvif_mask(&drm->device, 0x088488, (1 << 25), (1 << 25));
 	drm->dev->switch_power_state = DRM_SWITCH_POWER_ON;
 
 	/* Monitors may have been connected / disconnected during suspend */
