@@ -97,7 +97,7 @@ static int nouveau_noaccel = 0;
 module_param_named(noaccel, nouveau_noaccel, int, 0400);
 
 MODULE_PARM_DESC(modeset, "enable driver (default: auto, "
-		          "0 = disabled, 1 = enabled, 2 = headless)");
+			  "0 = disabled, 1 = enabled, 2 = headless)");
 int nouveau_modeset = -1;
 module_param_named(modeset, nouveau_modeset, int, 0400);
 
@@ -194,22 +194,6 @@ static int
 nouveau_cli_init(struct nouveau_drm *drm, const char *sname,
 		 struct nouveau_cli *cli)
 {
-	static const struct nvif_mclass
-	mems[] = {
-		{ NVIF_CLASS_MEM_GF100, -1 },
-		{ NVIF_CLASS_MEM_NV50 , -1 },
-		{ NVIF_CLASS_MEM_NV04 , -1 },
-		{}
-	};
-	static const struct nvif_mclass
-	vmms[] = {
-		{ NVIF_CLASS_VMM_GP100, -1 },
-		{ NVIF_CLASS_VMM_GM200, -1 },
-		{ NVIF_CLASS_VMM_GF100, -1 },
-		{ NVIF_CLASS_VMM_NV50 , -1 },
-		{ NVIF_CLASS_VMM_NV04 , -1 },
-		{}
-	};
 	int ret;
 
 	snprintf(cli->name, sizeof(cli->name), "%s", sname);
@@ -242,25 +226,11 @@ nouveau_cli_init(struct nouveau_drm *drm, const char *sname,
 		goto done;
 	}
 
-	ret = nvif_mclass(&cli->mmu.object, vmms);
-	if (ret < 0) {
-		NV_PRINTK(err, cli, "No supported VMM class\n");
-		goto done;
-	}
-
-	ret = nouveau_vmm_init(cli, vmms[ret].oclass, &cli->vmm);
+	ret = nouveau_vmm_init(cli, &cli->vmm);
 	if (ret) {
 		NV_PRINTK(err, cli, "VMM allocation failed: %d\n", ret);
 		goto done;
 	}
-
-	ret = nvif_mclass(&cli->mmu.object, mems);
-	if (ret < 0) {
-		NV_PRINTK(err, cli, "No supported MEM class\n");
-		goto done;
-	}
-
-	cli->mem = &mems[ret];
 
 	/* Don't pass in the (shared) sched_wq in order to let
 	 * nouveau_sched_create() create a dedicated one for VM_BIND jobs.
@@ -725,11 +695,35 @@ nouveau_drm_device_new(const struct drm_driver *drm_driver, struct device *paren
 		NV_ERROR(drm, "No supported MMU class (0x%04x)\n", drm->device.impl->mmu.oclass);
 		ret = -ENODEV;
 		goto done;
-        }
+	}
 
-	ret = nvif_mmu_ctor(&drm->device.object, "drmMmu", &drm->mmu);
+	ret = nvif_mmu_ctor(&drm->device, "drmMmu", &drm->mmu);
 	if (ret) {
 		NV_ERROR(drm, "MMU allocation failed: %d\n", ret);
+		goto done;
+	}
+
+	switch (drm->mmu.impl->mem.oclass) {
+	case NVIF_CLASS_MEM_GF100:
+	case NVIF_CLASS_MEM_NV50:
+	case NVIF_CLASS_MEM_NV04:
+		break;
+	default:
+		NV_ERROR(drm, "No supported MEM class (0x%04x)\n", drm->mmu.impl->mem.oclass);
+		ret = -ENODEV;
+		goto done;
+	}
+
+	switch (drm->mmu.impl->vmm.oclass) {
+	case NVIF_CLASS_VMM_GP100:
+	case NVIF_CLASS_VMM_GM200:
+	case NVIF_CLASS_VMM_GF100:
+	case NVIF_CLASS_VMM_NV50:
+	case NVIF_CLASS_VMM_NV04:
+		break;
+	default:
+		NV_ERROR(drm, "No supported VMM class (0x%04x)\n", drm->mmu.impl->vmm.oclass);
+		ret = -ENODEV;
 		goto done;
 	}
 
