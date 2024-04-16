@@ -203,14 +203,11 @@ u_memcpya(uint64_t user, unsigned int nmemb, unsigned int size)
 struct nouveau_drm {
 	struct nvkm_device *nvkm;
 	struct nvif_parent parent;
-	struct nvif_client _client;
+	struct nvif_client client;
 	struct nvif_device device;
 	struct nvif_mmu mmu;
 
-	union {
-		struct nouveau_cli client;
-		struct nouveau_cli cli;
-	};
+	struct nouveau_cli cli;
 	struct drm_device *dev;
 
 	struct list_head clients;
@@ -341,8 +338,8 @@ void nouveau_drm_device_remove(struct nouveau_drm *);
 	dev_##l(_cli->drm->dev->dev, "%s: "f, _cli->name, ##a);                \
 } while(0)
 
-#define NV_PRINTK_(l,drm,f,a...) do {             \
-	dev_##l((drm)->nvkm->dev, "drm: "f, ##a); \
+#define NV_PRINTK_(l,drm,f,a...) do {          \
+	dev_##l(drm->dev->dev, "drm: "f, ##a); \
 } while(0)
 #define NV_FATAL(drm,f,a...) NV_PRINTK_(crit, (drm), f, ##a)
 #define NV_ERROR(drm,f,a...) NV_PRINTK_(err, (drm), f, ##a)
@@ -360,9 +357,9 @@ void nouveau_drm_device_remove(struct nouveau_drm *);
 
 #define NV_PRINTK_ONCE(l,c,f,a...) NV_PRINTK(l##_once,c,f, ##a)
 
-#define NV_ERROR_ONCE(drm,f,a...) NV_PRINTK_ONCE(err, &(drm)->client, f, ##a)
-#define NV_WARN_ONCE(drm,f,a...) NV_PRINTK_ONCE(warn, &(drm)->client, f, ##a)
-#define NV_INFO_ONCE(drm,f,a...) NV_PRINTK_ONCE(info, &(drm)->client, f, ##a)
+#define NV_ERROR_ONCE(drm,f,a...) NV_PRINTK_ONCE(err, &(drm)->cli, f, ##a)
+#define NV_WARN_ONCE(drm,f,a...) NV_PRINTK_ONCE(warn, &(drm)->cli, f, ##a)
+#define NV_INFO_ONCE(drm,f,a...) NV_PRINTK_ONCE(info, &(drm)->cli, f, ##a)
 
 extern int nouveau_modeset;
 
