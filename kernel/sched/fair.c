@@ -5116,7 +5116,7 @@ static bool throttle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (cfs_rq_is_idle(group_cfs_rq(se)))
 			idle_task_delta = cfs_rq->h_nr_running;
 
-		qcfs_rq->h_nr_running -= task_delta;
+		update_h_nr_running(qcfs_rq, -1 * task_delta);
 		qcfs_rq->idle_h_nr_running -= idle_task_delta;
 
 		if (qcfs_rq->load.weight) {
@@ -5138,7 +5138,7 @@ static bool throttle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (cfs_rq_is_idle(group_cfs_rq(se)))
 			idle_task_delta = cfs_rq->h_nr_running;
 
-		qcfs_rq->h_nr_running -= task_delta;
+		update_h_nr_running(qcfs_rq, -1 * task_delta);
 		qcfs_rq->idle_h_nr_running -= idle_task_delta;
 	}
 
@@ -5195,7 +5195,7 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (cfs_rq_is_idle(group_cfs_rq(se)))
 			idle_task_delta = cfs_rq->h_nr_running;
 
-		qcfs_rq->h_nr_running += task_delta;
+		update_h_nr_running(qcfs_rq, task_delta);
 		qcfs_rq->idle_h_nr_running += idle_task_delta;
 
 		/* end evaluation on encountering a throttled cfs_rq */
@@ -5212,7 +5212,7 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (cfs_rq_is_idle(group_cfs_rq(se)))
 			idle_task_delta = cfs_rq->h_nr_running;
 
-		qcfs_rq->h_nr_running += task_delta;
+		update_h_nr_running(qcfs_rq, task_delta);
 		qcfs_rq->idle_h_nr_running += idle_task_delta;
 
 		/* end evaluation on encountering a throttled cfs_rq */
@@ -5827,6 +5827,27 @@ static int sched_idle_cpu(int cpu)
 }
 #endif
 
+static void update_h_nr_running(struct cfs_rq *cfs_rq, int delta)
+{
+	int old_h_nr_running, new_h_nr_running;
+	bool root = (&rq_of(cfs_rq)->cfs == cfs_rq);
+	
+	if (root) {
+		old_h_nr_running = cfs_rq->h_nr_running;
+	}
+
+	new_h_nr_running = cfs_rq->h_nr_running + delta;
+	cfs_rq->h_nr_running = new_h_nr_running;
+	
+	if (root && !!old_h_nr_running != !!new_h_nr_running) {
+		if (new_h_nr_running) {
+			dl_server_start(&rq_of(cfs_rq)->fair_server);
+		} else {
+			dl_server_stop(&rq_of(cfs_rq)->fair_server);
+		}
+	}
+}
+
 /*
  * The enqueue_task method is called before nr_running is
  * increased. Here we update the fair scheduling stats and
@@ -5852,7 +5873,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		/* Account for idle runtime */
 		if (!rq->nr_running)
 			dl_server_update_idle_time(rq, rq->curr);
-		dl_server_start(&rq->fair_server);
 	}
 
 #ifdef CONFIG_SMP
@@ -5880,7 +5900,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		cfs_rq = cfs_rq_of(se);
 		enqueue_entity(cfs_rq, se, flags);
 
-		cfs_rq->h_nr_running++;
+		update_h_nr_running(cfs_rq, 1);
 		cfs_rq->idle_h_nr_running += idle_h_nr_running;
 
 		if (cfs_rq_is_idle(cfs_rq))
@@ -5900,7 +5920,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		se_update_runnable(se);
 		update_cfs_group(se);
 
-		cfs_rq->h_nr_running++;
+		update_h_nr_running(cfs_rq, 1);
 		cfs_rq->idle_h_nr_running += idle_h_nr_running;
 
 		if (cfs_rq_is_idle(cfs_rq))
@@ -5980,7 +6000,7 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		cfs_rq = cfs_rq_of(se);
 		dequeue_entity(cfs_rq, se, flags);
 
-		cfs_rq->h_nr_running--;
+		update_h_nr_running(cfs_rq, -1);
 		cfs_rq->idle_h_nr_running -= idle_h_nr_running;
 
 		if (cfs_rq_is_idle(cfs_rq))
@@ -6012,7 +6032,7 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		se_update_runnable(se);
 		update_cfs_group(se);
 
-		cfs_rq->h_nr_running--;
+		update_h_nr_running(cfs_rq, -1);
 		cfs_rq->idle_h_nr_running -= idle_h_nr_running;
 
 		if (cfs_rq_is_idle(cfs_rq))
@@ -6032,9 +6052,6 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		rq->next_balance = jiffies;
 
 dequeue_throttle:
-	if (!rq->cfs.h_nr_running)
-		dl_server_stop(&rq->fair_server);
-
 	util_est_update(&rq->cfs, p, task_sleep);
 	hrtick_update(rq);
 }
