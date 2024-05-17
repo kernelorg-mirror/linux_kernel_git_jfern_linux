@@ -4,7 +4,14 @@
 //!
 //! C header: [`include/linux/firmware.h`](srctree/include/linux/firmware.h)
 
-use crate::{bindings, device::Device, error::Error, error::Result, str::CStr};
+use crate::{
+    alloc::{Allocator, Flags, Vec},
+    bindings,
+    device::Device,
+    error::Error,
+    error::Result,
+    str::CStr,
+};
 use core::ptr::NonNull;
 
 /// # Invariants
@@ -29,7 +36,8 @@ impl FwFunc {
 ///
 /// This is a simple abstraction around the C firmware API. Just like with the C API, firmware can
 /// be requested. Once requested the abstraction provides direct access to the firmware buffer as
-/// `&[u8]`. The firmware is released once [`Firmware`] is dropped.
+/// `&[u8]`. Alternatively, the firmware can be copied to a new buffer using `Firmware::copy`. The
+/// firmware is released once [`Firmware`] is dropped.
 ///
 /// # Invariants
 ///
@@ -48,6 +56,22 @@ impl FwFunc {
 ///
 /// let fw = Firmware::request(c_str!("path/to/firmware.bin"), &dev)?;
 /// let blob = fw.data();
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ```no_run
+/// use kernel::alloc::allocator::Vmalloc;
+/// # use kernel::{c_str, device::Device, firmware::Firmware};
+///
+/// # fn no_run() -> Result<(), Error> {
+/// # // SAFETY: *NOT* safe, just for the example to get an `ARef<Device>` instance
+/// # let dev = unsafe { Device::from_raw(core::ptr::null_mut()) };
+///
+/// let fw = Firmware::request(c_str!("path/to/firmware.bin"), &dev)?;
+/// let fw = fw.copy::<Vmalloc>(GFP_KERNEL)?;
+/// let blob = fw.as_slice();
 ///
 /// # Ok(())
 /// # }
@@ -98,6 +122,16 @@ impl Firmware {
         // `bindings::firmware` guarantees, if successfully requested, that
         // `bindings::firmware::data` has a size of `bindings::firmware::size` bytes.
         unsafe { core::slice::from_raw_parts((*self.as_raw()).data, self.size()) }
+    }
+
+    /// Copies the requested firmware into a new `Vec<u8, A>`, using the given allocator and flags
+    /// to allocate the vector's backing buffer.
+    pub fn copy<A: Allocator>(&self, flags: Flags) -> Result<Vec<u8, A>> {
+        let mut dst = Vec::<u8, A>::new();
+
+        dst.extend_from_slice(self.data(), flags)?;
+
+        Ok(dst)
     }
 }
 
