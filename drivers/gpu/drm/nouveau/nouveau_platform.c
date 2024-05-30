@@ -41,6 +41,8 @@ static void nouveau_platform_remove(struct platform_device *pdev)
 	struct nouveau_drm *drm = platform_get_drvdata(pdev);
 
 	nouveau_drm_device_remove(drm);
+
+	nvkm_device_tegra.remove_new(pdev);
 }
 
 #if IS_ENABLED(CONFIG_OF)

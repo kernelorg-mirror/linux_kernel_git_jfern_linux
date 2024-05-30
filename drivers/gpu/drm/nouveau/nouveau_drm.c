@@ -797,9 +797,11 @@ static int nouveau_drm_probe(struct pci_dev *pdev,
 	/* We need to check that the chipset is supported before booting
 	 * fbdev off the hardware, as there's no way to put it back.
 	 */
-	ret = nvkm_device_pci_new(pdev, nouveau_config, nouveau_debug, &device);
+	ret = nvkm_device_pci_driver.probe(pdev, NULL);
 	if (ret)
 		return ret;
+
+	device = pci_get_drvdata(pdev);
 
 	/* Remove conflicting drivers (vesafb, efifb etc). */
 	ret = drm_aperture_remove_conflicting_pci_framebuffers(pdev, &driver_pci);
@@ -850,8 +852,6 @@ nouveau_drm_device_remove(struct nouveau_drm *drm)
 	drm_dev_unplug(drm->dev);
 
 	nouveau_drm_device_fini(drm);
-	nouveau_drm_device_del(drm);
-	nvkm_device_del(&device);
 }
 
 static void
@@ -864,6 +864,8 @@ nouveau_drm_remove(struct pci_dev *pdev)
 		pdev->pm_cap = drm->old_pm_cap;
 	nouveau_drm_device_remove(drm);
 	pci_disable_device(pdev);
+
+	nvkm_device_pci_driver.remove(pdev);
 }
 
 static int
@@ -1345,9 +1347,11 @@ nouveau_platform_device_create(const struct nvkm_device_tegra_func *func,
 	struct nouveau_drm *drm;
 	int err;
 
-	err = nvkm_device_tegra_new(func, pdev, nouveau_config, nouveau_debug, pdevice);
+	err = nvkm_device_tegra.probe(pdev);
 	if (err)
 		return ERR_PTR(err);
+
+	*pdevice = platform_get_drvdata(pdev);
 
 	drm = nouveau_drm_device_new(&driver_platform, &pdev->dev, *pdevice);
 	if (IS_ERR(drm)) {
