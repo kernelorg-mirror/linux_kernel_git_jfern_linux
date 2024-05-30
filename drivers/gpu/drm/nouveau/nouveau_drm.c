@@ -900,11 +900,7 @@ nouveau_pmops_suspend(struct device *dev)
 	if (ret)
 		return ret;
 
-	pci_save_state(pdev);
-	pci_disable_device(pdev);
-	pci_set_power_state(pdev, PCI_D3hot);
-	udelay(200);
-	return 0;
+	return nvkm_device_pci_driver.driver.pm->suspend(dev);
 }
 
 int
@@ -918,12 +914,9 @@ nouveau_pmops_resume(struct device *dev)
 	    drm->dev->switch_power_state == DRM_SWITCH_POWER_DYNAMIC_OFF)
 		return 0;
 
-	pci_set_power_state(pdev, PCI_D0);
-	pci_restore_state(pdev);
-	ret = pci_enable_device(pdev);
+	ret = nvkm_device_pci_driver.driver.pm->resume(dev);
 	if (ret)
 		return ret;
-	pci_set_master(pdev);
 
 	ret = nouveau_do_resume(drm, false);
 
@@ -972,12 +965,8 @@ nouveau_pmops_runtime_suspend(struct device *dev)
 		return -EBUSY;
 	}
 
-	nouveau_switcheroo_optimus_dsm();
 	ret = nouveau_do_suspend(drm, true);
-	pci_save_state(pdev);
-	pci_disable_device(pdev);
-	pci_ignore_hotplug(pdev);
-	pci_set_power_state(pdev, PCI_D3cold);
+	ret = nvkm_device_pci_driver.driver.pm->runtime_suspend(dev);
 	drm->dev->switch_power_state = DRM_SWITCH_POWER_DYNAMIC_OFF;
 	return ret;
 }
@@ -994,12 +983,9 @@ nouveau_pmops_runtime_resume(struct device *dev)
 		return -EBUSY;
 	}
 
-	pci_set_power_state(pdev, PCI_D0);
-	pci_restore_state(pdev);
-	ret = pci_enable_device(pdev);
+	ret = nvkm_device_pci_driver.driver.pm->runtime_resume(dev);
 	if (ret)
 		return ret;
-	pci_set_master(pdev);
 
 	ret = nouveau_do_resume(drm, true);
 	if (ret) {
@@ -1007,8 +993,6 @@ nouveau_pmops_runtime_resume(struct device *dev)
 		return ret;
 	}
 
-	/* do magic */
-	nvif_mask(&drm->device, 0x088488, (1 << 25), (1 << 25));
 	drm->dev->switch_power_state = DRM_SWITCH_POWER_ON;
 
 	/* Monitors may have been connected / disconnected during suspend */
