@@ -491,7 +491,7 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 	struct drm_device *dev = drm->dev;
 	struct nouveau_cli *cli, *temp_cli;
 
-	if (nouveau_pmops_runtime()) {
+	if (nouveau_pmops_runtime(dev->dev)) {
 		pm_runtime_get_sync(dev->dev);
 		pm_runtime_forbid(dev->dev);
 	}
@@ -589,7 +589,7 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 	nouveau_dmem_init(drm);
 	nouveau_led_init(dev);
 
-	if (nouveau_pmops_runtime()) {
+	if (nouveau_pmops_runtime(dev->dev)) {
 		pm_runtime_use_autosuspend(dev->dev);
 		pm_runtime_set_autosuspend_delay(dev->dev, 5000);
 		pm_runtime_set_active(dev->dev);
@@ -1028,10 +1028,13 @@ nouveau_pmops_thaw(struct device *dev)
 }
 
 bool
-nouveau_pmops_runtime(void)
+nouveau_pmops_runtime(struct device *dev)
 {
+	struct nouveau_drm *drm = nouveau_drm(dev_get_drvdata(dev));
+
 	if (nouveau_runtime_pm == -1)
-		return nouveau_is_optimus() || nouveau_is_v1_dsm();
+		return drm->device.impl->runpm;
+
 	return nouveau_runtime_pm == 1;
 }
 
@@ -1042,7 +1045,7 @@ nouveau_pmops_runtime_suspend(struct device *dev)
 	struct nouveau_drm *drm = pci_get_drvdata(pdev);
 	int ret;
 
-	if (!nouveau_pmops_runtime()) {
+	if (!nouveau_pmops_runtime(dev)) {
 		pm_runtime_forbid(dev);
 		return -EBUSY;
 	}
@@ -1064,7 +1067,7 @@ nouveau_pmops_runtime_resume(struct device *dev)
 	struct nouveau_drm *drm = pci_get_drvdata(pdev);
 	int ret;
 
-	if (!nouveau_pmops_runtime()) {
+	if (!nouveau_pmops_runtime(dev)) {
 		pm_runtime_forbid(dev);
 		return -EBUSY;
 	}
@@ -1095,7 +1098,7 @@ nouveau_pmops_runtime_resume(struct device *dev)
 static int
 nouveau_pmops_runtime_idle(struct device *dev)
 {
-	if (!nouveau_pmops_runtime()) {
+	if (!nouveau_pmops_runtime(dev)) {
 		pm_runtime_forbid(dev);
 		return -EBUSY;
 	}
