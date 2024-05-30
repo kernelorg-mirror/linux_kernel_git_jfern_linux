@@ -2,6 +2,10 @@
 config DRM_NOUVEAU
 	tristate "Nouveau (NVIDIA) cards"
 	depends on DRM && PCI && MMU
+	depends on DRM_DISPLAY_DP_HELPER
+	depends on DRM_DISPLAY_HDMI_HELPER
+	depends on DRM_DISPLAY_HELPER
+	select AUXILIARY_BUS
 	select IOMMU_API
 	select FW_LOADER
 	select DRM_DISPLAY_DP_HELPER
