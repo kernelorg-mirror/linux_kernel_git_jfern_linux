@@ -791,9 +791,6 @@ static int nouveau_drm_probe(struct pci_dev *pdev,
 	struct nouveau_drm *drm;
 	int ret;
 
-	if (vga_switcheroo_client_probe_defer(pdev))
-		return -EPROBE_DEFER;
-
 	/* We need to check that the chipset is supported before booting
 	 * fbdev off the hardware, as there's no way to put it back.
 	 */
