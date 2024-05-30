@@ -510,7 +510,6 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 	nouveau_bios_takedown(dev);
 
 	nouveau_ttm_fini(drm);
-	nouveau_vga_fini(drm);
 
 	/*
 	 * There may be existing clients from as-yet unclosed files. For now,
@@ -560,8 +559,6 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 	 */
 	if (drm->device.impl->chipset == 0xc1)
 		nvif_mask(&drm->device, 0x00088080, 0x00000800, 0x00000000);
-
-	nouveau_vga_init(drm);
 
 	ret = nouveau_ttm_init(drm);
 	if (ret)
@@ -613,7 +610,6 @@ fail_dispctor:
 fail_bios:
 	nouveau_ttm_fini(drm);
 fail_ttm:
-	nouveau_vga_fini(drm);
 	nouveau_cli_fini(&drm->cli);
 fail_wq:
 	destroy_workqueue(drm->sched_wq);
