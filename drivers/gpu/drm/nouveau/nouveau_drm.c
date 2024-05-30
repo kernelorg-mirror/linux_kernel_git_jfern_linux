@@ -1172,7 +1172,7 @@ static const struct dev_pm_ops nouveau_pm_ops = {
 
 static const struct auxiliary_device_id
 nouveau_drm_id_table[] = {
-	{ .name = "nouveau.device" },
+	{ .name = "nvkm.device" },
 	{}
 };
 
@@ -1188,8 +1188,6 @@ nouveau_auxdrv = {
 static int __init
 nouveau_drm_init(void)
 {
-	int ret;
-
 	nouveau_display_options();
 
 	if (nouveau_modeset == -1) {
@@ -1199,10 +1197,6 @@ nouveau_drm_init(void)
 
 	if (!nouveau_modeset)
 		return 0;
-
-	ret = nvkm_init();
-	if (ret)
-		return ret;
 
 	nouveau_backlight_ctor();
 
@@ -1221,8 +1215,6 @@ nouveau_drm_exit(void)
 
 	if (IS_ENABLED(CONFIG_DRM_NOUVEAU_SVM))
 		mmu_notifier_synchronize();
-
-	nvkm_exit();
 }
 
 module_init(nouveau_drm_init);
