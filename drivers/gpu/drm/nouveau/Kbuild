@@ -5,14 +5,12 @@ ccflags-y += -I $(src)/nvkm
 ccflags-y += -I $(src)
 
 # NVKM - HW resource manager
-#- code also used by various userspace tools/tests
-include $(src)/nvif/Kbuild
-nouveau-y := $(nvif-y)
+include $(src)/nvkm/Kbuild
+nouveau-y := $(nvkm-y)
 
 # NVIF - NVKM interface library (NVKM user interface also defined here)
-#- code also used by various userspace tools/tests
-include $(src)/nvkm/Kbuild
-nouveau-y += $(nvkm-y)
+include $(src)/nvif/Kbuild
+nouveau-y += $(nvif-y)
 
 # DRM - general
 ifdef CONFIG_X86
