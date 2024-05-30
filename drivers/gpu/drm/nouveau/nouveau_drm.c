@@ -488,7 +488,7 @@ nouveau_driver = {
 static void
 nouveau_drm_device_fini(struct nouveau_drm *drm)
 {
-	struct drm_device *dev = drm->dev;
+	struct drm_device *dev = &drm->dev;
 	struct nouveau_cli *cli, *temp_cli;
 
 	if (nouveau_pmops_runtime(dev->dev)) {
@@ -537,7 +537,7 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 static int
 nouveau_drm_device_init(struct nouveau_drm *drm)
 {
-	struct drm_device *dev = drm->dev;
+	struct drm_device *dev = &drm->dev;
 	int ret;
 
 	drm->sched_wq = alloc_workqueue("nouveau_sched_wq_shared", 0,
@@ -595,7 +595,7 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 		pm_runtime_put(dev->dev);
 	}
 
-	ret = drm_dev_register(drm->dev, 0);
+	ret = drm_dev_register(&drm->dev, 0);
 	if (ret) {
 		nouveau_drm_device_fini(drm);
 		return ret;
@@ -619,9 +619,6 @@ fail_wq:
 static void
 nouveau_drm_device_del(struct nouveau_drm *drm)
 {
-	if (drm->dev)
-		drm_dev_put(drm->dev);
-
 	nvif_mmu_dtor(&drm->mmu);
 	nvif_device_dtor(&drm->device);
 	nvif_client_dtor(&drm->client);
@@ -634,27 +631,19 @@ static struct nouveau_drm *
 nouveau_drm_device_new(const struct drm_driver *drm_driver, struct device *parent,
 		       struct nvkm_device *device)
 {
+	struct nouveau_drm *drm;
 	const struct nvif_driver *driver;
 	const struct nvif_client_impl *impl;
 	struct nvif_client_priv *priv;
-
-	struct nouveau_drm *drm;
 	int ret;
+	
+	drm = devm_drm_dev_alloc(parent, drm_driver, typeof(*drm), dev);
+	if (IS_ERR(drm))
+		return drm;
 
-	drm = kzalloc(sizeof(*drm), GFP_KERNEL);
-	if (!drm)
-		return ERR_PTR(-ENOMEM);
-
+	drm->dev.dev_private = drm;
 	drm->nvkm = device;
-
-	drm->dev = drm_dev_alloc(drm_driver, parent);
-	if (IS_ERR(drm->dev)) {
-		ret = PTR_ERR(drm->dev);
-		goto done;
-	}
-
-	drm->dev->dev_private = drm;
-	dev_set_drvdata(parent, drm);
+	drm->nvkm->driver = &drm->driver;
 
 	nvif_parent_ctor(&nouveau_parent, &drm->parent);
 	drm->client.object.parent = &drm->parent;
@@ -719,12 +708,7 @@ nouveau_drm_device_new(const struct drm_driver *drm_driver, struct device *paren
 	}
 
 done:
-	if (ret) {
-		nouveau_drm_device_del(drm);
-		drm = NULL;
-	}
-
-	return ret ? ERR_PTR(ret) : drm;
+	return drm;
 }
 
 static int nouveau_drm_probe(struct pci_dev *pdev,
@@ -752,14 +736,16 @@ static int nouveau_drm_probe(struct pci_dev *pdev,
 		goto fail_nvkm;
 	}
 
+	pci_set_drvdata(pdev, &drm->dev);
+
 	ret = nouveau_drm_device_init(drm);
 	if (ret)
-		goto fail_drm;
+		return ret;
 
 	if (drm->device.impl->ram_size <= 32 * 1024 * 1024)
-		drm_fbdev_ttm_setup(drm->dev, 8);
+		drm_fbdev_ttm_setup(&drm->dev, 8);
 	else
-		drm_fbdev_ttm_setup(drm->dev, 32);
+		drm_fbdev_ttm_setup(&drm->dev, 32);
 
 	return 0;
 
@@ -777,7 +763,7 @@ nouveau_drm_device_remove(struct nouveau_drm *drm)
 {
 	struct nvkm_device *device = drm->nvkm;
 
-	drm_dev_unplug(drm->dev);
+	drm_dev_unplug(&drm->dev);
 
 	nouveau_drm_device_fini(drm);
 }
@@ -795,7 +781,7 @@ nouveau_drm_remove(struct pci_dev *pdev)
 static int
 nouveau_do_suspend(struct nouveau_drm *drm, bool runtime)
 {
-	struct drm_device *dev = drm->dev;
+	struct drm_device *dev = &drm->dev;
 	struct ttm_resource_manager *man;
 	int ret;
 
@@ -858,7 +844,7 @@ fail_display:
 static int
 nouveau_do_resume(struct nouveau_drm *drm, bool runtime)
 {
-	struct drm_device *dev = drm->dev;
+	struct drm_device *dev = &drm->dev;
 	int ret = 0;
 
 	NV_DEBUG(drm, "resuming object tree...\n");
@@ -892,8 +878,8 @@ nouveau_pmops_suspend(struct device *dev)
 	struct nouveau_drm *drm = pci_get_drvdata(pdev);
 	int ret;
 
-	if (drm->dev->switch_power_state == DRM_SWITCH_POWER_OFF ||
-	    drm->dev->switch_power_state == DRM_SWITCH_POWER_DYNAMIC_OFF)
+	if (drm->dev.switch_power_state == DRM_SWITCH_POWER_OFF ||
+	    drm->dev.switch_power_state == DRM_SWITCH_POWER_DYNAMIC_OFF)
 		return 0;
 
 	ret = nouveau_do_suspend(drm, false);
@@ -910,8 +896,8 @@ nouveau_pmops_resume(struct device *dev)
 	struct nouveau_drm *drm = pci_get_drvdata(pdev);
 	int ret;
 
-	if (drm->dev->switch_power_state == DRM_SWITCH_POWER_OFF ||
-	    drm->dev->switch_power_state == DRM_SWITCH_POWER_DYNAMIC_OFF)
+	if (drm->dev.switch_power_state == DRM_SWITCH_POWER_OFF ||
+	    drm->dev.switch_power_state == DRM_SWITCH_POWER_DYNAMIC_OFF)
 		return 0;
 
 	ret = nvkm_device_pci_driver.driver.pm->resume(dev);
@@ -967,7 +953,7 @@ nouveau_pmops_runtime_suspend(struct device *dev)
 
 	ret = nouveau_do_suspend(drm, true);
 	ret = nvkm_device_pci_driver.driver.pm->runtime_suspend(dev);
-	drm->dev->switch_power_state = DRM_SWITCH_POWER_DYNAMIC_OFF;
+	drm->dev.switch_power_state = DRM_SWITCH_POWER_DYNAMIC_OFF;
 	return ret;
 }
 
@@ -993,7 +979,7 @@ nouveau_pmops_runtime_resume(struct device *dev)
 		return ret;
 	}
 
-	drm->dev->switch_power_state = DRM_SWITCH_POWER_ON;
+	drm->dev.switch_power_state = DRM_SWITCH_POWER_ON;
 
 	/* Monitors may have been connected / disconnected during suspend */
 	nouveau_display_hpd_resume(drm);
@@ -1252,6 +1238,7 @@ nouveau_platform_device_create(const struct nvkm_device_tegra_func *func,
 			       struct platform_device *pdev,
 			       struct nvkm_device **pdevice)
 {
+	struct nvkm_device *device;
 	struct nouveau_drm *drm;
 	int err;
 
@@ -1259,26 +1246,21 @@ nouveau_platform_device_create(const struct nvkm_device_tegra_func *func,
 	if (err)
 		return ERR_PTR(err);
 
-	*pdevice = platform_get_drvdata(pdev);
+	device = platform_get_drvdata(pdev);
 
-	drm = nouveau_drm_device_new(&driver_platform, &pdev->dev, *pdevice);
+	drm = nouveau_drm_device_new(&driver_platform, &pdev->dev, device);
 	if (IS_ERR(drm)) {
-		err = PTR_ERR(drm);
-		goto err_free;
+		nvkm_device_del(&device);
+		return (void *)drm;
 	}
+
+	platform_set_drvdata(pdev, &drm->dev);
 
 	err = nouveau_drm_device_init(drm);
 	if (err)
-		goto err_put;
+		return ERR_PTR(err);
 
-	return drm->dev;
-
-err_put:
-	nouveau_drm_device_del(drm);
-err_free:
-	nvkm_device_del(pdevice);
-
-	return ERR_PTR(err);
+	return &drm->dev;
 }
 
 static int __init
