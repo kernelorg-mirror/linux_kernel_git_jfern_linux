@@ -353,7 +353,9 @@ static int
 nv50_audio_component_get_eld(struct device *kdev, int port, int dev_id,
 			     bool *enabled, unsigned char *buf, int max_bytes)
 {
-	struct nouveau_drm *drm = dev_get_drvdata(kdev);
+	struct nvkm_device *device = dev_get_drvdata(kdev);
+	struct nouveau_drm *drm = container_of(device->driver, typeof(*drm), driver);
+	struct drm_device *drm_dev = &drm->dev;
 	struct drm_encoder *encoder;
 	struct nouveau_encoder *nv_encoder;
 	struct nouveau_crtc *nv_crtc;
@@ -363,7 +365,7 @@ nv50_audio_component_get_eld(struct device *kdev, int port, int dev_id,
 
 	mutex_lock(&drm->audio.lock);
 
-	drm_for_each_encoder(encoder, &drm->dev) {
+	drm_for_each_encoder(encoder, drm_dev) {
 		struct nouveau_connector *nv_connector = NULL;
 
 		if (encoder->encoder_type == DRM_MODE_ENCODER_DPMST)
@@ -398,17 +400,19 @@ static int
 nv50_audio_component_bind(struct device *kdev, struct device *hda_kdev,
 			  void *data)
 {
-	struct nouveau_drm *drm = dev_get_drvdata(kdev);
+	struct nvkm_device *device = dev_get_drvdata(kdev);
+	struct nouveau_drm *drm = container_of(device->driver, typeof(*drm), driver);
+	struct drm_device *drm_dev = &drm->dev;
 	struct drm_audio_component *acomp = data;
 
 	if (WARN_ON(!device_link_add(hda_kdev, kdev, DL_FLAG_STATELESS)))
 		return -ENOMEM;
 
-	drm_modeset_lock_all(&drm->dev);
+	drm_modeset_lock_all(drm_dev);
 	acomp->ops = &nv50_audio_component_ops;
 	acomp->dev = kdev;
 	drm->audio.component = acomp;
-	drm_modeset_unlock_all(&drm->dev);
+	drm_modeset_unlock_all(drm_dev);
 	return 0;
 }
 
@@ -416,14 +420,16 @@ static void
 nv50_audio_component_unbind(struct device *kdev, struct device *hda_kdev,
 			    void *data)
 {
-	struct nouveau_drm *drm = dev_get_drvdata(kdev);
+	struct nvkm_device *device = dev_get_drvdata(kdev);
+	struct nouveau_drm *drm = container_of(device->driver, typeof(*drm), driver);
+	struct drm_device *drm_dev = &drm->dev;
 	struct drm_audio_component *acomp = data;
 
-	drm_modeset_lock_all(&drm->dev);
+	drm_modeset_lock_all(drm_dev);
 	drm->audio.component = NULL;
 	acomp->ops = NULL;
 	acomp->dev = NULL;
-	drm_modeset_unlock_all(&drm->dev);
+	drm_modeset_unlock_all(drm_dev);
 }
 
 static const struct component_ops nv50_audio_component_bind_ops = {
@@ -434,7 +440,7 @@ static const struct component_ops nv50_audio_component_bind_ops = {
 static void
 nv50_audio_component_init(struct nouveau_drm *drm)
 {
-	if (component_add(drm->dev.dev, &nv50_audio_component_bind_ops))
+	if (component_add(drm->dev.dev->parent, &nv50_audio_component_bind_ops))
 		return;
 
 	drm->audio.component_registered = true;
@@ -447,7 +453,7 @@ nv50_audio_component_fini(struct nouveau_drm *drm)
 	if (!drm->audio.component_registered)
 		return;
 
-	component_del(drm->dev.dev, &nv50_audio_component_bind_ops);
+	component_del(drm->dev.dev->parent, &nv50_audio_component_bind_ops);
 	drm->audio.component_registered = false;
 	mutex_destroy(&drm->audio.lock);
 }
