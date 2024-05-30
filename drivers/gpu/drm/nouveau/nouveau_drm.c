@@ -479,6 +479,11 @@ nouveau_parent = {
 	.errorf = nouveau_drm_errorf,
 };
 
+static const struct nvif_driver_func
+nouveau_driver = {
+	.event = nvif_event,
+};
+
 static void
 nouveau_drm_device_fini(struct nouveau_drm *drm)
 {
