@@ -1348,7 +1348,7 @@ nouveau_platform_device_create(const struct nvkm_device_tegra_func *func,
 
 	err = nvkm_device_tegra_new(func, pdev, nouveau_config, nouveau_debug, pdevice);
 	if (err)
-		goto err_free;
+		return ERR_PTR(err);
 
 	drm = nouveau_drm_device_new(&driver_platform, &pdev->dev, *pdevice);
 	if (IS_ERR(drm)) {
