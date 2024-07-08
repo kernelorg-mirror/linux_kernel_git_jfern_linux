@@ -453,6 +453,30 @@ where
 
         Ok(())
     }
+
+    /// Shortens the vector, keeping the first `len` elements and dropping
+    /// the rest.
+    pub fn truncate(&mut self, len: usize) {
+        // This is safe because:
+        //
+        // * the slice passed to `drop_in_place` is valid; the `len > self.len`
+        //   case avoids creating an invalid slice, and
+        // * the `len` of the vector is shrunk before calling `drop_in_place`,
+        //   such that no value will be dropped twice in case `drop_in_place`
+        //   were to panic once (if it panics twice, the program aborts).
+        unsafe {
+            // Note: It's intentional that this is `>` and not `>=`.
+            //       Changing it to `>=` has negative performance
+            //       implications in some cases. See #78884 for more.
+            if len > self.len() {
+                return;
+            }
+            let remaining_len = self.len() - len;
+            let s = ptr::slice_from_raw_parts_mut(self.as_mut_ptr().add(len), remaining_len);
+            self.set_len(len);
+            ptr::drop_in_place(s);
+        }
+    }
 }
 
 impl<T: Clone, A: Allocator> Vec<T, A> {
@@ -518,6 +542,19 @@ impl<T: Clone, A: Allocator> Vec<T, A> {
         v.extend_with(n, value, flags)?;
 
         Ok(v)
+    }
+
+    /// Resizes the `KVec` in-place so that `len` is equal to `new_len`.
+    pub fn resize(&mut self, new_len: usize, value: T, flags: Flags) -> Result<(), AllocError> {
+        let len = self.len();
+
+        if new_len > len {
+            self.extend_with(new_len - len, value, flags)
+        } else {
+            self.truncate(new_len);
+
+            Ok(())
+        }
     }
 }
 
