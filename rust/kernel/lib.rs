@@ -41,6 +41,7 @@ pub mod device;
 pub mod device_id;
 pub mod devres;
 pub mod dma;
+pub mod elf;
 pub mod driver;
 #[cfg(CONFIG_DRM = "y")]
 pub mod drm;
