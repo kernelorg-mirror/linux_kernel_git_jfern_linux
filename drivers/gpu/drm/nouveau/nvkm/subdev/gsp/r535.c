@@ -2269,6 +2269,11 @@ nvkm_gsp_sg_free(struct nvkm_device *device, struct sg_table *sgt)
 	struct scatterlist *sgl;
 	int i;
 
+	if (sgt == NULL)
+		return;
+	if (sgt->sgl == NULL)
+		return;
+
 	dma_unmap_sgtable(device->dev, sgt, DMA_BIDIRECTIONAL, 0);
 
 	for_each_sgtable_sg(sgt, sgl, i) {
