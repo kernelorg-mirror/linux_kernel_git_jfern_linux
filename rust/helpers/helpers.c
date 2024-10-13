@@ -11,6 +11,7 @@
 #include "bug.c"
 #include "build_assert.c"
 #include "build_bug.c"
+#include "delay.c"
 #include "device.c"
 #include "drm.c"
 #include "err.c"
