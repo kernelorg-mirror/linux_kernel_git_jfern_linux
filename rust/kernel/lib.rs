@@ -45,6 +45,7 @@ pub mod block;
 #[doc(hidden)]
 pub mod build_assert;
 pub mod cred;
+pub mod delay;
 pub mod device;
 pub mod device_id;
 pub mod devres;
