@@ -14,6 +14,7 @@
 #include "build_bug.c"
 #include "cpumask.c"
 #include "cred.c"
+#include "delay.c"
 #include "device.c"
 #include "drm.c"
 #include "err.c"
