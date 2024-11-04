@@ -742,7 +742,6 @@ fail_drm_dev_init:
 fail_drm:
 	nouveau_drm_device_del(drm);
 fail_nvkm:
-	nvkm_device_del(&device);
 	return ret;
 }
 
