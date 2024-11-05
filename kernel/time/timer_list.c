@@ -154,7 +154,6 @@ static void print_cpu(struct seq_file *m, int cpu, u64 now)
 		struct tick_sched *ts = tick_get_tick_sched(cpu);
 		P_flag(nohz, TS_FLAG_NOHZ);
 		P_flag(highres, TS_FLAG_HIGHRES);
-		P_ns(last_tick);
 		P_flag(tick_stopped, TS_FLAG_STOPPED);
 		P(idle_jiffies);
 		P(idle_calls);

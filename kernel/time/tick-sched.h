@@ -71,7 +71,6 @@ struct tick_sched {
 
 	/* Tick handling */
 	struct hrtimer			sched_timer;
-	ktime_t				last_tick;
 	ktime_t				next_tick;
 	unsigned long			idle_jiffies;
 	ktime_t				idle_waketime;
