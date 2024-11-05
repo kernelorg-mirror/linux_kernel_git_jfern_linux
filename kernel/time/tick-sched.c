@@ -8,6 +8,7 @@
  *
  *  Started by: Thomas Gleixner and Ingo Molnar
  */
+#include "linux/hrtimer_types.h"
 #include <linux/compiler.h>
 #include <linux/cpu.h>
 #include <linux/err.h>
@@ -837,9 +838,24 @@ EXPORT_SYMBOL_GPL(get_cpu_iowait_time_us);
 
 static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 {
+	struct hrtimer dummy;
+	hrtimer_init(&dummy, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_HARD);
+
 	/* Set the time to expire on the next tick and not some far away future. */
 	hrtimer_cancel(&ts->sched_timer);
-	hrtimer_set_expires(&ts->sched_timer, DIV_ROUND_UP_ULL(now, TICK_NSEC) * TICK_NSEC);
+
+	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
+
+	/* Forward the time to expire in the future */
+	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
+
+	hrtimer_set_expires(&dummy, DIV_ROUND_UP_ULL(now, TICK_NSEC) * TICK_NSEC);
+
+	// Assert that dummy and ts have same expires
+	if (WARN_ON_ONCE(hrtimer_get_expires(&dummy) != hrtimer_get_expires(&ts->sched_timer))) {
+		trace_printk("Warning: dummy expires: %llu, ts expires: %llu\n",
+			     hrtimer_get_expires(&dummy), hrtimer_get_expires(&ts->sched_timer));
+	}
 
 	if (tick_sched_flag_test(ts, TS_FLAG_HIGHRES)) {
 		hrtimer_start_expires(&ts->sched_timer,
