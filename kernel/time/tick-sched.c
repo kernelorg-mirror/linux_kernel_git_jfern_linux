@@ -837,11 +837,9 @@ EXPORT_SYMBOL_GPL(get_cpu_iowait_time_us);
 
 static void tick_nohz_restart(struct tick_sched *ts, ktime_t now)
 {
+	/* Set the time to expire on the next tick and not some far away future. */
 	hrtimer_cancel(&ts->sched_timer);
-	hrtimer_set_expires(&ts->sched_timer, ts->last_tick);
-
-	/* Forward the time to expire in the future */
-	hrtimer_forward(&ts->sched_timer, now, TICK_NSEC);
+	hrtimer_set_expires(&ts->sched_timer, DIV_ROUND_UP_ULL(now, TICK_NSEC) * TICK_NSEC);
 
 	if (tick_sched_flag_test(ts, TS_FLAG_HIGHRES)) {
 		hrtimer_start_expires(&ts->sched_timer,
@@ -1043,7 +1041,6 @@ static void tick_nohz_stop_tick(struct tick_sched *ts, int cpu)
 		calc_load_nohz_start();
 		quiet_vmstat();
 
-		ts->last_tick = hrtimer_get_expires(&ts->sched_timer);
 		tick_sched_flag_set(ts, TS_FLAG_STOPPED);
 		trace_tick_stop(1, TICK_DEP_MASK_NONE);
 	}
