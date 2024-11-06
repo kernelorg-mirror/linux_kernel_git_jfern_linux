@@ -890,7 +890,7 @@ u64 get_jiffies_update(unsigned long *basej)
  */
 static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 {
-	u64 basemono, next_tick, delta, expires;
+	u64 basemono, next_tick, delta, expires, delta_hr, next_hr_wo;
 	unsigned long basejiff;
 	int tick_cpu;
 
@@ -932,7 +932,9 @@ static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 	 * force prod the timer.
 	 */
 	delta = next_tick - basemono;
-	if (delta <= (u64)TICK_NSEC) {
+	next_hr_wo = hrtimer_next_event_without(&ts->sched_timer);
+	delta_hr = next_hr_wo - basemono;
+	if (delta <= (u64)TICK_NSEC || delta_hr <= (u64)TICK_NSEC) {
 		/*
 		 * We've not stopped the tick yet, and there's a timer in the
 		 * next period, so no point in stopping it either, bail.
