@@ -887,14 +887,20 @@ u64 get_jiffies_update(unsigned long *basej)
  * *%0		- When the next event is a maximum of TICK_NSEC in the future
  *		  and the tick is not stopped yet
  * *%next_event	- Next event based on clock monotonic
+ *
+ * Note: ts->idle_entrytime is updated with 'now' via tick_nohz_idle_enter().
  */
 static ktime_t tick_nohz_next_event(struct tick_sched *ts, int cpu)
 {
-	u64 basemono, next_tick, delta, expires, delta_hr, next_hr_wo;
+	u64 basemono, next_tick, delta, expires, delta_hr, next_hr_wo, boot_ticks;
 	unsigned long basejiff;
 	int tick_cpu;
 
-	basemono = get_jiffies_update(&basejiff);
+	boot_ticks = DIV_ROUND_DOWN_ULL(ts->idle_entrytime, TICK_NSEC);
+	/* basejiff needs to be offset between starting time and tick setup. */
+	basejiff = boot_ticks + INITIAL_JIFFIES - ticks_till_first_jiffie;
+	basemono = boot_ticks * TICK_NSEC;
+
 	ts->last_jiffies = basejiff;
 	ts->timer_expires_base = basemono;
 

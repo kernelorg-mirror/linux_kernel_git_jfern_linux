@@ -34,6 +34,9 @@ DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
  */
 ktime_t tick_next_period;
 
+/* The time until setup of tick device by first jiffie-updating CPU. */
+unsigned long ticks_till_first_jiffie;
+
 /*
  * tick_do_timer_cpu is a timer core internal variable which holds the CPU NR
  * which is responsible for calling do_timer(), i.e. the timekeeping stuff. This
@@ -219,6 +222,8 @@ static void tick_setup_device(struct tick_device *td,
 		if (READ_ONCE(tick_do_timer_cpu) == TICK_DO_TIMER_BOOT) {
 			WRITE_ONCE(tick_do_timer_cpu, cpu);
 			tick_next_period = ktime_get();
+			ticks_till_first_jiffie =
+				DIV_ROUND_DOWN_ULL(tick_next_period, TICK_NSEC);
 #ifdef CONFIG_NO_HZ_FULL
 			/*
 			 * The boot CPU may be nohz_full, in which case set
