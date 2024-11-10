@@ -860,24 +860,6 @@ static inline bool local_timer_softirq_pending(void)
 	return local_softirq_pending() & BIT(TIMER_SOFTIRQ);
 }
 
-/*
- * Read jiffies and the time when jiffies were updated last
- */
-u64 get_jiffies_update(unsigned long *basej)
-{
-	unsigned long basejiff;
-	unsigned int seq;
-	u64 basemono;
-
-	do {
-		seq = read_seqcount_begin(&jiffies_seq);
-		basemono = last_jiffies_update;
-		basejiff = jiffies;
-	} while (read_seqcount_retry(&jiffies_seq, seq));
-	*basej = basejiff;
-	return basemono;
-}
-
 /**
  * tick_nohz_next_event() - return the clock monotonic based next event
  * @ts:		pointer to tick_sched struct

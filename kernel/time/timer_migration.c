@@ -17,6 +17,9 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/timer_migration.h>
 
+#define jiffies_to_now(j) \
+	((jiffies - INITIAL_JIFFIES + ticks_till_first_jiffie) * TICK_NSEC)
+
 /*
  * The timer migration mechanism is built on a hierarchy of groups. The
  * lowest level group contains CPUs, the next level groups of CPU groups
@@ -1078,7 +1081,8 @@ void tmigr_handle_remote(void)
 			return;
 	}
 
-	data.now = get_jiffies_update(&data.basej);
+	data.basej = jiffies;
+	data.now = jiffies_to_now(data.basej);
 
 	/*
 	 * Update @tmc->wakeup only at the end and do not reset @tmc->wakeup to
@@ -1158,13 +1162,12 @@ bool tmigr_requires_handle_remote(void)
 {
 	struct tmigr_cpu *tmc = this_cpu_ptr(&tmigr_cpu);
 	struct tmigr_remote_data data;
-	unsigned long jif;
 	bool ret = false;
 
 	if (tmigr_is_not_available(tmc))
 		return ret;
 
-	data.now = get_jiffies_update(&jif);
+	data.now = jiffies_to_now(jiffies);
 	data.childmask = tmc->childmask;
 	data.firstexp = KTIME_MAX;
 	data.tmc_active = !tmc->idle;
