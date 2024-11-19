@@ -13,6 +13,7 @@
 #include "build_bug.c"
 #include "delay.c"
 #include "device.c"
+#include "dma.c"
 #include "drm.c"
 #include "err.c"
 #include "io.c"
