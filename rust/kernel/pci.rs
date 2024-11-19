@@ -380,6 +380,21 @@ impl Device {
         Ok(unsafe { bindings::pci_resource_len(self.as_raw(), bar.try_into()?) })
     }
 
+    /// Returns the size of the given PCI bar start
+    pub fn resource_start(&self, bar: u32) -> Result<bindings::resource_size_t> {
+        if !Bar::index_is_valid(bar) {
+            return Err(EINVAL);
+        }
+
+        // SAFETY: Safe by the type invariant.
+        Ok(unsafe { bindings::pci_resource_start(self.as_raw(), bar.try_into()?) })
+    }
+
+    /// Returns the 16-bit bus/device/function
+    pub fn dev_id(&self) -> Result<u16> {
+	Ok(unsafe { bindings::pci_dev_id(self.as_raw()) })
+    }
+
     /// Mapps an entire PCI-BAR after performing a region-request on it. I/O operation bound checks
     /// can be performed on compile time for offsets (plus the requested type size) < SIZE.
     pub fn iomap_region_sized<const SIZE: usize>(

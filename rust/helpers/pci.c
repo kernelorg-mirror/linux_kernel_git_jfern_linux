@@ -16,3 +16,13 @@ u64 rust_helper_pci_resource_len(struct pci_dev *pdev, int bar)
 {
 	return pci_resource_len(pdev, bar);
 }
+
+u64 rust_helper_pci_resource_start(struct pci_dev *pdev, int bar)
+{
+	return pci_resource_start(pdev, bar);
+}
+
+u16 rust_helper_pci_dev_id(struct pci_dev *pdev)
+{
+	return pci_dev_id(pdev);
+}
