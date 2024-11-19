@@ -83,6 +83,7 @@ pub mod code {
     declare_err!(EIOCBQUEUED, "iocb queued, will get completion event.");
     declare_err!(ERECALLCONFLICT, "Conflict with recalled state.");
     declare_err!(ENOGRACE, "NFS file lock reclaim refused.");
+    declare_err!(ETIME, "Timer Expired.");
 }
 
 /// Generic integer kernel error.
