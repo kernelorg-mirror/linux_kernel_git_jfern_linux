@@ -7,6 +7,7 @@
  * Sorted alphabetically.
  */
 
+#include "auxiliary_bus.c"
 #include "blk.c"
 #include "bug.c"
 #include "build_assert.c"

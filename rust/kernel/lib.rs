@@ -34,6 +34,8 @@ compile_error!("Missing kernel configuration for conditional compilation");
 extern crate self as kernel;
 
 pub mod alloc;
+#[cfg(CONFIG_AUXILIARY_BUS)]
+pub mod auxiliary_bus;
 #[cfg(CONFIG_BLOCK)]
 pub mod block;
 mod build_assert;
