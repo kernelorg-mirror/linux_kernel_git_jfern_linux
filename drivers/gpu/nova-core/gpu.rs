@@ -6,6 +6,7 @@ use kernel::{
     device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString, sync::Arc,
 };
 
+use crate::bios::Bios;
 use crate::driver::Bar0;
 use core::fmt::Debug;
 
@@ -75,6 +76,7 @@ pub(crate) struct Gpu {
     spec: GpuSpec,
     /// MMIO mapping of PCI BAR 0
     bar: Arc<Devres<Bar0>>,
+    pub bios: Bios,
     fw: Firmware,
 }
 
@@ -231,7 +233,10 @@ impl Firmware {
 impl Gpu {
     pub(crate) fn new(pdev: &pci::Device, bar: Arc<Devres<Bar0>>) -> Result<impl PinInit<Self>> {
         let spec = GpuSpec::new(&bar)?;
+        let mut bios = Bios::new();
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
+
+        bios.probe(&bar)?;
 
         dev_info!(
             pdev.as_ref(),
@@ -240,6 +245,6 @@ impl Gpu {
             spec.boot0
         );
 
-        Ok(pin_init!(Self { spec, bar, fw }))
+        Ok(pin_init!(Self { spec, bios, bar, fw }))
     }
 }

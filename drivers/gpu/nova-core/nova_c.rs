@@ -2,6 +2,7 @@
 
 //! Nova GPU Driver
 
+mod bios;
 mod driver;
 mod gpu;
 
