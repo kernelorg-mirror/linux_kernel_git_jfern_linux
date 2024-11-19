@@ -435,6 +435,40 @@ impl Device {
         }
     }
 
+    /// Read a 32-bit value from configuration space
+    pub fn read_config_dword(&self, offset: u32) -> Result<u32> {
+	let pdev = self.as_raw();
+	let mut val: u32 = 0;
+	let ret = unsafe { bindings::pci_read_config_dword(pdev, offset as i32, &mut val) };
+
+	if ret < 0 {
+            Err(Error::from_errno(ret))
+	} else {
+	    Ok(val)
+	}
+    }
+
+    /// Read a 16-bit value from configuration space
+    pub fn read_config_word(&self, offset: u32) -> Result<u16> {
+	let pdev = self.as_raw();
+	let mut val: u16 = 0;
+	let ret = unsafe { bindings::pci_read_config_word(pdev, offset as i32, &mut val) };
+
+	if ret < 0 {
+            Err(Error::from_errno(ret))
+	} else {
+	    Ok(val)
+	}
+    }
+
+    /// Find a PCI extended capability
+    pub fn find_ext_capability(&self, cap: i32) -> Result<u16> {
+	let pdev = self.as_raw();
+
+	let val = unsafe { bindings::pci_find_ext_capability(pdev, cap) };
+	Ok(val)
+    }
+
     pub fn alloc_irq_vectors(&self, min_vecs: u32, max_vecs: u32, flags: u32) -> Result<u32> {
         let ret = unsafe {
             bindings::pci_alloc_irq_vectors_affinity(
