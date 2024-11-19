@@ -567,7 +567,7 @@ impl Device {
         }
         crate::pr_info!("Setting up IRQ: {}\n", ret);
 
-        irq::Registration::try_new(ret as _, data, irq::flags::SHARED, name_args)
+        irq::Registration::try_thread_new(ret as _, data, irq::flags::SHARED, name_args)
     }
 }
 

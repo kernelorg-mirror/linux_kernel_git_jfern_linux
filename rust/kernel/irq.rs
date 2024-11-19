@@ -86,6 +86,9 @@ pub trait Handler {
 
     /// Called from interrupt context when the irq happens.
     fn handle_irq(data: <Self::Data as ForeignOwnable>::Borrowed<'_>) -> Return;
+
+    /// Called from thread context when the irq happens.
+    fn handle_thread_irq(data: <Self::Data as ForeignOwnable>::Borrowed<'_>) -> Return;
 }
 
 /// The registration of an interrupt handler.
@@ -130,6 +133,18 @@ impl<H: Handler> Registration<H> {
         }))
     }
 
+    pub fn try_thread_new(
+        irq: u32,
+        data: H::Data,
+        flags: usize,
+        name: fmt::Arguments<'_>,
+    ) -> Result<Self> {
+        // SAFETY: `handler` only calls `H::Data::borrow` on `raw_data`.
+        Ok(Self(unsafe {
+            InternalRegistration::try_new(irq, Some(Self::handler), Some(Self::thread_handler), flags, data, name)?
+        }))
+    }
+
     unsafe extern "C" fn handler(
         _irq: core::ffi::c_int,
         raw_data: *mut core::ffi::c_void,
@@ -138,6 +153,16 @@ impl<H: Handler> Registration<H> {
         // because `from_foreign` is called only after the irq is unregistered.
         let data = unsafe { H::Data::borrow(raw_data) };
         H::handle_irq(data) as _
+    }
+
+    unsafe extern "C" fn thread_handler(
+        _irq: core::ffi::c_int,
+        raw_data: *mut core::ffi::c_void,
+    ) -> bindings::irqreturn_t {
+        // SAFETY: On registration, `into_foreign` was called, so it is safe to borrow from it here
+        // because `from_foreign` is called only after the irq is unregistered.
+        let data = unsafe { H::Data::borrow(raw_data) };
+        H::handle_thread_irq(data) as _
     }
 }
 
