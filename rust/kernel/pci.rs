@@ -36,6 +36,7 @@ impl<T: Driver + 'static> driver::RegistrationOps for Adapter<T> {
         pdrv.probe = Some(Self::probe_callback);
         pdrv.remove = Some(Self::remove_callback);
         pdrv.id_table = T::ID_TABLE.as_ptr();
+        pdrv.sriov_configure = Some(Self::sriov_configure_callback);
 
         // SAFETY: `pdrv` is guaranteed to be a valid `RegType`.
         to_result(unsafe {
@@ -93,6 +94,21 @@ impl<T: Driver + 'static> Adapter<T> {
 
             KBox::<T>::from_foreign(ptr)
         };
+    }
+
+    extern "C" fn sriov_configure_callback(pdev: *mut bindings::pci_dev, num_vfs: i32) -> i32 {
+       // SAFETY: The PCI core only ever calls the probe callback with a valid `pdev`.
+        let dev = unsafe { device::Device::from_raw(&mut (*pdev).dev) };
+        // SAFETY: `dev` is guaranteed to be embedded in a valid `struct pci_dev` by the call
+        // above.
+        let mut pdev = unsafe { Device::from_dev(dev) };
+
+	match T::sriov_configure(&mut pdev, num_vfs) {
+	    Ok(val) => {
+		val
+	    }
+	    Err(err) => Error::to_errno(err)
+	}
     }
 }
 
@@ -220,6 +236,9 @@ pub trait Driver {
     /// Called when a new platform device is added or discovered.
     /// Implementers should attempt to initialize the device here.
     fn probe(dev: &mut Device, id: &DeviceId, id_info: &Self::IdInfo) -> Result<Pin<KBox<Self>>>;
+
+    /// PCI SRIOV configuration callback
+    fn sriov_configure(dev: &mut Device, num_vfs: i32) -> Result<i32>;
 }
 
 /// The PCI device representation.
@@ -396,6 +415,16 @@ impl Device {
         Ok(unsafe { bindings::pci_resource_start(self.as_raw(), bar.try_into()?) })
     }
 
+    /// Enable SRIOV virtual functions for this device
+    pub fn enable_sriov(&self, num_vfs: i32) -> Result<i32> {
+	Ok(unsafe { bindings::pci_enable_sriov(self.as_raw(), num_vfs) })
+    }
+
+    /// Disable SRIOV virtual functions for this device.
+    pub fn disable_sriov(&self) -> Result {
+	Ok(unsafe { bindings::pci_disable_sriov(self.as_raw()) })
+    }
+
     /// Returns the 16-bit bus/device/function
     pub fn dev_id(&self) -> Result<u16> {
 	Ok(unsafe { bindings::pci_dev_id(self.as_raw()) })
@@ -422,6 +451,12 @@ impl Device {
     /// Returns a new `ARef` of the base `device::Device`.
     pub fn as_dev(&self) -> ARef<device::Device> {
         self.0.clone()
+    }
+
+    /// Is this device a virtual function
+    pub fn is_virtfn(&self) -> bool {
+        let pdev = self.as_raw();
+	unsafe { (*pdev).is_virtfn() == 1 }
     }
 
     // TODO: check that all these &self methods use internal synchronization
