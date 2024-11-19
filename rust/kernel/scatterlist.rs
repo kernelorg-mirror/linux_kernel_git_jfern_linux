@@ -30,8 +30,14 @@ impl SGEntry {
     }
 
     /// Returns the length of this span
+    #[cfg(CONFIG_NEED_SG_DMA_LENGTH)]
     pub fn dma_len(&self) -> usize {
         // SAFETY: deref of pointer is ok according to the invariant
+        (unsafe{ *self.0.get() }).dma_length as usize
+    }
+
+    #[cfg(not(CONFIG_NEED_SG_DMA_LENGTH))]
+    pub fn dma_len(&self) -> usize {
         (unsafe{ *self.0.get() }).length as usize
     }
 
