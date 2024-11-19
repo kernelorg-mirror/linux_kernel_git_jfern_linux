@@ -179,6 +179,12 @@ impl<const ID: u64> ListLinks<ID> {
         unsafe { Opaque::raw_get(ptr::addr_of!((*me).inner)) }
     }
 
+    #[inline]
+    unsafe fn fields_nomut(me: *const Self) -> *mut ListLinksFields {
+        // SAFETY: The caller promises that the pointer is valid.
+        unsafe { Opaque::raw_get(ptr::addr_of!((*me).inner)) }
+    }
+
     /// # Safety
     ///
     /// `me` must be dereferenceable.
@@ -513,6 +519,56 @@ impl<T: ?Sized + ListItem<ID>, const ID: u64> List<T, ID> {
             _ty: PhantomData,
         }
     }
+
+    ///
+    pub fn push_before(&mut self, item: &ListLinks<ID>, new_item: ListArc<T, ID>) {
+        let raw_new_item = ListArc::into_raw(new_item);
+        let new_links = unsafe { T::prepare_to_insert(raw_new_item) };
+        // SAFETY: We have not yet called `post_remove`, so `list_links` is still valid.
+        let new_item = unsafe { ListLinks::fields(new_links) };
+
+        let item = unsafe { ListLinks::fields_nomut(item) };
+        unsafe {
+
+            let next = item;
+            let prev = (*item).prev;
+            // SAFETY: By the type invariant, this pointer is valid or null. We just checked that
+            // it's not null, so it must be valid.
+            // SAFETY: Pointers in a linked list are never dangling, and the caller just gave us
+            // ownership of the fields on `item`.
+            // INVARIANT: This correctly inserts `item` between `prev` and `next`.
+            (*new_item).next = next;
+            (*new_item).prev = prev;
+            (*next).prev = new_item;
+            (*prev).next = new_item;
+        }
+        if self.first == item {
+            self.first = new_item;
+        }
+    }
+
+    ///
+    pub fn push_after(&mut self, item: &ListLinks<ID>, new_item: ListArc<T, ID>) {
+        let raw_new_item = ListArc::into_raw(new_item);
+        let new_links = unsafe { T::prepare_to_insert(raw_new_item) };
+        // SAFETY: We have not yet called `post_remove`, so `list_links` is still valid.
+        let new_item = unsafe { ListLinks::fields(new_links) };
+
+        let item = unsafe { ListLinks::fields_nomut(item) };
+        unsafe {
+            let prev = item;
+            let next = (*item).next;
+            // SAFETY: By the type invariant, this pointer is valid or null. We just checked that
+            // it's not null, so it must be valid.
+            // SAFETY: Pointers in a linked list are never dangling, and the caller just gave us
+            // ownership of the fields on `item`.
+            // INVARIANT: This correctly inserts `item` between `prev` and `next`.
+            (*new_item).next = next;
+            (*new_item).prev = prev;
+            (*prev).next = new_item;
+            (*next).prev = new_item;
+        }
+    }
 }
 
 impl<T: ?Sized + ListItem<ID>, const ID: u64> Default for List<T, ID> {
@@ -588,6 +644,18 @@ pub struct Cursor<'a, T: ?Sized + ListItem<ID>, const ID: u64 = 0> {
 }
 
 impl<'a, T: ?Sized + ListItem<ID>, const ID: u64> Cursor<'a, T, ID> {
+
+    /// Check if the objects are the same
+    pub fn eq(&self, test: &T) -> bool {
+
+	let me = self.current;
+	let testfield = unsafe { ListLinks::fields(T::view_links(test)) };
+	if me == testfield {
+	    return true;
+	}
+	return false;
+    }
+
     /// Access the current element of this cursor.
     pub fn current(&self) -> ArcBorrow<'_, T> {
         // SAFETY: The `current` pointer points a value in the list.
@@ -602,6 +670,18 @@ impl<'a, T: ?Sized + ListItem<ID>, const ID: u64> Cursor<'a, T, ID> {
         // * Values in a list never have a `UniqueArc` reference, because the list has a `ListArc`
         //   reference, and `UniqueArc` references must be unique.
         unsafe { ArcBorrow::from_raw(me) }
+    }
+
+    /// Move the cursor to the end
+    pub fn end(self)  -> Option<Cursor<'a, T, ID>> {
+        // SAFETY: The `current` field is always in a list.
+        let last = unsafe { (*self.list.first).prev };
+        // INVARIANT: Since `self.current` is in the `list`, its `next` pointer is also in the
+        // `list`.
+        Some(Cursor {
+            current: last,
+            list: self.list,
+        })
     }
 
     /// Move the cursor to the next element.
