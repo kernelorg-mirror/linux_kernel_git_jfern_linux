@@ -15,6 +15,7 @@ mod paste;
 mod pin_data;
 mod pinned_drop;
 mod vtable;
+mod versions;
 mod zeroable;
 
 use proc_macro::TokenStream;
@@ -177,6 +178,12 @@ pub fn module(ts: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn vtable(attr: TokenStream, ts: TokenStream) -> TokenStream {
     vtable::vtable(attr, ts)
+}
+
+/// Declares multiple variants of a structure or impl code
+#[proc_macro_attribute]
+pub fn versions(attr: TokenStream, item: TokenStream) -> TokenStream {
+    versions::versions(attr, item)
 }
 
 /// Concatenate two identifiers.
