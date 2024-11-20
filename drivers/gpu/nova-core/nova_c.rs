@@ -9,6 +9,7 @@ mod driver;
 mod firmware;
 mod falcon;
 mod gpu;
+mod nvfw;
 mod rm_riscv;
 mod sec2;
 mod timer;
