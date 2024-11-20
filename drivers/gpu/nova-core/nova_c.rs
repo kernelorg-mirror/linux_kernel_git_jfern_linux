@@ -10,6 +10,7 @@ mod firmware;
 mod falcon;
 mod gpu;
 mod rm_riscv;
+mod sec2;
 mod timer;
 
 use crate::driver::NovaCoreDriver;
