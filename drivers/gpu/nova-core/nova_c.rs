@@ -4,6 +4,7 @@
 
 mod bios;
 mod devinit;
+mod dma;
 mod driver;
 mod gpu;
 mod timer;
