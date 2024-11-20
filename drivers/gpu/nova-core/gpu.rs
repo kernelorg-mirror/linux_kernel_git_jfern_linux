@@ -372,7 +372,39 @@ impl Firmware {
     }
 }
 
+#[repr(C)]
+pub(crate) struct GpuDevice {
+    pub gsp: Arc<GspDevice>,
+    pub mgr: Arc<dyn GspManager>,
+}
+
+impl Drop for GpuDevice {
+    fn drop(&mut self) {
+        let _ = self.mgr.free_device(self.gsp.clone());
+    }
+}
+
+#[repr(C)]
+pub(crate) struct GpuClient {
+    pub gsp: Arc<GspClient>,
+    mgr: Arc<dyn GspManager>,
+}
+
+impl Drop for GpuClient {
+    fn drop(&mut self) {
+        let _ = self.mgr.free_client(self.gsp.clone());
+    }
+}
+
 impl Gpu {
+
+    pub(crate) fn alloc_client_device(&self) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
+        let (gsp_client, gsp_device) = self.gsp.alloc_client_device()?;
+
+        Ok((Arc::new(GpuClient { gsp: gsp_client, mgr: self.gsp.clone() }, GFP_KERNEL)?,
+            Arc::new(GpuDevice { gsp: gsp_device, mgr: self.gsp.clone() }, GFP_KERNEL)?))
+    }
+
     pub(crate) fn new(pdev: &pci::Device, bar: Arc<Devres<Bar0>>) -> Result<impl PinInit<Self>> {
         let spec = GpuSpec::new(&bar)?;
         let mut bios = Bios::new();

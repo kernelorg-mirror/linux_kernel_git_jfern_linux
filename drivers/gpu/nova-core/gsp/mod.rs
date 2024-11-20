@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
 pub(crate) use kernel::macros::versions;
+
+use core::sync::atomic::{AtomicU16, Ordering};
 use kernel::prelude::*;
 use kernel::sync::{Arc, Mutex, new_mutex};
 use kernel::sync::lock::Guard;
@@ -22,6 +24,7 @@ use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
+use crate::gsp::alloc_msgs::*;
 use crate::gsp::ctrl_msgs::*;
 use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
@@ -212,15 +215,53 @@ pub(crate) struct GspManager {
     gsp_objs: Arc<GSPSharedMemObjectsOuter::ver>,
     bar1_pdb: u64,
     bar2_pdb: u64,
+    alloc_id: AtomicU16,
 }
 
 pub(crate) trait GspManager: Send + Sync {
+    fn alloc_client_device(&self) -> Result<(Arc<GspClient>,
+                                             Arc<GspDevice>)>;
+    fn free_client(&self, client: Arc<GspClient>) -> Result<()>;
+    fn free_device(&self, device: Arc<GspDevice>) -> Result<()>;
+
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
     fn get_bar_pdb(&self, bar: u8) -> u64;
 }
 
 #[versions(GSP)]
 impl GspManager for GspManager::ver {
+
+    fn alloc_client_device(&self) -> Result<(Arc<GspClient>,
+                                             Arc<GspDevice>)> {
+        let client = Arc::new(self.alloc_client()?, GFP_KERNEL)?;
+        let device = Arc::new(self.alloc_device(client.clone())?, GFP_KERNEL)?;
+        Ok((client, device))
+    }
+
+    fn free_client(&self, client: Arc<GspClient>) -> Result<()> {
+        let mut msg = FreeMsg::ver::get(&client.object)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        self.free_client_id(client.object.handle & 0xffff);
+        Ok(())
+    }
+
+    fn free_device(&self, device: Arc<GspDevice>) -> Result<()>{
+        let mut msg = FreeMsg::ver::get(&device.subdevice)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        let mut msg = FreeMsg::ver::get(&device.object)?;
+
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()> {
         let mut msg = UpdateBarPdeMsg::ver::get(bar, addr, shift)?;
 
@@ -241,6 +282,58 @@ impl GspManager for GspManager::ver {
 
 #[versions(GSP)]
 impl GspManager::ver {
+
+    fn get_new_client_id(&self) -> u16 {
+        self.alloc_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn free_client_id(&self, _handle: u32) {
+//        self.ids.lock().unwrap().free(handle);
+    }
+
+    fn alloc_client(&self) -> Result<GspClient> {
+        let id = self.get_new_client_id();
+        let mut msg = AllocClient::ver::new(id, 0xffffffff)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        Ok(GspClient {
+            object: Arc::new(GspObject {
+                client: None,
+                parent: None,
+                handle: msg.handle,
+            }, GFP_KERNEL)?
+        })
+    }
+
+    fn alloc_device(&self, client: Arc<GspClient>) -> Result<GspDevice> {
+        let mut msg = AllocDevice::ver::new(&client)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        let devobj = Arc::new(GspObject {
+            client: Some(client.clone()),
+            parent: Some(client.object.clone()),
+            handle: msg.handle,
+        }, GFP_KERNEL)?;
+
+        let mut sub_msg = AllocSubdevice::ver::new(&devobj)?;
+
+        sub_msg.push(&mut gsp_objs.queues)?;
+
+        Ok(GspDevice {
+            object: devobj.clone(),
+            subdevice: Arc::new(GspObject {
+                client: Some(client),
+                parent: Some(devobj),
+                handle: sub_msg.handle,
+            }, GFP_KERNEL)?
+        })
+    }
 
     fn init_gsp(loader_fw: &Sec2Fw,
                 gsp_objs: &mut GSPSharedMemObjects::ver,
@@ -423,6 +516,7 @@ impl GspManager::ver {
             bar1_pdb: gsp_static_config.bar1_pdb(),
             bar2_pdb: gsp_static_config.bar2_pdb(),
             sysmem_flush,
+            alloc_id: AtomicU16::new(0xab00),
         };
 
         let mgr = Arc::new(mgr, GFP_KERNEL)?;
