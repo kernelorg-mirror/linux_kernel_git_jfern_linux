@@ -3,6 +3,7 @@
 //! Nova GPU Driver
 
 mod bios;
+mod devinit;
 mod driver;
 mod gpu;
 

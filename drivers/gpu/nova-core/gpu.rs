@@ -7,6 +7,7 @@ use kernel::{
 };
 
 use crate::bios::Bios;
+use crate::devinit;
 use crate::driver::Bar0;
 use core::fmt::Debug;
 
@@ -271,6 +272,9 @@ impl Gpu {
     pub(crate) fn new(pdev: &pci::Device, bar: Arc<Devres<Bar0>>) -> Result<impl PinInit<Self>> {
         let spec = GpuSpec::new(&bar)?;
         let mut bios = Bios::new();
+
+        devinit::wait(&bar)?;
+
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
         bios.probe(&bar)?;
