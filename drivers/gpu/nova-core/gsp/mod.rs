@@ -4,6 +4,7 @@ pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
 use kernel::sync::Arc;
 
+use crate::devinit;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
@@ -29,6 +30,10 @@ impl GspManager::ver {
 
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
                       fw: Firmware) -> Result<Arc<GspManager::ver>> {
+        let display_disabled = devinit::check_display_disable(&gpu_base)?;
+        let fb_size = devinit::vidmem_size(&gpu_base)?;
+        let vga_base = devinit::vga_workspace_addr(&gpu_base, fb_size, display_disabled)?;
+        let _vga_size = fb_size - vga_base;
 
         let mgr = GspManager::ver {
             gpu_base,
