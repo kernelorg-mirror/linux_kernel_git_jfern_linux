@@ -2,11 +2,17 @@
 #![allow(dead_code)]
 
 use kernel::{
+    scatterlist::*,
     prelude::*,
     firmware::Firmware,
+    page::PAGE_SIZE,
+    device,
 };
 
-use crate::dma::DmaObject;
+use crate::gpu::GSP_PAGE_SIZE;
+use core::alloc::Layout;
+
+use crate::dma::{DmaObject, SGObject};
 
 pub(crate) fn fw_rd32(fw: &Firmware, offset: usize) -> u32 {
     u32::from_le_bytes(fw.data()[offset..offset+4].try_into().unwrap())
@@ -197,3 +203,100 @@ impl BLFirmware {
     }
 }
 
+#[allow(unused)]
+pub(crate) struct Radix3 {
+    pub lvl2: SGObject,
+    pub lvl1: DmaObject,
+    pub lvl0: DmaObject,
+}
+
+impl Radix3 {
+    /// Allocate a radix3 table from a scatter-gather list
+    pub(crate) fn new(size: usize,
+                      sg_init: SGTableInit,
+                      dev: &device::Device) -> Result<Radix3>
+    {
+        let tbl_size: usize =
+            Layout::from_size_align((size as usize / GSP_PAGE_SIZE as usize)
+                                    * core::mem::size_of::<u64>(),
+                                    GSP_PAGE_SIZE as usize)?.pad_to_align().size();
+
+        if tbl_size == 0 {
+            return Err(EINVAL);
+        }
+
+        let mut lvl0 = DmaObject::new_cleared(dev, GSP_PAGE_SIZE as usize, "lvl0")?;
+        let mut lvl1 = DmaObject::new_cleared(dev, GSP_PAGE_SIZE as usize, "lvl1")?;
+
+        let mut lvl2_vec = VVec::<u8>::with_capacity(tbl_size, GFP_KERNEL)?;
+        unsafe { lvl2_vec.set_len(tbl_size) };
+
+        /* fill lvl2 with pages from fw sgt */
+        let mut index: usize = 0;
+        for sg in sg_init.iter() {
+            for j in 0..(sg.dma_len() / GSP_PAGE_SIZE as usize) {
+                let entry: u64 = sg.dma_address() + (GSP_PAGE_SIZE as u64 * j as u64);
+
+                let bytes = entry.to_le_bytes(); // use to_be_bytes() for big-endian
+
+                // Write the bytes to the Vec at the specified offset
+                lvl2_vec[index..index + 8].copy_from_slice(&bytes);
+
+                index += core::mem::size_of::<u64>();
+            }
+        }
+
+        let (lvl2, s_init) = SGObject::new_from_data(dev, lvl2_vec)?;
+
+        // Write the bus address of level 1 to level 0
+        let lvl1_addr = lvl1.dma.dma_handle();
+        lvl0.wr64(lvl1_addr, 0)?;
+
+        let mut index: usize = 0;
+        // Write the bus address of each page in level 2 to level 1
+        for sg in s_init.iter() {
+            for j in 0..(sg.dma_len() / GSP_PAGE_SIZE as usize) {
+                let entry: u64 = sg.dma_address() + (GSP_PAGE_SIZE as u64 * j as u64);
+                lvl1.wr64(entry, index)?;
+                index += core::mem::size_of::<u64>();
+            }
+        }
+
+        Ok(Self {
+            lvl2,
+            lvl1,
+            lvl0
+        })
+    }
+}
+
+#[allow(unused)]
+pub(crate) struct RadixFirmware {
+    pub sg_obj: SGObject,
+    pub radix3: Radix3,
+    pub len: usize,
+    pub name: &'static str,
+}
+
+impl RadixFirmware {
+    pub(crate) fn new(dev: &device::Device, name: &'static str, data: &[u8]) -> Result<Self>
+    {
+        let len = Layout::from_size_align(data.len(),
+                                          PAGE_SIZE)?.pad_to_align().size();
+
+        let mut newvec : VVec<u8> = VVec::with_capacity(len, GFP_KERNEL)?;
+
+        newvec.extend_from_slice(data, GFP_KERNEL)?;
+
+        let (sg_obj, s_init) = SGObject::new_from_data(dev, newvec)?;
+
+        let radix3 = Radix3::new(data.len(), s_init, dev)?;
+
+        Ok(Self {
+            sg_obj,
+            radix3,
+            len: data.len(),
+            name,
+        })
+    }
+}

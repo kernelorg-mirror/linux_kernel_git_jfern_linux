@@ -6,6 +6,7 @@ use kernel::{
     device,
     device::Device,
     devres::Devres,
+    elf::Elf,
     error::code::*,
     firmware,
     fmt,
@@ -18,13 +19,17 @@ use kernel::{
 
 use crate::bios::Bios;
 use crate::devinit;
+use crate::dma::DmaObject;
 use crate::driver::Bar0;
-use crate::firmware::BLFirmware;
+use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
 use crate::sec2::{Sec2, Sec2Fw};
 use core::fmt::Debug;
+
+const GSP_PAGE_SHIFT: u32 = 12;
+pub(crate) const GSP_PAGE_SIZE: u32 = 1 << GSP_PAGE_SHIFT;
 
 pub(crate) struct GpuConsts {
     sig_section: &'static str,
@@ -112,8 +117,9 @@ pub(crate) struct Firmware {
     pub loader_fw: Sec2Fw,
     pub unload_fw: Sec2Fw,
     pub bootloader_fw: RiscvFw,
+    pub gsp_fw: RadixFirmware,
+    pub gsp_sigs: NvkmFirmware,
     pub bl_fw: Option<BLFirmware>,
-    gsp: firmware::Firmware,
 }
 
 /// Structure holding the base pre-GSP boot GPU pieces
@@ -250,6 +256,16 @@ impl GpuSpec {
 }
 
 impl Firmware {
+
+    fn find_elf_section<'a>(elf: &'a Elf<'_>, section: &'static str) -> Result<&'a [u8]> {
+        for i in 0..elf.section_header_count() {
+            if elf.section_name(i)?.to_str() == core::prelude::v1::Ok(section) {
+                return elf.section_bytes(i);
+            }
+        }
+        Err(EINVAL)
+    }
+
     fn new(dev: ARef<device::Device>, gpu_base: &GpuBase, sec2: &Sec2, ver: &str) -> Result<Firmware> {
         let mut chip_name = CString::try_from_fmt(fmt!("{:?}", gpu_base.spec.chipset))?;
         chip_name.make_ascii_lowercase();
@@ -286,12 +302,24 @@ impl Firmware {
             bl_fw = Some(BLFirmware::new(bl.unwrap()));
         }
 
+        let gspvec : VVec<u8> = gsp.copy(GFP_KERNEL)?;
+        let elf = Elf::from_bytes(gspvec.as_slice())?;
+
+        let data = Self::find_elf_section(&elf, ".fwimage")?;
+
+        let gsp_fw = RadixFirmware::new(&dev, ".fwimage", data)?;
+
+        let data = Self::find_elf_section(&elf, gpu_base.spec.gpu_consts.sig_section)?;
+        let gsp_sigs_dma = DmaObject::new_from_data(&dev, data, gpu_base.spec.gpu_consts.sig_section)?;
+        let gsp_sigs = NvkmFirmware::new("gsp sigs", gsp_sigs_dma);
+
         Ok(Firmware {
             loader_fw,
             unload_fw,
             bootloader_fw,
+            gsp_fw,
+            gsp_sigs,
             bl_fw,
-            gsp,
         })
     }
 }
