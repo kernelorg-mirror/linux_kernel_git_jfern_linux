@@ -263,4 +263,262 @@ impl GSPSharedQueues::ver {
         self.gsp_falcon = Some(gsp_falcon);
         self.sec2_falcon = Some(sec2_falcon);
     }
+
+    fn cmdq_push(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver) -> Result<()> {
+        let mut argc = rpc.csum(lq.cmdq.inc_seq());
+
+        let mut off = 0;
+        let mut wptr = lq.cmdq.read_wptr();
+        loop {
+            let free = lq.cmdq.wait_for_write_slot(wptr)?;
+            let step = core::cmp::min::<u32>(free as u32, lq.cmdq.cnt - wptr);
+            let size = core::cmp::min::<u32>(argc, step * GSP_PAGE_SIZE);
+
+            lq.cmdq.copy_data_to_slot(wptr, size as usize, off, rpc.data.as_mut_ptr() as *mut u8);
+
+            wptr += div_round_up(size as usize, 0x1000 as usize) as u32;
+            if wptr == lq.cmdq.cnt {
+                wptr = 0;
+            }
+
+            off += size as isize;
+            argc -= size;
+
+            if argc == 0 {
+                break;
+            }
+        }
+
+        lq.cmdq.write_wptr(wptr);
+        self.gsp_falcon.as_ref().unwrap().cmdq_push()?;
+
+        Ok(())
+    }
+
+    fn rpc_send(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>,
+                rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
+        self.cmdq_push(lq, rpc)?;
+
+        if wait {
+            let rpc_fn: u32 = rpc.get_rpc_fn();
+            let rep_vec = self.msg_recv(lq, rpc_fn, repc)?;
+
+            rpc.set_recv(rep_vec);
+        }
+        Ok(())
+    }
+
+    fn rpc_push_locked(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
+        let max_msg_size : u32 = (16 * 0x1000) - RpcMsg::ver::get_gsp_msg_hdr_size();
+        let max_rpc_size : u32 = max_msg_size - RpcMsg::ver::get_gsp_rpc_hdr_size();
+        let mut rpc_size : u32 = rpc.get_rpc_length() - RpcMsg::ver::get_gsp_rpc_hdr_size();
+
+        if rpc_size > max_rpc_size {
+            let mut offset : u32 = 0;
+
+            rpc.set_lengths(RpcMsg::ver::get_gsp_rpc_hdr_size() + max_rpc_size);
+            let rpc_fn: u32 = rpc.get_rpc_fn();
+
+            self.rpc_send(lq, rpc, false, 0)?;
+
+            rpc_size -= max_rpc_size;
+            offset += max_rpc_size;
+            while rpc_size != 0 {
+                let size: u32 = core::cmp::min::<u32>(rpc_size, max_rpc_size);
+
+                let mut cont_rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD, false, size as usize)?;
+                unsafe {
+                    core::ptr::copy_nonoverlapping(rpc.get_data_ptr().byte_offset(offset as isize), cont_rpc.get_data_ptr(), size as usize);
+                }
+
+                self.rpc_send(lq, &mut cont_rpc, false, 0)?;
+                offset += size;
+                rpc_size -= size;
+            }
+
+            if wait {
+                self.msg_recv(lq, rpc_fn, repc)?;
+            }
+        } else {
+            self.rpc_send(lq, rpc, wait, repc)?;
+        }
+        Ok(())
+    }
+
+    fn msgq_wait(&self, lq: &Guard<'_, LockedQueues, MutexBackend>,
+                 msg: Option<&mut KVec<u8>>,
+                 offset: u32,
+                 repc: u32, peeklen: Option<&mut u32>, ptime: &mut i32,
+                 skip_copy_rpc_header: bool) -> Result<isize> {
+        let size: u32 = div_round_up((RpcMsg::ver::get_gsp_msg_hdr_size() + repc) as usize, GSP_PAGE_SIZE as usize) as u32;
+        if size == 0 || size >= lq.msgq.cnt {
+            pr_info!("ERROR IN MSGQ WAIT {}", size);
+            return Err(EINVAL);
+        }
+
+        let mut rptr = match lq.msgq.wait_for_read_slot(size, ptime) {
+            Err(_) => {
+                pr_info!("Error timedout waiting for msgq read slot");
+                return Err(ETIME);
+            },
+            Ok(x) => { x }
+        };
+
+        if peeklen != None {
+            let peek_val = peeklen.unwrap();
+
+            *peek_val = RpcMsg::ver::get_rpc_length_from_ptr(lq.msgq.get_slot_ptr(rptr));
+            return Ok(0);
+        }
+
+        let size = align(repc as usize + RpcMsg::ver::get_gsp_msg_hdr_size() as usize, GSP_PAGE_SIZE as usize);
+
+        let mut len = ((lq.msgq.cnt - rptr) * GSP_PAGE_SIZE) - RpcMsg::ver::get_gsp_msg_hdr_size();
+        len = core::cmp::min::<u32>(repc, len);
+
+        let msg = msg.unwrap();
+        if !skip_copy_rpc_header {
+            lq.msgq.copy_data_from_slot(rptr, len as usize, RpcMsg::ver::get_gsp_msg_hdr_size() as isize,
+                                        offset as isize, msg.as_mut_ptr() as *mut u8);
+        } else {
+            lq.msgq.copy_data_from_slot(rptr, len as usize - RpcMsg::ver::get_gsp_msg_hdr_size() as usize,
+                                        RpcMsg::ver::get_gsp_msg_hdr_size() as isize,
+                                        offset as isize + RpcMsg::ver::get_gsp_msg_hdr_size() as isize, msg.as_mut_ptr() as *mut u8);
+        }
+
+        let new_repc = repc - len;
+
+        if new_repc != 0 {
+
+            // I don't think this code makes any sense - nouveau does this so just copy it for now
+            lq.msgq.copy_data_from_slot(0, new_repc as usize, 0, len as isize, msg.as_mut_ptr() as *mut u8);
+            // also probably mssing msg set length
+        }
+
+        rptr = (rptr + div_round_up(size as usize, GSP_PAGE_SIZE as usize) as u32) % lq.msgq.cnt;
+
+        lq.msgq.write_rptr(rptr);
+
+        Ok((offset + len) as isize)
+    }
+
+    fn msgq_recv(&self, lq: &Guard<'_, LockedQueues, MutexBackend>, msg_repc: u32, total_repc: u32, ptime: &mut i32) -> Result<Option<KVec<u8>>> {
+        let max_msg_size : u32 = (16 * 0x1000) - RpcMsg::ver::get_gsp_msg_hdr_size();
+        let max_rpc_size : u32 = max_msg_size - RpcMsg::ver::get_gsp_rpc_hdr_size();
+        let repc: u32 = total_repc;
+
+        let buf_size = core::cmp::max::<u32>(msg_repc, total_repc + RpcMsg::ver::get_gsp_rpc_hdr_size());
+
+        let mut msg = KVec::with_capacity(buf_size as usize, GFP_KERNEL)?;
+        unsafe {
+            msg.set_len(buf_size as usize);
+        }
+        let _msg_offset = self.msgq_wait(lq, Some(&mut msg), 0, msg_repc, None, ptime, false)?;
+
+        if total_repc <= max_rpc_size {
+            return Ok(Some(msg));
+        }
+
+        let mut offset = msg_repc;
+        let mut new_repc = repc - msg_repc - RpcMsg::ver::get_gsp_rpc_hdr_size();
+
+        while new_repc != 0 {
+            let size = self.msg_recv_continuation(lq, &mut msg, offset, new_repc, ptime)?;
+
+            new_repc -= size as u32;
+            offset += size as u32;
+        }
+
+        Ok(Some(msg))
+    }
+
+    fn msg_recv_continuation(&self, lq: &Guard<'_, LockedQueues, MutexBackend>, msg: &mut KVec<u8>, offset: u32, _repc: u32, ptime: &mut i32) -> Result<isize> {
+        let mut peekval: u32 = 0;
+
+        self.msgq_wait(lq, None, 0, RpcMsg::ver::get_gsp_rpc_hdr_size(), Some(&mut peekval), ptime, false)?;
+
+        let msg_length = peekval;
+
+        self.msgq_wait(lq, Some(msg), offset, msg_length, None, ptime, true)
+    }
+
+    fn msg_recv(&self, lq: &Guard<'_, LockedQueues, MutexBackend>, rpc_fn: u32, repc: u32) -> Result<Option<KVec<u8>>> {
+        loop {
+            let mut peekval: u32 = 0;
+            let mut time = 4000000;
+
+            self.msgq_wait(lq, None, 0, RpcMsg::ver::get_gsp_rpc_hdr_size(), Some(&mut peekval), &mut time, false)?;
+
+            let msg_length = peekval;
+
+            let msg = self.msgq_recv(lq, msg_length, repc, &mut time)?;
+
+            if msg.is_none() {
+                return Err(EINVAL);
+            }
+
+            let mut msg = msg.unwrap();
+
+            let (recv_rpc_fn, rpc_result) = RpcMsg::ver::get_rpc_result(&mut msg);
+
+            pr_info!("RPC GOT {} {} {}", recv_rpc_fn, rpc_result, rpc_fn);
+
+            if rpc_result != 0 {
+                pr_info!("MESSAGE INVALID {}\n", rpc_result);
+                return Err(EINVAL);
+            }
+
+            if rpc_fn != 0 && recv_rpc_fn == rpc_fn {
+                if repc != 0 {
+                    pr_info!("MSG FUNC MATCHED {}", rpc_fn);
+                    return Ok(Some(msg));
+                }
+                return Ok(None);
+            }
+
+            pr_info!("DO NOTIFY {}", recv_rpc_fn);
+            match recv_rpc_fn {
+                fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
+                    if !self.gsp_falcon.is_none() &&
+                        !self.sec2_falcon.is_none() {
+                        }
+                },
+                fw::ver::gen::NV_VGPU_MSG_EVENT_OS_ERROR_LOG => {
+                }
+                _ => {},
+            }
+
+            if rpc_fn == 0 {
+                if lq.msgq.queue_empty() {
+                    break;
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    pub(crate) fn rpc_poll(&mut self, rpc_fn: u32) -> Result<()> {
+        let lq = self.lq.clone();
+        let mut locked = lq.lock();
+        self.msg_recv(&mut locked, rpc_fn, 0)?;
+        Ok(())
+    }
+
+    pub(crate) fn msg_irq_work(&self) {
+        let lq = &self.lq.clone();
+        let mut locked = lq.lock();
+        if !locked.msgq.queue_empty() {
+            let _ = self.msg_recv(&mut locked, 0, 0);
+        }
+    }
+
+    pub(crate) fn rpc_push(&mut self, rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
+        let lq = self.lq.clone();
+        let mut locked = lq.lock();
+        self.rpc_push_locked(&mut locked, rpc, wait, repc)
+    }
+
+    pub(crate) fn poll_gsp_init_done(&mut self) -> Result<()> {
+        self.rpc_poll(fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_INIT_DONE)
+    }
 }

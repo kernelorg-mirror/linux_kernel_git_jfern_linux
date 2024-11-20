@@ -3,6 +3,8 @@
 pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
 use kernel::sync::{Arc, Mutex, new_mutex};
+use kernel::sync::lock::Guard;
+use kernel::sync::lock::mutex::MutexBackend;
 
 use crate::{align, div_round_up};
 use crate::chipsets_before;
@@ -20,6 +22,7 @@ use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
+use crate::gsp::msgs::*;
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
@@ -28,6 +31,7 @@ use crate::{timer_msec, timer_nsec};
 mod boot_structs;
 mod fwsec;
 pub(crate) mod gsp_falcon;
+mod msgs;
 mod sharedq;
 
 const GSP_PAGE_SHIFT: u32 = 12;
@@ -143,7 +147,8 @@ impl GspManager::ver {
             pr_err!("GSP FALCON LOAD FAILED - RISCV NOT ACTIVE\n");
             return Err(EINVAL);
         }
-        Ok(())
+        /* kick off the event processing */
+        gsp_objs.queues.poll_gsp_init_done()
     }
 
     fn fini(gpu_base: &GpuBase,
