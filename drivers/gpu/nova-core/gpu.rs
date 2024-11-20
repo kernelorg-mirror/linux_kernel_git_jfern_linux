@@ -405,6 +405,10 @@ impl Gpu {
             Arc::new(GpuDevice { gsp: gsp_device, mgr: self.gsp.clone() }, GFP_KERNEL)?))
     }
 
+    pub(crate) fn get_engine_bitmap(&self) -> u64 {
+        self.gsp.get_engine_bitmap()
+    }
+
     pub(crate) fn new(pdev: &pci::Device, bar: Arc<Devres<Bar0>>) -> Result<impl PinInit<Self>> {
         let spec = GpuSpec::new(&bar)?;
         let mut bios = Bios::new();

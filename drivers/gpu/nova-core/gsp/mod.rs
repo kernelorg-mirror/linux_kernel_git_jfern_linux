@@ -21,6 +21,7 @@ use crate::gsp::sharedq::*;
 
 use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
+use crate::gpu::FifoDeviceInfoTable;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
@@ -217,6 +218,7 @@ pub(crate) struct GspManager {
     bar2_pdb: u64,
     vmmu_segment_size: u64,
     alloc_id: AtomicU16,
+    fifo_info: FifoDeviceInfoTable,
 }
 
 pub(crate) trait GspManager: Send + Sync {
@@ -229,6 +231,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn get_bar_pdb(&self, bar: u8) -> u64;
 
     fn get_vmmu_segment_size(&self) -> u64;
+    fn get_engine_bitmap(&self) -> u64;
 }
 
 #[versions(GSP)]
@@ -284,6 +287,14 @@ impl GspManager for GspManager::ver {
 
     fn get_vmmu_segment_size(&self) -> u64 {
         self.vmmu_segment_size
+    }
+
+    fn get_engine_bitmap(&self) -> u64 {
+        let mut mask: u64 = 0;
+        for entry in &self.fifo_info.table {
+            mask |= 1_u64 << entry.id;
+        }
+        mask
     }
 }
 
@@ -501,7 +512,7 @@ impl GspManager::ver {
         let _ = constructed_table.push(&mut gsp_objs.queues)?;
 
         let mut fifo_table = FifoGetDeviceInfoTable::ver::new(&internal_device)?;
-        let _table = fifo_table.push(&mut gsp_objs.queues)?;
+        let table = fifo_table.push(&mut gsp_objs.queues)?;
 
         let mut fault_buffer_size = CEGetFaultMethodBufferSize::ver::new(&internal_device)?;
         let _ = fault_buffer_size.push(&mut gsp_objs.queues)?;
@@ -528,6 +539,7 @@ impl GspManager::ver {
             bar2_pdb: gsp_static_config.bar2_pdb(),
             vmmu_segment_size: vmmu_segment_size_msg.get_segment_size(),
             alloc_id: AtomicU16::new(0xab00),
+            fifo_info: table,
         };
 
         let mgr = Arc::new(mgr, GFP_KERNEL)?;
