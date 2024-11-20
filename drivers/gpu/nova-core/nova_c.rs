@@ -7,6 +7,7 @@ mod devinit;
 mod dma;
 mod driver;
 mod firmware;
+mod falcon;
 mod gpu;
 mod rm_riscv;
 mod timer;
