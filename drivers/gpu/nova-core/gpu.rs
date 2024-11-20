@@ -19,8 +19,11 @@ use kernel::{
 use crate::bios::Bios;
 use crate::devinit;
 use crate::driver::Bar0;
+use crate::firmware::BLFirmware;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
+use crate::rm_riscv::RiscvFw;
+use crate::sec2::{Sec2, Sec2Fw};
 use core::fmt::Debug;
 
 pub(crate) struct GpuConsts {
@@ -106,11 +109,11 @@ pub(crate) struct GpuSpec {
 /// Structure encapsulating the firmware blobs required for the GPU to operate.
 #[allow(dead_code)]
 pub(crate) struct Firmware {
-    booter_load: firmware::Firmware,
-    booter_unload: firmware::Firmware,
-    bootloader: firmware::Firmware,
+    pub loader_fw: Sec2Fw,
+    pub unload_fw: Sec2Fw,
+    pub bootloader_fw: RiscvFw,
+    pub bl_fw: Option<BLFirmware>,
     gsp: firmware::Firmware,
-    bl_fw: Option<firmware::Firmware>,
 }
 
 /// Structure holding the base pre-GSP boot GPU pieces
@@ -247,8 +250,8 @@ impl GpuSpec {
 }
 
 impl Firmware {
-    fn new(dev: &device::Device, spec: &GpuSpec, ver: &str) -> Result<Firmware> {
-        let mut chip_name = CString::try_from_fmt(fmt!("{:?}", spec.chipset))?;
+    fn new(dev: ARef<device::Device>, gpu_base: &GpuBase, sec2: &Sec2, ver: &str) -> Result<Firmware> {
+        let mut chip_name = CString::try_from_fmt(fmt!("{:?}", gpu_base.spec.chipset))?;
         chip_name.make_ascii_lowercase();
 
         let fw_booter_load_path =
@@ -261,24 +264,34 @@ impl Firmware {
             CString::try_from_fmt(fmt!("nvidia/{}/gsp/gsp-{}.bin", &*chip_name, ver))?;
         let mut fw_bl_path = None;
 
-        if spec.gpu_consts.need_bl_fw {
+        if gpu_base.spec.gpu_consts.need_bl_fw {
             fw_bl_path = Some(CString::try_from_fmt(fmt!("nvidia/{}/acr/bl.bin", &*chip_name))?);
         }
-        let booter_load = firmware::Firmware::request(&fw_booter_load_path, dev)?;
-        let booter_unload = firmware::Firmware::request(&fw_booter_unload_path, dev)?;
-        let bootloader = firmware::Firmware::request(&fw_bootloader_path, dev)?;
-        let gsp = firmware::Firmware::request(&fw_gsp_path, dev)?;
+        let booter_load = firmware::Firmware::request(&fw_booter_load_path, &dev)?;
+        let booter_unload = firmware::Firmware::request(&fw_booter_unload_path, &dev)?;
+        let bootloader = firmware::Firmware::request(&fw_bootloader_path, &dev)?;
+        let gsp = firmware::Firmware::request(&fw_gsp_path, &dev)?;
+
+        let mut bl = None;
+        if gpu_base.spec.gpu_consts.need_bl_fw {
+            bl = Some(firmware::Firmware::request(&fw_bl_path.unwrap(), &dev)?);
+        }
+
+        let bootloader_fw = RiscvFw::new_from_fw(&dev, &bootloader, "bootloader")?;
+        let loader_fw = Sec2Fw::new(&dev, sec2.falcon.clone(), &booter_load, "booter-load")?;
+        let unload_fw = Sec2Fw::new(&dev, sec2.falcon.clone(), &booter_unload, "booter-unload")?;
 
         let mut bl_fw = None;
-        if spec.gpu_consts.need_bl_fw {
-            bl_fw = Some(firmware::Firmware::request(&fw_bl_path.unwrap(), dev)?);
+        if !bl.is_none() {
+            bl_fw = Some(BLFirmware::new(bl.unwrap()));
         }
+
         Ok(Firmware {
-            booter_load,
-            booter_unload,
-            bootloader,
-            gsp,
+            loader_fw,
+            unload_fw,
+            bootloader_fw,
             bl_fw,
+            gsp,
         })
     }
 }
@@ -293,8 +306,6 @@ impl Gpu {
         let vfn = Vfn::new(bar.clone())?;
 
         Vfn::install_irq(&vfn, pdev)?;
-
-        let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
         let timer = Arc::new(Timer::new(bar.clone())?, GFP_KERNEL)?;
 
@@ -314,6 +325,9 @@ impl Gpu {
             base.spec.chipset,
             base.spec.boot0
         );
+
+        let sec2 = Sec2::new(base.clone())?;
+        let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
 
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
