@@ -210,3 +210,54 @@ impl UnloadGuestDriver::ver {
         queues.rpc_push(&mut self.rpc, true, 0)
     }
 }
+
+#[versions(GSP)]
+pub(crate) struct ControlMsg {
+    pub rpc: RpcMsg::ver,
+    msg_size: u32,
+}
+
+#[versions(GSP)]
+impl ControlMsg::ver {
+    pub(crate) fn get(object: &GspObject, cmd: u32, size: usize, has_reply: bool) -> Result<Self> {
+        let rpc_size = fw::ver::gen::s_rpc_gsp_rm_control_v03_00::str_size() + size;
+
+        let mut rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL, has_reply, rpc_size)?;
+
+        let cli_handle = match &object.client {
+            Some(x) => { (*((*x).object)).handle }
+            None => object.handle
+        };
+        let _msg = fw::ver::gen::s_rpc_gsp_rm_control_v03_00::new(rpc.get_data_ptr())
+            .hClient(cli_handle)
+            .hObject(object.handle)
+            .cmd(cmd)
+            .status(0)
+            .paramsSize(size as u32)
+            .flags(0);
+
+        Ok(Self {
+            rpc,
+            msg_size: rpc_size as u32,
+        })
+    }
+
+    pub(crate) fn get_data_ptr(&mut self) -> *mut u8 {
+        unsafe { self.rpc.get_data_ptr().byte_offset(fw::ver::gen::s_rpc_gsp_rm_control_v03_00::str_size() as isize) }
+    }
+
+    pub(crate) fn wr(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        let _rep = queues.rpc_push(&mut self.rpc, true, 0)?;
+        Ok(())
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        let _rep = queues.rpc_push(&mut self.rpc, true, self.msg_size)?;
+
+        let msg = fw::ver::gen::s_rpc_gsp_rm_control_v03_00::new(self.rpc.get_data_ptr());
+
+        if msg.get_status() != 0 {
+        }
+        Ok(())
+    }
+}

@@ -145,6 +145,26 @@ pub(crate) struct FBInfo {
     pub vf_partition_count: u8,
 }
 
+#[derive(Debug)]
+#[allow(unused)]
+pub(crate) struct IntrInfo {
+    pub inst: u32,
+    pub stall: u32,
+    pub nonstall: u32,
+}
+
+#[allow(unused)]
+pub(crate) struct FifoDeviceEntry {
+    pub addr: u32,
+    pub rmid: u32,
+    pub id: u32,
+    pub eng_desc: u32,
+}
+
+pub(crate) struct FifoDeviceInfoTable {
+    pub table: KVec<FifoDeviceEntry>
+}
+
 /// Structure holding the base pre-GSP boot GPU pieces
 #[allow(dead_code)]
 pub(crate) struct GpuBase {

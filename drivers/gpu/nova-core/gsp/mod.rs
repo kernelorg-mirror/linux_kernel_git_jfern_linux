@@ -22,6 +22,7 @@ use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
+use crate::gsp::ctrl_msgs::*;
 use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
 use crate::nvfw::*;
@@ -30,6 +31,7 @@ use crate::timer::TimerWait;
 use crate::{timer_msec, timer_nsec};
 
 mod boot_structs;
+mod ctrl_msgs;
 mod fwsec;
 pub(crate) mod gsp_falcon;
 mod msgs;
@@ -138,6 +140,12 @@ impl GspClient {
 pub(crate) struct GspDevice {
     object: Arc<GspObject>,
     subdevice: Arc<GspObject>,
+}
+
+pub(crate) enum EventSetNotificationAction {
+    DISABLE,
+    SINGLE,
+    REPEAT,
 }
 
 #[versions(GSP)]
@@ -302,10 +310,22 @@ impl GspManager::ver {
             parent: Some(internal_device_object.clone()),
             handle: gsp_static_config.internal_subdevice(),
         }, GFP_KERNEL)?;
-        let _internal_device: Arc<GspDevice> = Arc::new(GspDevice {
+        let internal_device: Arc<GspDevice> = Arc::new(GspDevice {
             object: internal_device_object,
             subdevice: internal_subdevice_object,
         }, GFP_KERNEL)?;
+
+        let mut intr_kernel_table = InternalIntrGetKernelTableParams::ver::new(&internal_device)?;
+        let _intr_table = intr_kernel_table.push(&mut gsp_objs.queues)?;
+
+        let mut constructed_table = GetConstructedFalconInfo::ver::new(&internal_device)?;
+        let _ = constructed_table.push(&mut gsp_objs.queues)?;
+
+        let mut fifo_table = FifoGetDeviceInfoTable::ver::new(&internal_device)?;
+        let _table = fifo_table.push(&mut gsp_objs.queues)?;
+
+        let mut fault_buffer_size = CEGetFaultMethodBufferSize::ver::new(&internal_device)?;
+        let _ = fault_buffer_size.push(&mut gsp_objs.queues)?;
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
