@@ -24,6 +24,7 @@ use crate::driver::Bar0;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
+use crate::mmu::mm::MemRange;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
@@ -183,6 +184,7 @@ pub(crate) struct Gpu {
     base: Arc<GpuBase>,
     pub vfn: Arc<Vfn>,
     pub gsp: Arc<dyn GspManager>,
+    pub vram_mm: Arc<MemRange>,
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -402,13 +404,18 @@ impl Gpu {
 
         let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
 
-        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
+        let mut vram_mm = MemRange::new(1)?;
+
+        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
+
+        let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
+
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, gsp }))
+        Ok(pin_init!(Self { base, vfn, gsp, vram_mm }))
     }
 
     pub(crate) fn release(&self) {

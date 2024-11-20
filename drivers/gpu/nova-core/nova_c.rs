@@ -10,6 +10,7 @@ mod firmware;
 mod falcon;
 mod gpu;
 mod gsp;
+mod mmu;
 mod nvfw;
 mod rm_riscv;
 mod sec2;
@@ -44,4 +45,12 @@ pub(crate) fn div_round_up64(n: u64, d: u64) -> u64 {
 
 pub(crate) fn div_round_up(n: usize, d: usize) -> usize {
     (n + d - 1) / d
+}
+
+pub(crate) fn rounddown(x: usize, y: usize) -> usize {
+    x - (x % y)
+}
+
+pub(crate) fn roundup(x: usize, y: usize) -> usize {
+    (x + (y - 1) / y) * y
 }

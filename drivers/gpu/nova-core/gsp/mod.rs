@@ -26,6 +26,7 @@ use crate::gsp::ctrl_msgs::*;
 use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
 use crate::vfn::{Vfn, VfnHandler};
+use crate::mmu::mm::MemRange;
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
@@ -303,6 +304,7 @@ impl GspManager::ver {
 
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
                       vfn: &Arc<Vfn>,
+                      mm: &mut MemRange,
                       mut gsp_falcon: GspFalcon,
                       sec2: Sec2,
                       fw: Firmware) -> Result<Arc<GspManager::ver>> {
@@ -368,6 +370,8 @@ impl GspManager::ver {
         gsp_static_config.push(&mut gsp_objs.queues)?;
 
         gsp_static_config.fill_fb_regions(&mut fb_addr_info)?;
+
+        mm.init(0, (fb_addr_info.region[0].addr >> GSP_PAGE_SHIFT) as usize, (fb_addr_info.region[0].size >> GSP_PAGE_SHIFT) as usize)?;
 
         let internal_client: Arc<GspClient> = Arc::new(GspClient {
             object: Arc::new(GspObject { client: None, parent: None, handle: gsp_static_config.internal_client() }, GFP_KERNEL)?,
