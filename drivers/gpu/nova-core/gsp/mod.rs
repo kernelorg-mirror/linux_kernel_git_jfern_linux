@@ -118,6 +118,28 @@ impl GSPSharedMemObjects::ver {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct GspObject {
+    client: Option<Arc<GspClient>>,
+    parent: Option<Arc<GspObject>>,
+    handle: u32,
+}
+
+pub(crate) struct GspClient {
+    object: Arc<GspObject>
+}
+
+impl GspClient {
+    pub(crate) fn get_client_handle(&self) -> Result<u32> {
+        Ok(self.object.handle)
+    }
+}
+
+pub(crate) struct GspDevice {
+    object: Arc<GspObject>,
+    subdevice: Arc<GspObject>,
+}
+
 #[versions(GSP)]
 pub(crate) struct GspManager {
     gpu_base: Arc<GpuBase>,
@@ -264,6 +286,26 @@ impl GspManager::ver {
         gsp_static_config.push(&mut gsp_objs.queues)?;
 
         gsp_static_config.fill_fb_regions(&mut fb_addr_info)?;
+
+        let internal_client: Arc<GspClient> = Arc::new(GspClient {
+            object: Arc::new(GspObject { client: None, parent: None, handle: gsp_static_config.internal_client() }, GFP_KERNEL)?,
+        }, GFP_KERNEL)?;
+
+        let internal_device_object: Arc<GspObject> = Arc::new(GspObject {
+            client: Some(internal_client.clone()),
+            parent: Some((*internal_client).object.clone()),
+            handle: gsp_static_config.internal_device(),
+        }, GFP_KERNEL)?;
+
+        let internal_subdevice_object: Arc<GspObject> = Arc::new(GspObject {
+            client: Some(internal_client.clone()),
+            parent: Some(internal_device_object.clone()),
+            handle: gsp_static_config.internal_subdevice(),
+        }, GFP_KERNEL)?;
+        let _internal_device: Arc<GspDevice> = Arc::new(GspDevice {
+            object: internal_device_object,
+            subdevice: internal_subdevice_object,
+        }, GFP_KERNEL)?;
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
