@@ -33,6 +33,14 @@ use crate::rm_riscv::RiscvFw;
 use crate::sec2::{Sec2, Sec2Fw};
 use core::fmt::Debug;
 
+#[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
+use crate::vgpu_mgr::VGPUMgr;
+
+#[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
+pub(crate) const NOVA_ENABLE_VGPU: bool = true;
+#[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
+pub(crate) const NOVA_ENABLE_VGPU: bool = false;
+
 pub(crate) struct GpuConsts {
     sig_section: &'static str,
     pub sec2_addr: u32,
@@ -188,6 +196,10 @@ pub(crate) struct Gpu {
     pub gsp: Arc<dyn GspManager>,
     pub vram_mm: Arc<MemRange>,
     pub bar: Arc<Bar>,
+    #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
+    pub vgpu: Arc<VGPUMgr>,
+    #[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
+    pub vgpu: bool
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -460,12 +472,16 @@ impl Gpu {
 
         instmem.set_bar(bars.clone())?;
 
+	#[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
+	let vgpu = VGPUMgr::new(gsp.get_vmmu_segment_size())?;
+	#[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
+	let vgpu = false;
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, gsp, bar: bars, vram_mm }))
+        Ok(pin_init!(Self { base, vfn, gsp, bar: bars, vram_mm, vgpu }))
     }
 
     pub(crate) fn release(&self) {

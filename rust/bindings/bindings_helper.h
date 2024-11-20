@@ -11,6 +11,7 @@
 #include <drm/drm_file.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_ioctl.h>
+#include <drm/nvkm_vgpu_mgr_vfio.h>
 #include <kunit/test.h>
 #include <linux/auxiliary_bus.h>
 #include <linux/blk-mq.h>

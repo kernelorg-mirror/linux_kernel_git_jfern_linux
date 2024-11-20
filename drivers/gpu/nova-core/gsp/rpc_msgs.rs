@@ -4,6 +4,7 @@ use kernel::bindings;
 use kernel::pci::Device;
 
 use crate::gpu::{SizeAddr, FBInfo};
+use crate::gpu::NOVA_ENABLE_VGPU;
 use crate::gsp::*;
 
 #[versions(GSP)]
@@ -71,9 +72,10 @@ struct NvRegistryEntry {
     value: u32
 }
 
-static REGISTRY : [NvRegistryEntry; 2] = [
+static REGISTRY : [NvRegistryEntry; 3] = [
     NvRegistryEntry { name: "RMSecBusResetEnable", value: 1 },
     NvRegistryEntry { name: "RMForcePcieConfigSave", value: 1 },
+    NvRegistryEntry { name: "RMSetSriovMode", value: NOVA_ENABLE_VGPU as u32 }
 ];
 
 #[versions(GSP)]

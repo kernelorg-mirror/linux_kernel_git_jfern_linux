@@ -18,6 +18,10 @@ mod sec2;
 mod timer;
 mod vfn;
 
+/// VGPU MGR interface
+#[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
+pub mod vgpu_mgr;
+
 use crate::driver::NovaCoreDriver;
 
 kernel::module_pci_driver! {

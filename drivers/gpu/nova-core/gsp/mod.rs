@@ -19,6 +19,7 @@ use crate::gsp::fwsec::{NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::sharedq::*;
 
+use crate::gpu::NOVA_ENABLE_VGPU;
 use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
 use crate::gpu::FifoDeviceInfoTable;
@@ -232,6 +233,11 @@ pub(crate) trait GspManager: Send + Sync {
 
     fn get_vmmu_segment_size(&self) -> u64;
     fn get_engine_bitmap(&self) -> u64;
+
+    // gate these on vgpu?
+    fn ctrl_get(&self, device: Arc<GspDevice>, cmd: u32, size: u32, cookie: *mut *mut core::ffi::c_void) -> *mut core::ffi::c_void;
+
+    fn ctrl_wr(&self, ctrl: *mut core::ffi::c_void, cookie: *mut core::ffi::c_void) -> i32;
 }
 
 #[versions(GSP)]
@@ -295,6 +301,28 @@ impl GspManager for GspManager::ver {
             mask |= 1_u64 << entry.id;
         }
         mask
+    }
+
+    fn ctrl_get(&self, device: Arc<GspDevice>, cmd: u32, size: u32,
+                cookie: *mut *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+        let mut ctrl_obj : Pin<KBox<ControlMsg::ver>> = KBox::new(ControlMsg::ver::get(&device.subdevice, cmd, size as usize, false).unwrap(), GFP_KERNEL).unwrap().into();
+
+        let ptr = ctrl_obj.get_data_ptr() as *mut core::ffi::c_void;
+        unsafe { (*cookie) = Box::into_raw(Pin::into_inner(ctrl_obj)) as *mut _ as *mut core::ffi::c_void };
+
+        ptr
+    }
+
+    fn ctrl_wr(&self, _ctrl: *mut core::ffi::c_void, cookie: *mut core::ffi::c_void) -> i32 {
+
+        let mut ctrl_obj: KBox<ControlMsg::ver> = unsafe { KBox::from_raw(cookie as *mut ControlMsg::ver) };
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        match ctrl_obj.wr(&mut gsp_objs.queues) {
+            Err(x) => { return x.to_errno(); }
+            _ => { 0 }
+        }
     }
 }
 
@@ -458,7 +486,7 @@ impl GspManager::ver {
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
 
-        let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base, false)?;
+        let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base, NOVA_ENABLE_VGPU)?;
         gsp_system_info.push(&mut gsp_objs.queues)?;
 
         let mut gsp_registry = GspRegistryRpcMsg::ver::new()?;

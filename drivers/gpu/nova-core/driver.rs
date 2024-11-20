@@ -27,6 +27,12 @@ pub(crate) struct NovaCoreData {
 const BAR0_SIZE: usize = 8 * 1024 * 1024;
 pub(crate) type Bar0 = pci::Bar<BAR0_SIZE>;
 
+impl NovaCoreDriver {
+    pub(crate) fn data(&self) -> Arc<NovaCoreData> {
+        self.0.clone()
+    }
+}
+
 impl pci::Driver for NovaCoreDriver {
     type IdInfo = ();
 
@@ -64,9 +70,14 @@ impl pci::Driver for NovaCoreDriver {
     }
 
     fn sriov_configure(
-        _pdev: &mut pci::Device,
-        _num_vfs: i32) -> Result<i32> {
-        Err(EINVAL)
+        pdev: &mut pci::Device,
+        num_vfs: i32) -> Result<i32> {
+        if num_vfs > 0 {
+            return pdev.enable_sriov(num_vfs);
+        } else {
+            pdev.disable_sriov()?;
+        }
+        Ok(0)
     }
 }
 

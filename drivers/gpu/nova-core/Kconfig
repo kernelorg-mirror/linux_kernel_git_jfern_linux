@@ -9,3 +9,10 @@ config NOVA_CORE
 	  GSP-based GPUs.
 
 	  If M is selected, the module will be called nova.
+
+config NOVA_CORE_VGPU_SUPPORT
+       bool "Enable support for VGPU"
+       depends on NOVA_CORE
+       default n
+       help
+          Choose this if you want to use nova-core as backend for VGPU
