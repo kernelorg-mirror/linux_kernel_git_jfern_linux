@@ -42,6 +42,10 @@ impl pci::Driver for NovaCoreDriver {
     ) -> Result<Pin<KBox<Self>>> {
         dev_dbg!(pdev.as_ref(), "Probe Nova GPU driver.\n");
 
+        if pdev.is_virtfn() {
+            return Err(ENODEV);
+        }
+
         pdev.enable_device_mem()?;
         pdev.set_master();
         pdev.enable_msi();
