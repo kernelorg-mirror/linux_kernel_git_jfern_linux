@@ -23,6 +23,7 @@ use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
 use crate::gsp::msgs::*;
+use crate::gsp::rpc_msgs::*;
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
@@ -32,6 +33,7 @@ mod boot_structs;
 mod fwsec;
 pub(crate) mod gsp_falcon;
 mod msgs;
+mod rpc_msgs;
 mod sharedq;
 
 const GSP_PAGE_SHIFT: u32 = 12;
@@ -154,8 +156,16 @@ impl GspManager::ver {
     fn fini(gpu_base: &GpuBase,
             fw: &Firmware,
             gsp_objs: &mut GSPSharedMemObjects::ver,
+            unload: bool,
             mbox0: u32,
             mbox1: u32) -> Result<()> {
+
+        if unload {
+            let mut unload = UnloadGuestDriver::ver::get(false)?;
+
+            unload.push(&mut gsp_objs.queues)?;
+        }
+
         let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
 
         timer_msec!({
@@ -207,7 +217,7 @@ impl GspManager::ver {
             bar.writel((sysmem_flush.dma.dma_handle() >> 40) as u32, 0x100c40);
         }
 
-        let fb_addr_info = boot_structs::Wpr::ver::fill_fb_addr_info(
+        let mut fb_addr_info = boot_structs::Wpr::ver::fill_fb_addr_info(
             &gpu_base, fb_size, vga_base, vga_size, &fw);
 
         let mut fwsec = Fwsec::new_from_bios(&gpu_base,
@@ -229,18 +239,30 @@ impl GspManager::ver {
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
 
+        let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base)?;
+        gsp_system_info.push(&mut gsp_objs.queues)?;
+
+        let mut gsp_registry = GspRegistryRpcMsg::ver::new()?;
+        gsp_registry.push(&mut gsp_objs.queues)?;
+
         gsp_objs.queues.gsp_falcon.as_ref().unwrap().reset()?;
         gsp_objs.queues.gsp_falcon.as_ref().unwrap().write_libos_addr()?;
+
         let boot_iova = gsp_objs.wpr_meta.dma.dma_handle();
         let booted = Self::init_gsp(&fw.loader_fw, &mut gsp_objs, boot_iova);
 
         match booted {
             Err(x) => {
-                Self::fini(&gpu_base, &fw, &mut gsp_objs, 0xff, 0xff)?;
+                Self::fini(&gpu_base, &fw, &mut gsp_objs, false, 0xff, 0xff)?;
                 return Err(x);
             }
             Ok(_) => {}
         }
+
+        let mut gsp_static_config = GSPStaticConfigRpc::ver::new()?;
+        gsp_static_config.push(&mut gsp_objs.queues)?;
+
+        gsp_static_config.fill_fb_regions(&mut fb_addr_info)?;
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
@@ -266,6 +288,6 @@ impl Drop for GspManager::ver {
         let gsp_objs = self.gsp_objs.clone();
         let locked_gsp_objs = gsp_objs.inner.lock();
         let mut inner_gsp_objs = locked_gsp_objs;
-        let _ = Self::fini(&self.gpu_base, &self.fw, &mut inner_gsp_objs, 0xff, 0xff);
+        let _ = Self::fini(&self.gpu_base, &self.fw, &mut inner_gsp_objs, true, 0xff, 0xff);
     }
 }
