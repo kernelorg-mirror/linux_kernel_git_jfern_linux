@@ -21,7 +21,7 @@ use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
 use crate::nvfw::*;
-use crate::sec2::Sec2;
+use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
 use crate::{timer_msec, timer_nsec};
 
@@ -130,6 +130,22 @@ impl GspManager for GspManager::ver {
 #[versions(GSP)]
 impl GspManager::ver {
 
+    fn init_gsp(loader_fw: &Sec2Fw,
+                gsp_objs: &mut GSPSharedMemObjects::ver,
+                wpr_sr_addr: u64) -> Result<()> {
+
+        loader_fw.boot((wpr_sr_addr & 0xffffffff) as u32,
+                       Some((wpr_sr_addr >> 32) as u32))?;
+
+        gsp_objs.queues.gsp_falcon.as_mut().unwrap().write_app_version()?;
+
+        if !gsp_objs.queues.gsp_falcon.as_ref().unwrap().falcon.riscv_active()? {
+            pr_err!("GSP FALCON LOAD FAILED - RISCV NOT ACTIVE\n");
+            return Err(EINVAL);
+        }
+        Ok(())
+    }
+
     fn fini(gpu_base: &GpuBase,
             fw: &Firmware,
             gsp_objs: &mut GSPSharedMemObjects::ver,
@@ -207,6 +223,19 @@ impl GspManager::ver {
         gsp_falcon.set_libos_addr(gsp_objs.libos.dma.dma_handle());
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
+
+        gsp_objs.queues.gsp_falcon.as_ref().unwrap().reset()?;
+        gsp_objs.queues.gsp_falcon.as_ref().unwrap().write_libos_addr()?;
+        let boot_iova = gsp_objs.wpr_meta.dma.dma_handle();
+        let booted = Self::init_gsp(&fw.loader_fw, &mut gsp_objs, boot_iova);
+
+        match booted {
+            Err(x) => {
+                Self::fini(&gpu_base, &fw, &mut gsp_objs, 0xff, 0xff)?;
+                return Err(x);
+            }
+            Ok(_) => {}
+        }
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
