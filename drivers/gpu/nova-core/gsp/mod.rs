@@ -10,7 +10,8 @@ use crate::devinit;
 use crate::dma::DmaObject;
 use crate::falcon::Falcon;
 use crate::gsp::fwsec::Fwsec;
-use crate::gsp::fwsec::NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS;
+use crate::gsp::fwsec::{NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
+                        NVFW_FALCON_APPIF_DMEMMAPPER_CMD_SB};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::sharedq::*;
 
@@ -20,6 +21,8 @@ use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
 use crate::sec2::Sec2;
+use crate::timer::TimerWait;
+use crate::{timer_msec, timer_nsec};
 
 mod boot_structs;
 mod fwsec;
@@ -93,6 +96,43 @@ impl GspManager for GspManager::ver {
 
 #[versions(GSP)]
 impl GspManager::ver {
+
+    fn fini(gpu_base: &GpuBase,
+            fw: &Firmware,
+            gsp_objs: &mut GSPSharedMemObjects::ver,
+            mbox0: u32,
+            mbox1: u32) -> Result<()> {
+        let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
+
+        timer_msec!({
+            if (gsp_objs.queues.gsp_falcon.as_ref().unwrap().falcon.rd32(0x40)? & 0x80000000) != 0 {
+                break;
+            }
+        }, 2000, &gpu_base.timer);
+
+        gsp_objs.queues.gsp_falcon.as_ref().unwrap().reset()?;
+
+        // Boot fwsec into SB mode.
+        let mut fwsec = Fwsec::new_from_bios(&gpu_base,
+                                             gsp_objs.queues.gsp_falcon.as_ref().unwrap(),
+                                             NVFW_FALCON_APPIF_DMEMMAPPER_CMD_SB, 0, 0, &fw.bl_fw)?;
+
+        fwsec.boot()?;
+
+        let mut wpr2_hi = bar.readl(0x1fa828);
+
+        if wpr2_hi != 0 {
+            fw.unload_fw.boot(mbox0, Some(mbox1))?;
+            wpr2_hi = bar.readl(0x1fa828);
+            if wpr2_hi != 0 {
+                pr_info!("WPR2 still set after unload\n");
+            }
+        } else {
+            pr_info!("WPR2 not set, not unloading fw\n");
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
                       mut gsp_falcon: GspFalcon,
                       sec2: Sec2,
@@ -146,5 +186,15 @@ impl GspManager::ver {
 
         let mgr = Arc::new(mgr, GFP_KERNEL)?;
         Ok(mgr)
+    }
+}
+
+#[versions(GSP)]
+impl Drop for GspManager::ver {
+    fn drop(&mut self) {
+        let gsp_objs = self.gsp_objs.clone();
+        let locked_gsp_objs = gsp_objs.inner.lock();
+        let mut inner_gsp_objs = locked_gsp_objs;
+        let _ = Self::fini(&self.gpu_base, &self.fw, &mut inner_gsp_objs, 0xff, 0xff);
     }
 }
