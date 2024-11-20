@@ -1,5 +1,6 @@
 pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
+use kernel::bindings;
 use kernel::pci::Device;
 
 use crate::gpu::{SizeAddr, FBInfo};
@@ -12,7 +13,7 @@ pub(crate) struct GspSystemInfoRpcMsg {
 
 #[versions(GSP)]
 impl GspSystemInfoRpcMsg::ver {
-    pub(crate) fn new(gpu_base: &GpuBase) -> Result<Self> {
+    pub(crate) fn new(gpu_base: &GpuBase, vgpu_support: bool) -> Result<Self> {
         let mut rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO, false, fw::ver::gen::s_GspSystemInfo::str_size())?;
         let mut bars: [u64; 4] = Default::default();
 
@@ -24,7 +25,7 @@ impl GspSystemInfoRpcMsg::ver {
 
         let pciaddr = pci_dev.dev_id()?;
 
-        let _msg = fw::ver::gen::s_GspSystemInfo::new(rpc.get_data_ptr())
+        let mut msg = fw::ver::gen::s_GspSystemInfo::new(rpc.get_data_ptr())
             .gpuPhysAddr(bars[0])
             .gpuPhysFbAddr(bars[1])
             .gpuPhysInstAddr(bars[2])
@@ -32,6 +33,28 @@ impl GspSystemInfoRpcMsg::ver {
             .maxUserVa((1 << 47) - 4096)
             .pciConfigMirrorBase(0x88000)
             .pciConfigMirrorSize(0x1000);
+
+
+        if vgpu_support {
+            let pos = pci_dev.find_ext_capability(bindings::PCI_EXT_CAP_ID_SRIOV as i32)? as u32;
+            let total_vf = pci_dev.read_config_word(pos + bindings::PCI_SRIOV_TOTAL_VF)?;
+            let first_vf_offset = pci_dev.read_config_word(pos + bindings::PCI_SRIOV_VF_OFFSET)?;
+
+            let lo = pci_dev.read_config_dword(pos + bindings::PCI_SRIOV_BAR)?;
+            let bar1_lo = pci_dev.read_config_dword(pos + bindings::PCI_SRIOV_BAR + 4)?;
+            let bar1_hi = pci_dev.read_config_dword(pos + bindings::PCI_SRIOV_BAR + 8)?;
+            let bar2_lo = pci_dev.read_config_dword(pos + bindings::PCI_SRIOV_BAR + 12)?;
+            let bar2_hi = pci_dev.read_config_dword(pos + bindings::PCI_SRIOV_BAR + 16)?;
+
+            let _ = msg.new_S_gspVFInfo()
+                .totalVFs(total_vf as u32)
+                .firstVFOffset(first_vf_offset as u32)
+                .FirstVFBar0Address((lo & 0xfffffff0) as u64)
+                .FirstVFBar1Address(((bar1_hi as u64) << 32) + (bar1_lo & 0xfffffff0) as u64)
+                .FirstVFBar2Address(((bar2_hi as u64) << 32) + (bar2_lo & 0xfffffff0) as u64)
+                .b64bitBar1(1)
+                .b64bitBar2(1);
+        }
 
         Ok(Self {
             rpc,

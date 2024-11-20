@@ -458,7 +458,7 @@ impl GspManager::ver {
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
 
-        let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base)?;
+        let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base, false)?;
         gsp_system_info.push(&mut gsp_objs.queues)?;
 
         let mut gsp_registry = GspRegistryRpcMsg::ver::new()?;
