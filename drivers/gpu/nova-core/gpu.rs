@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use kernel::{
-    device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString, sync::Arc,
+    device, device::Device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString, sync::Arc, types::ARef,
 };
 
 use crate::bios::Bios;
@@ -105,6 +105,7 @@ pub(crate) struct Firmware {
 /// Structure holding the base pre-GSP boot GPU pieces
 #[allow(dead_code)]
 pub(crate) struct GpuBase {
+    pub dev: ARef<Device>,
     pub spec: GpuSpec,
     /// MMIO mapping of PCI BAR 0
     pub bar: Arc<Devres<Bar0>>,
@@ -284,6 +285,7 @@ impl Gpu {
         bios.probe(&bar)?;
 
         let base = Arc::new(GpuBase {
+            dev: pdev.as_ref().into(),
             spec,
             bar,
             bios,
