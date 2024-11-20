@@ -33,6 +33,7 @@ mod boot_structs;
 mod fwsec;
 pub(crate) mod gsp_falcon;
 mod msgs;
+mod notifiers;
 mod rpc_msgs;
 mod sharedq;
 

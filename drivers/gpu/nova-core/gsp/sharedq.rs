@@ -481,9 +481,11 @@ impl GSPSharedQueues::ver {
                 fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
                     if !self.gsp_falcon.is_none() &&
                         !self.sec2_falcon.is_none() {
+                            notifiers::Notifiers::ver::run_cpu_sequencer(self.gsp_falcon.as_ref().unwrap(), self.sec2_falcon.as_ref().unwrap(), &mut msg)?;
                         }
                 },
                 fw::ver::gen::NV_VGPU_MSG_EVENT_OS_ERROR_LOG => {
+                    notifiers::Notifiers::ver::os_error_log(&mut msg);
                 }
                 _ => {},
             }
