@@ -44,6 +44,7 @@ impl pci::Driver for NovaCoreDriver {
 
         pdev.enable_device_mem()?;
         pdev.set_master();
+        pdev.enable_msi();
 
         let bar = Arc::new(pdev.iomap_region_sized::<BAR0_SIZE>(0, c_str!("nova"))?, GFP_KERNEL)?;
         let p = pdev.clone();
@@ -67,6 +68,7 @@ impl pci::Driver for NovaCoreDriver {
 
 impl Drop for NovaCoreDriver {
     fn drop(&mut self) {
+        self.0.gpu.release();
         dev_dbg!(self.0.pdev.as_ref(), "Remove Nova GPU driver.\n");
     }
 }

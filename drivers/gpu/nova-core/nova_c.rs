@@ -12,6 +12,7 @@ mod gpu;
 mod rm_riscv;
 mod sec2;
 mod timer;
+mod vfn;
 
 use crate::driver::NovaCoreDriver;
 

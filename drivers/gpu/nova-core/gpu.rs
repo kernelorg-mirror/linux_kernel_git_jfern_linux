@@ -20,6 +20,7 @@ use crate::bios::Bios;
 use crate::devinit;
 use crate::driver::Bar0;
 use crate::timer::Timer;
+use crate::vfn::Vfn;
 use core::fmt::Debug;
 
 pub(crate) struct GpuConsts {
@@ -128,6 +129,7 @@ pub(crate) struct GpuBase {
 #[pin_data]
 pub(crate) struct Gpu {
     base: Arc<GpuBase>,
+    pub vfn: Arc<Vfn>,
     fw: Firmware,
 }
 
@@ -288,6 +290,10 @@ impl Gpu {
 
         devinit::wait(&bar)?;
 
+        let vfn = Vfn::new(bar.clone())?;
+
+        Vfn::install_irq(&vfn, pdev)?;
+
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
         let timer = Arc::new(Timer::new(bar.clone())?, GFP_KERNEL)?;
@@ -309,6 +315,22 @@ impl Gpu {
             base.spec.boot0
         );
 
-        Ok(pin_init!(Self { base, fw }))
+        {
+            let bar = base.bar.try_access().ok_or(ENXIO)?;
+            bar.try_writel(0x40, 0x110004)?;
+        }
+
+        Ok(pin_init!(Self { base, vfn, fw }))
     }
+
+    pub(crate) fn release(&self) {
+        self.vfn.unregister_irq();
+    }
+}
+
+const PCI_BASE: usize = 0x88000;
+pub(crate) fn msi_rearm(bar: &Devres<Bar0>) -> Result<()> {
+    let bar = bar.try_access().ok_or(ENXIO)?;
+    bar.writel(0, PCI_BASE + 0x704);
+    Ok(())
 }
