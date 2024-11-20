@@ -32,6 +32,7 @@ use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
 use crate::{timer_msec, timer_nsec};
 
+mod alloc_msgs;
 mod boot_structs;
 mod ctrl_msgs;
 mod fwsec;
