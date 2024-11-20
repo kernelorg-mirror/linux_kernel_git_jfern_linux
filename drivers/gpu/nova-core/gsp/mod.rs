@@ -215,6 +215,7 @@ pub(crate) struct GspManager {
     gsp_objs: Arc<GSPSharedMemObjectsOuter::ver>,
     bar1_pdb: u64,
     bar2_pdb: u64,
+    vmmu_segment_size: u64,
     alloc_id: AtomicU16,
 }
 
@@ -226,6 +227,8 @@ pub(crate) trait GspManager: Send + Sync {
 
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
     fn get_bar_pdb(&self, bar: u8) -> u64;
+
+    fn get_vmmu_segment_size(&self) -> u64;
 }
 
 #[versions(GSP)]
@@ -277,6 +280,10 @@ impl GspManager for GspManager::ver {
         } else {
             self.bar2_pdb
         }
+    }
+
+    fn get_vmmu_segment_size(&self) -> u64 {
+        self.vmmu_segment_size
     }
 }
 
@@ -499,6 +506,9 @@ impl GspManager::ver {
         let mut fault_buffer_size = CEGetFaultMethodBufferSize::ver::new(&internal_device)?;
         let _ = fault_buffer_size.push(&mut gsp_objs.queues)?;
 
+        let mut vmmu_segment_size_msg = GetVmmuSegmentSize::ver::new(&internal_device)?;
+        let _ = vmmu_segment_size_msg.push(&mut gsp_objs.queues)?;
+
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
         let gsp_outer  = GSPSharedMemObjectsOuter::ver { inner: gsp_objs };
@@ -510,12 +520,13 @@ impl GspManager::ver {
 
         let mgr = GspManager::ver {
             gpu_base,
+            sysmem_flush,
             fw,
             fb_addr_info,
             gsp_objs: gsp_outer,
             bar1_pdb: gsp_static_config.bar1_pdb(),
             bar2_pdb: gsp_static_config.bar2_pdb(),
-            sysmem_flush,
+            vmmu_segment_size: vmmu_segment_size_msg.get_segment_size(),
             alloc_id: AtomicU16::new(0xab00),
         };
 

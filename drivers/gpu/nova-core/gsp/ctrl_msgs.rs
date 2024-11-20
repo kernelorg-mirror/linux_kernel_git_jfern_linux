@@ -179,3 +179,29 @@ impl GetConstructedFalconInfo::ver {
     }
 }
 
+#[versions(GSP)]
+pub(crate) struct GetVmmuSegmentSize {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl GetVmmuSegmentSize::ver {
+    pub(crate) fn new(device: &GspDevice) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS::str_size();
+
+        let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE, msg_size, true)?;
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.push(queues)
+    }
+
+    pub(crate) fn get_segment_size(&mut self) -> u64 {
+        let msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS::new(self.ctrl.get_data_ptr());
+        msg.get_vmmuSegmentSize()
+    }
+}
