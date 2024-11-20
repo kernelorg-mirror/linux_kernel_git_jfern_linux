@@ -24,8 +24,9 @@ static inline int nvidia_vgpu_mgr_get_handle(struct pci_dev *pdev,
 
 	pf_dev = pdev->physfn;
 
-	if (strcmp(pf_dev->driver->name, "nvkm"))
-		return -EINVAL;
+	if (strcmp(pf_dev->driver->name, "nvkm") &&
+	    strcmp(pf_dev->driver->name, "NovaCore"))
+	  return -EINVAL;
 
 	h->pf_drvdata = pci_get_drvdata(pf_dev);
 	h->ops = nvkm_vgpu_mgr_get_vfio_ops(h->pf_drvdata);
