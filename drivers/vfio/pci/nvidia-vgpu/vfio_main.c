@@ -423,7 +423,7 @@ static const struct vfio_device_ops nvidia_vgpu_vfio_ops = {
 
 static int setup_vgpu_type(struct nvidia_vgpu_vfio *nvdev)
 {
-	nvdev->curr_vgpu_type = find_vgpu_type(nvdev, 869);
+	nvdev->curr_vgpu_type = find_vgpu_type(nvdev, 939);
 	if (!nvdev->curr_vgpu_type)
 		return -ENODEV;
 	return 0;
