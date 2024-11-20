@@ -149,34 +149,35 @@ static int shutdown_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 {
 	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;
 	NV2080_CTRL_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK_PARAMS *ctrl;
+	void *cookie;
 
 	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
 			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK,
-			sizeof(*ctrl));
+					   sizeof(*ctrl), &cookie);
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl);;
 
 	ctrl->gfid = vgpu->info.gfid;
 
 	return nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					  ctrl);
+					  ctrl, cookie);
 }
 
 static int cleanup_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 {
 	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;
 	NV2080_CTRL_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP_PARAMS *ctrl;
-
+	void *cookie;
 	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
 			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP,
-			sizeof(*ctrl));
+					   sizeof(*ctrl), &cookie);
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl);
 
 	ctrl->gfid = vgpu->info.gfid;
 
 	return nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					  ctrl);
+					  ctrl, cookie);
 }
 
 static int bootload_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
@@ -186,10 +187,11 @@ static int bootload_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 	NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS *ctrl;
 	DECLARE_BITMAP(engine_bitmap, NV2080_GPU_MAX_ENGINES);
 	int ret, i;
+	void *cookie;
 
 	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
 			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK,
-			sizeof(*ctrl));
+					   sizeof(*ctrl), &cookie);
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl);
 
@@ -224,7 +226,7 @@ static int bootload_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 	ctrl->bDeviceProfilingEnabled = false;
 
 	ret = nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					 ctrl);
+					 ctrl, cookie);
 	if (ret)
 		return ret;
 	return 0;

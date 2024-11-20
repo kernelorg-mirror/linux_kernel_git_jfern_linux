@@ -52,11 +52,11 @@ static inline int nvidia_vgpu_mgr_get_handle(struct pci_dev *pdev,
 #define nvidia_vgpu_mgr_get_gsp_client_handle(m, c) \
 	m->handle.ops->get_gsp_client_handle(c)
 
-#define nvidia_vgpu_mgr_rm_ctrl_get(m, g, c, s) \
-	m->handle.ops->rm_ctrl_get(g, c, s)
+#define nvidia_vgpu_mgr_rm_ctrl_get(m, g, c, s, cook)	\
+        m->handle.ops->rm_ctrl_get(g, c, s, cook)
 
-#define nvidia_vgpu_mgr_rm_ctrl_wr(m, g, c) \
-	m->handle.ops->rm_ctrl_wr(g, c)
+#define nvidia_vgpu_mgr_rm_ctrl_wr(m, g, c, cook)	\
+        m->handle.ops->rm_ctrl_wr(g, c, cook)
 
 #define nvidia_vgpu_mgr_rm_ctrl_rd(m, g, c, s) \
 	m->handle.ops->rm_ctrl_rd(g, c, s)

@@ -441,10 +441,10 @@ int nvidia_vgpu_mgr_init_vgpu_types(struct nvidia_vgpu_mgr *vgpu_mgr)
 {
 	NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS *ctrl;
 	int i, ret;
-
+	void *cookie;
 	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu_mgr->gsp_client,
 			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE,
-			sizeof(*ctrl));
+					   sizeof(*ctrl), &cookie);
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl);
 
@@ -455,7 +455,7 @@ int nvidia_vgpu_mgr_init_vgpu_types(struct nvidia_vgpu_mgr *vgpu_mgr)
 		memcpy(&ctrl->vgpuInfo[i], vgpu_types[i], sizeof(NVA081_CTRL_VGPU_INFO));
 
 	ret = nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu_mgr->gsp_client,
-					 ctrl);
+					 ctrl, cookie);
 	if (ret)
 		return ret;
 
