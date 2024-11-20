@@ -208,13 +208,33 @@ pub(crate) struct GspManager {
     fw: Firmware,
     fb_addr_info: FBInfo,
     gsp_objs: Arc<GSPSharedMemObjectsOuter::ver>,
+    bar1_pdb: u64,
+    bar2_pdb: u64,
 }
 
 pub(crate) trait GspManager: Send + Sync {
+    fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
+    fn get_bar_pdb(&self, bar: u8) -> u64;
 }
 
 #[versions(GSP)]
 impl GspManager for GspManager::ver {
+    fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()> {
+        let mut msg = UpdateBarPdeMsg::ver::get(bar, addr, shift)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
+    fn get_bar_pdb(&self, bar: u8) -> u64 {
+        if bar == 1 {
+            self.bar1_pdb
+        } else {
+            self.bar2_pdb
+        }
+    }
 }
 
 #[versions(GSP)]
@@ -395,6 +415,8 @@ impl GspManager::ver {
             fw,
             fb_addr_info,
             gsp_objs: gsp_outer,
+            bar1_pdb: gsp_static_config.bar1_pdb(),
+            bar2_pdb: gsp_static_config.bar2_pdb(),
             sysmem_flush,
         };
 

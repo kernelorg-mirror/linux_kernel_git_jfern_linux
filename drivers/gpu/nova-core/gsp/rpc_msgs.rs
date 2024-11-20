@@ -261,3 +261,35 @@ impl ControlMsg::ver {
         Ok(())
     }
 }
+
+#[versions(GSP)]
+pub(crate) struct UpdateBarPdeMsg {
+    pub rpc: RpcMsg::ver,
+}
+
+#[versions(GSP)]
+impl UpdateBarPdeMsg::ver {
+    pub(crate) fn get(bar: u32, addr: u64, shift: u32) -> Result<Self> {
+        let rpc_size = fw::ver::gen::s_rpc_update_bar_pde_v15_00::str_size();
+
+        let mut rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_UPDATE_BAR_PDE, false, rpc_size)?;
+
+        let mut msg = fw::ver::gen::s_rpc_update_bar_pde_v15_00::new(rpc.get_data_ptr());
+
+        let mut val = 0;
+        if addr != 0 {
+            val = (addr >> 4) | 2;
+        }
+        let _info = msg.new_S_info()
+            .barType(bar)
+            .entryValue(val)
+            .entryLevelShift(shift as u64);
+        Ok(Self {
+            rpc
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        queues.rpc_push(&mut self.rpc, true, 0)
+    }
+}
