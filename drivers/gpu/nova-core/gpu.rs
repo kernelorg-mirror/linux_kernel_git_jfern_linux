@@ -17,13 +17,14 @@ pub(crate) struct GpuConsts {
 }
 
 /// Enum representing the GPU chipset.
-#[derive(Debug)]
+#[derive(Debug,PartialOrd,PartialEq,Clone,Copy)]
 pub(crate) enum Chipset {
     TU102 = 0x162,
     TU104 = 0x164,
     TU106 = 0x166,
     TU117 = 0x167,
     TU116 = 0x168,
+    GA100 = 0x170,
     GA102 = 0x172,
     GA103 = 0x173,
     GA104 = 0x174,
@@ -34,6 +35,36 @@ pub(crate) enum Chipset {
     AD104 = 0x194,
     AD106 = 0x196,
     AD107 = 0x197,
+}
+
+impl Chipset {
+    pub(crate) fn val(chipset: &Chipset) -> u32 {
+        *chipset as u32
+    }
+}
+
+/// Checks if a chipset is inside a certain range
+#[macro_export]
+macro_rules! chipset_range {
+    ($var:expr, $start:ident, $end:ident) => {
+        Chipset::val($var) >= Chipset::val(&Chipset::$start) && $var <= Chipset::val(&Chipset::$end)
+    }
+}
+
+/// Checks if a chipset if before a certain point
+#[macro_export]
+macro_rules! chipsets_before {
+    ($var:expr, $end:ident) => {
+        Chipset::val($var) <= Chipset::val(&Chipset::$end)
+    }
+}
+
+/// Checks if a chipset if after a certain point
+#[macro_export]
+macro_rules! chipsets_after {
+    ($var:expr, $start:ident) => {
+        Chipset::val($var) >= Chipset::val(&Chipset::$start)
+    }
 }
 
 /// Enum representing the GPU generation.
@@ -53,7 +84,7 @@ pub(crate) struct GpuSpec {
     /// Contents of the boot0 register.
     boot0: u64,
     card_type: CardType,
-    chipset: Chipset,
+    pub(crate) chipset: Chipset,
     /// The revision of the chipset.
     chiprev: u8,
     pub gpu_consts: GpuConsts,
@@ -72,7 +103,7 @@ pub(crate) struct Firmware {
 /// Structure holding the base pre-GSP boot GPU pieces
 #[allow(dead_code)]
 pub(crate) struct GpuBase {
-    spec: GpuSpec,
+    pub spec: GpuSpec,
     /// MMIO mapping of PCI BAR 0
     pub bar: Arc<Devres<Bar0>>,
     pub bios: Bios,
