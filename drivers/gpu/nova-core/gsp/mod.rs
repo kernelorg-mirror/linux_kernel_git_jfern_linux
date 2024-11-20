@@ -7,6 +7,10 @@ use kernel::sync::Arc;
 use crate::chipsets_before;
 use crate::devinit;
 use crate::dma::DmaObject;
+use crate::gsp::fwsec::Fwsec;
+use crate::gsp::fwsec::NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS;
+use crate::gsp::gsp_falcon::GspFalcon;
+
 use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
@@ -39,6 +43,7 @@ impl GspManager for GspManager::ver {
 impl GspManager::ver {
 
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
+                      gsp_falcon: GspFalcon,
                       fw: Firmware) -> Result<Arc<GspManager::ver>> {
         let display_disabled = devinit::check_display_disable(&gpu_base)?;
         let fb_size = devinit::vidmem_size(&gpu_base)?;
@@ -58,6 +63,15 @@ impl GspManager::ver {
 
         let fb_addr_info = boot_structs::Wpr::ver::fill_fb_addr_info(
             &gpu_base, fb_size, vga_base, vga_size, &fw);
+
+        let mut fwsec = Fwsec::new_from_bios(&gpu_base,
+                                             &gsp_falcon,
+                                             NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
+                                             fb_addr_info.frts.addr,
+                                             fb_addr_info.frts.size,
+                                             &fw.bl_fw)?;
+
+        fwsec.boot()?;
 
         let mgr = GspManager::ver {
             gpu_base,

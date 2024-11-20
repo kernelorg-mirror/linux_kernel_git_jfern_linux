@@ -22,6 +22,7 @@ use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
+use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
@@ -377,9 +378,11 @@ impl Gpu {
         );
 
         let sec2 = Sec2::new(base.clone())?;
+        let gsp_falcon = GspFalcon::new(base.clone())?;
+
         let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
 
-        let gsp = GspManagerr535_113_01::new(base.clone(), fw)? as Arc<dyn GspManager>;
+        let gsp = GspManagerr535_113_01::new(base.clone(), gsp_falcon, fw)? as Arc<dyn GspManager>;
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
