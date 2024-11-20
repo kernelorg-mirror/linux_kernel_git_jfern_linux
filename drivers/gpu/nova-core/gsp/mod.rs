@@ -2,27 +2,78 @@
 
 pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
-use kernel::sync::Arc;
+use kernel::sync::{Arc, Mutex, new_mutex};
 
+use crate::{align, div_round_up};
 use crate::chipsets_before;
 use crate::devinit;
 use crate::dma::DmaObject;
+use crate::falcon::Falcon;
 use crate::gsp::fwsec::Fwsec;
 use crate::gsp::fwsec::NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS;
 use crate::gsp::gsp_falcon::GspFalcon;
+use crate::gsp::sharedq::*;
 
 use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
+use crate::sec2::Sec2;
+
 mod boot_structs;
 mod fwsec;
 pub(crate) mod gsp_falcon;
+mod sharedq;
 
 const GSP_PAGE_SHIFT: u32 = 12;
 pub(crate) const GSP_PAGE_SIZE: u32 = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
+
+#[versions(GSP)]
+#[allow(unused)]
+pub(crate) struct GSPSharedMemObjects {
+    pub shm: Arc<DmaObject>,
+    pub queues: GSPSharedQueues::ver,
+}
+
+#[versions(GSP)]
+pub(crate) struct GSPSharedMemObjectsOuter {
+    pub inner: Pin<KBox<Mutex<GSPSharedMemObjects::ver>>>
+}
+
+#[versions(GSP)]
+impl GSPSharedMemObjects::ver {
+
+    pub(crate) fn fill_shm_ptes(dma: &mut DmaObject, nr_ptes: usize) {
+        unsafe {
+            let ptes : *mut u64 = dma.dma.start_ptr_mut().offset(0) as *mut u64;
+            for i in 0..nr_ptes {
+                *ptes.wrapping_add(i) = dma.dma.dma_handle() + (i << GSP_PAGE_SHIFT) as u64;
+            }
+        }
+    }
+
+    pub(crate) fn new(gpu_base: Arc<GpuBase>) -> Result<Self> {
+        let cmdq_size = 0x40000;
+        let msgq_size = 0x40000;
+        let mut ptes_nr = (cmdq_size + msgq_size) >> GSP_PAGE_SHIFT;
+        ptes_nr += div_round_up((ptes_nr * size_of::<u64>()) as usize, GSP_PAGE_SIZE as usize);
+        let ptes_size = align(ptes_nr * size_of::<u64>() as usize, GSP_PAGE_SIZE as usize);
+        let shmem_size = cmdq_size + msgq_size + ptes_size;
+
+        let mut shm = DmaObject::new_cleared(&gpu_base.dev, shmem_size, "shm")?;
+
+        Self::fill_shm_ptes(&mut shm, ptes_nr);
+
+        let queues = GSPSharedQueues::ver::new(&mut shm, cmdq_size as u32, msgq_size as u32, ptes_size as u32, ptes_nr as u32)?;
+        let shm = Arc::new(shm, GFP_KERNEL)?;
+        Ok(Self {
+            shm,
+            queues,
+        })
+    }
+}
 
 #[versions(GSP)]
 pub(crate) struct GspManager {
@@ -30,6 +81,7 @@ pub(crate) struct GspManager {
     sysmem_flush: DmaObject,
     fw: Firmware,
     fb_addr_info: FBInfo,
+    gsp_objs: Arc<GSPSharedMemObjectsOuter::ver>,
 }
 
 pub(crate) trait GspManager: Send + Sync {
@@ -41,9 +93,9 @@ impl GspManager for GspManager::ver {
 
 #[versions(GSP)]
 impl GspManager::ver {
-
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
-                      gsp_falcon: GspFalcon,
+                      mut gsp_falcon: GspFalcon,
+                      sec2: Sec2,
                       fw: Firmware) -> Result<Arc<GspManager::ver>> {
         let display_disabled = devinit::check_display_disable(&gpu_base)?;
         let fb_size = devinit::vidmem_size(&gpu_base)?;
@@ -73,10 +125,22 @@ impl GspManager::ver {
 
         fwsec.boot()?;
 
+        gsp_falcon.set_app_version(fw.bootloader_fw.app_version);
+
+        let mut gsp_objs = GSPSharedMemObjects::ver::new(gpu_base.clone())?;
+
+        gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
+
+        let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
+
+        let gsp_outer  = GSPSharedMemObjectsOuter::ver { inner: gsp_objs };
+        let gsp_outer = Arc::new(gsp_outer, GFP_KERNEL)?;
+
         let mgr = GspManager::ver {
             gpu_base,
             fw,
             fb_addr_info,
+            gsp_objs: gsp_outer,
             sysmem_flush,
         };
 
