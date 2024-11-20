@@ -69,14 +69,20 @@ pub(crate) struct Firmware {
     bl_fw: Option<firmware::Firmware>,
 }
 
+/// Structure holding the base pre-GSP boot GPU pieces
+#[allow(dead_code)]
+pub(crate) struct GpuBase {
+    spec: GpuSpec,
+    /// MMIO mapping of PCI BAR 0
+    pub bar: Arc<Devres<Bar0>>,
+    pub bios: Bios,
+}
+
 /// Structure holding the resources required to operate the GPU.
 #[allow(dead_code)]
 #[pin_data]
 pub(crate) struct Gpu {
-    spec: GpuSpec,
-    /// MMIO mapping of PCI BAR 0
-    bar: Arc<Devres<Bar0>>,
-    pub bios: Bios,
+    base: Arc<GpuBase>,
     fw: Firmware,
 }
 
@@ -238,13 +244,19 @@ impl Gpu {
 
         bios.probe(&bar)?;
 
+        let base = Arc::new(GpuBase {
+            spec,
+            bar,
+            bios,
+        }, GFP_KERNEL)?;
+
         dev_info!(
             pdev.as_ref(),
             "NVIDIA {:?} ({:#x})",
-            spec.chipset,
-            spec.boot0
+            base.spec.chipset,
+            base.spec.boot0
         );
 
-        Ok(pin_init!(Self { spec, bios, bar, fw }))
+        Ok(pin_init!(Self { base, fw }))
     }
 }
