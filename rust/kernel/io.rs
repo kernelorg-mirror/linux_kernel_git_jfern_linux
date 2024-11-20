@@ -158,6 +158,18 @@ impl<const SIZE: usize> Io<SIZE> {
         self.addr
     }
 
+    /// Create an ioremap ptr
+    #[inline]
+    pub unsafe fn remap(&self, size: usize) -> *mut core::ffi::c_void {
+	unsafe { bindings::ioremap(self.addr as u64, size as u64) }
+    }
+
+    /// Unmap a previously ioremap ptr
+    #[inline]
+    pub unsafe fn unmap(&self, ptr: *mut core::ffi::c_void) {
+	unsafe { bindings::iounmap(ptr) };
+    }
+
     /// Returns the size of this mapping.
     #[inline]
     pub fn maxsize(&self) -> usize {
