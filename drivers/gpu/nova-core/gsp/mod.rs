@@ -25,6 +25,7 @@ use crate::gpu::GpuBase;
 use crate::gsp::ctrl_msgs::*;
 use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
+use crate::vfn::{Vfn, VfnHandler};
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
@@ -60,6 +61,58 @@ pub(crate) struct GSPSharedMemObjects {
 #[versions(GSP)]
 pub(crate) struct GSPSharedMemObjectsOuter {
     pub inner: Pin<KBox<Mutex<GSPSharedMemObjects::ver>>>
+}
+
+#[versions(GSP)]
+impl VfnHandler for GSPSharedMemObjects::ver {
+    fn handle_vfn(&self) -> Result<u32> {
+        let gsp_falcon;
+        match self.queues.gsp_falcon.as_ref() {
+            Some(x) => {
+                gsp_falcon = x;
+            },
+            None => {
+                return Ok(0);
+            }
+        }
+
+        let flcn = gsp_falcon.falcon.clone();
+        let intr: u32 = flcn.rd32(0x0008)?;
+        let inte: u32 = flcn.rd32(flcn.addr2 + flcn.riscv_irqmask)?;
+        let mut stat = intr & inte;
+
+        if stat == 0 {
+            pr_info!("GSP IRQ fired with nothing set {:#x} {:#x}", intr, inte);
+            return Ok(0);
+        }
+
+        if stat & 0x00000040 != 0 {
+            flcn.wr32(0x4, 0x40)?;
+            pr_info!("GSP WORK");
+            self.queues.msg_irq_work();
+            stat &= !0x00000040;
+        }
+
+        if stat != 0 {
+            pr_info!("GSP intr unhandled {:#x}", stat);
+            flcn.wr32(0x14, stat)?;
+            flcn.wr32(0x04, stat)?;
+        }
+
+        flcn.intr_retrigger()?;
+        Ok(1)
+    }
+}
+
+#[versions(GSP)]
+impl VfnHandler for GSPSharedMemObjectsOuter::ver {
+    fn handle_vfn(&self) -> Result<u32> {
+
+        let gsp_objs = self.inner.lock();
+
+        gsp_objs.handle_vfn()?;
+        Ok(0)
+    }
 }
 
 #[versions(GSP)]
@@ -229,6 +282,7 @@ impl GspManager::ver {
     }
 
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
+                      vfn: &Arc<Vfn>,
                       mut gsp_falcon: GspFalcon,
                       sec2: Sec2,
                       fw: Firmware) -> Result<Arc<GspManager::ver>> {
@@ -316,7 +370,7 @@ impl GspManager::ver {
         }, GFP_KERNEL)?;
 
         let mut intr_kernel_table = InternalIntrGetKernelTableParams::ver::new(&internal_device)?;
-        let _intr_table = intr_kernel_table.push(&mut gsp_objs.queues)?;
+        let intr_table = intr_kernel_table.push(&mut gsp_objs.queues)?;
 
         let mut constructed_table = GetConstructedFalconInfo::ver::new(&internal_device)?;
         let _ = constructed_table.push(&mut gsp_objs.queues)?;
@@ -331,6 +385,10 @@ impl GspManager::ver {
 
         let gsp_outer  = GSPSharedMemObjectsOuter::ver { inner: gsp_objs };
         let gsp_outer = Arc::new(gsp_outer, GFP_KERNEL)?;
+
+        vfn.add_handler(intr_table[0].stall, gsp_outer.clone() as Arc<dyn VfnHandler>)?;
+        vfn.intr_allow(intr_table[0].stall)?;
+        vfn.rearm()?;
 
         let mgr = GspManager::ver {
             gpu_base,

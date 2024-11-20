@@ -402,7 +402,7 @@ impl Gpu {
 
         let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
 
-        let gsp = GspManagerr535_113_01::new(base.clone(), gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
+        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
