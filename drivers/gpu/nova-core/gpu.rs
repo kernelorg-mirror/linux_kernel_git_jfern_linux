@@ -22,6 +22,7 @@ use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
+use crate::gsp::*;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
@@ -139,7 +140,7 @@ pub(crate) struct GpuBase {
 pub(crate) struct Gpu {
     base: Arc<GpuBase>,
     pub vfn: Arc<Vfn>,
-    fw: Firmware,
+    pub gsp: Arc<dyn GspManager>,
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -357,12 +358,13 @@ impl Gpu {
         let sec2 = Sec2::new(base.clone())?;
         let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
 
+        let gsp = GspManagerr535_113_01::new(base.clone(), fw)? as Arc<dyn GspManager>;
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, fw }))
+        Ok(pin_init!(Self { base, vfn, gsp }))
     }
 
     pub(crate) fn release(&self) {
