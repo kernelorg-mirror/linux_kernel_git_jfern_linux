@@ -3,7 +3,17 @@
 #![allow(dead_code)]
 
 use kernel::{
-    device, device::Device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString, sync::Arc, types::ARef,
+    device,
+    device::Device,
+    devres::Devres,
+    error::code::*,
+    firmware,
+    fmt,
+    pci,
+    prelude::*,
+    str::CString,
+    sync::Arc,
+    types::ARef,
 };
 
 use crate::bios::Bios;
