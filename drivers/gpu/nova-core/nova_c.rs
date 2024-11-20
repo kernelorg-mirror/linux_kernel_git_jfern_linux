@@ -6,6 +6,7 @@ mod bios;
 mod devinit;
 mod driver;
 mod gpu;
+mod timer;
 
 use crate::driver::NovaCoreDriver;
 

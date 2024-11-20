@@ -9,6 +9,7 @@ use kernel::{
 use crate::bios::Bios;
 use crate::devinit;
 use crate::driver::Bar0;
+use crate::timer::Timer;
 use core::fmt::Debug;
 
 pub(crate) struct GpuConsts {
@@ -108,6 +109,7 @@ pub(crate) struct GpuBase {
     /// MMIO mapping of PCI BAR 0
     pub bar: Arc<Devres<Bar0>>,
     pub bios: Bios,
+    pub timer: Arc<Timer>,
 }
 
 /// Structure holding the resources required to operate the GPU.
@@ -277,12 +279,15 @@ impl Gpu {
 
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
+        let timer = Arc::new(Timer::new(bar.clone())?, GFP_KERNEL)?;
+
         bios.probe(&bar)?;
 
         let base = Arc::new(GpuBase {
             spec,
             bar,
             bios,
+            timer
         }, GFP_KERNEL)?;
 
         dev_info!(
