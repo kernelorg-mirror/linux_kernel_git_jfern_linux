@@ -20,6 +20,7 @@ use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
+use crate::nvfw::*;
 use crate::sec2::Sec2;
 use crate::timer::TimerWait;
 use crate::{timer_msec, timer_nsec};
@@ -36,7 +37,14 @@ pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
 #[versions(GSP)]
 #[allow(unused)]
 pub(crate) struct GSPSharedMemObjects {
+    pub libos: DmaObject,
+    pub loginit: DmaObject,
+    pub logintr: DmaObject,
+    pub logrm: DmaObject,
+    pub rmargs: DmaObject,
+    pub kern: Option<DmaObject>,
     pub shm: Arc<DmaObject>,
+    pub wpr_meta: DmaObject,
     pub queues: GSPSharedQueues::ver,
 }
 
@@ -69,10 +77,35 @@ impl GSPSharedMemObjects::ver {
 
         Self::fill_shm_ptes(&mut shm, ptes_nr);
 
+        let num_logs : usize = fw::ver::gen::LOGIDX_SIZE as usize;
+        let mut kern: Option<DmaObject> = None;
+        let mut loginit = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "loginit")?;
+        let mut logintr = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "logintr")?;
+        let mut logrm = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "logrm")?;
+        let mut rmargs = DmaObject::new_cleared(&gpu_base.dev, 0x1000, "rmargs")?;
+
+        boot_structs::Wpr::ver::fill_rmargs(rmargs.dma.start_ptr_mut(), shm.dma.dma_handle(), ptes_nr as u32,
+                                             ptes_size as u64,
+                                             ptes_size as u64 + cmdq_size as u64, false);
+
+        let libos = boot_structs::Wpr::ver::libos_fill_data(&gpu_base.dev,
+                                                            num_logs,
+                                                            &mut loginit, &mut logintr,
+                                                            &mut logrm, kern.as_mut(), &rmargs)?;
+
+        let wpr_meta = DmaObject::new_cleared(&gpu_base.dev, 0x1000, "wpr_meta")?;
+
         let queues = GSPSharedQueues::ver::new(&mut shm, cmdq_size as u32, msgq_size as u32, ptes_size as u32, ptes_nr as u32)?;
         let shm = Arc::new(shm, GFP_KERNEL)?;
         Ok(Self {
+            libos,
+            loginit,
+            logintr,
+            logrm,
+            rmargs,
+            kern,
             shm,
+            wpr_meta,
             queues,
         })
     }
@@ -168,6 +201,10 @@ impl GspManager::ver {
         gsp_falcon.set_app_version(fw.bootloader_fw.app_version);
 
         let mut gsp_objs = GSPSharedMemObjects::ver::new(gpu_base.clone())?;
+
+        boot_structs::Wpr::ver::fill_wpr_meta(gsp_objs.wpr_meta.dma.start_ptr_mut(), &fw.gsp_fw.radix3, &fw.bootloader_fw, &fw.gsp_sigs.dma, &fb_addr_info);
+
+        gsp_falcon.set_libos_addr(gsp_objs.libos.dma.dma_handle());
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
 
