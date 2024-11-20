@@ -29,9 +29,6 @@ use crate::rm_riscv::RiscvFw;
 use crate::sec2::{Sec2, Sec2Fw};
 use core::fmt::Debug;
 
-const GSP_PAGE_SHIFT: u32 = 12;
-pub(crate) const GSP_PAGE_SIZE: u32 = 1 << GSP_PAGE_SHIFT;
-
 pub(crate) struct GpuConsts {
     sig_section: &'static str,
     pub sec2_addr: u32,
@@ -121,6 +118,30 @@ pub(crate) struct Firmware {
     pub gsp_fw: RadixFirmware,
     pub gsp_sigs: NvkmFirmware,
     pub bl_fw: Option<BLFirmware>,
+}
+
+#[derive(Default,Debug)]
+pub(crate) struct SizeAddr {
+    pub addr: u64,
+    pub size: u64,
+}
+
+#[derive(Default,Debug)]
+#[allow(unused)]
+pub(crate) struct FBInfo {
+    pub vga_workspace: SizeAddr,
+    pub bios: SizeAddr,
+    pub frts: SizeAddr,
+    pub boot: SizeAddr,
+    pub elf: SizeAddr,
+    pub wpr2_heap: SizeAddr,
+    pub wpr2: SizeAddr,
+    pub heap: SizeAddr,
+    pub fb: SizeAddr,
+    pub region: KVec<SizeAddr>,
+    pub rsvd_size: u32,
+    pub wpr_size: u32,
+    pub vf_partition_count: u8,
 }
 
 /// Structure holding the base pre-GSP boot GPU pieces

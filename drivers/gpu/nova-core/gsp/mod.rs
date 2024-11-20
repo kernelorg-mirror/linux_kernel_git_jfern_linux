@@ -8,18 +8,24 @@ use crate::chipsets_before;
 use crate::devinit;
 use crate::dma::DmaObject;
 use crate::gpu::Chipset;
+use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
-pub(crate) mod gsp_falcon;
+mod boot_structs;
 mod fwsec;
+pub(crate) mod gsp_falcon;
 
+const GSP_PAGE_SHIFT: u32 = 12;
+pub(crate) const GSP_PAGE_SIZE: u32 = 1 << GSP_PAGE_SHIFT;
+pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
 
 #[versions(GSP)]
 pub(crate) struct GspManager {
     gpu_base: Arc<GpuBase>,
     sysmem_flush: DmaObject,
     fw: Firmware,
+    fb_addr_info: FBInfo,
 }
 
 pub(crate) trait GspManager: Send + Sync {
@@ -37,7 +43,7 @@ impl GspManager::ver {
         let display_disabled = devinit::check_display_disable(&gpu_base)?;
         let fb_size = devinit::vidmem_size(&gpu_base)?;
         let vga_base = devinit::vga_workspace_addr(&gpu_base, fb_size, display_disabled)?;
-        let _vga_size = fb_size - vga_base;
+        let vga_size = fb_size - vga_base;
 
         let sysmem_flush = DmaObject::new_cleared(&gpu_base.dev, 0x1000, "sysmem flush page")?;
 
@@ -50,9 +56,13 @@ impl GspManager::ver {
             bar.writel((sysmem_flush.dma.dma_handle() >> 40) as u32, 0x100c40);
         }
 
+        let fb_addr_info = boot_structs::Wpr::ver::fill_fb_addr_info(
+            &gpu_base, fb_size, vga_base, vga_size, &fw);
+
         let mgr = GspManager::ver {
             gpu_base,
             fw,
+            fb_addr_info,
             sysmem_flush,
         };
 

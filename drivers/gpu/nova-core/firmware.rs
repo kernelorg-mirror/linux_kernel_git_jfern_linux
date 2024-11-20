@@ -9,7 +9,7 @@ use kernel::{
     device,
 };
 
-use crate::gpu::GSP_PAGE_SIZE;
+use crate::gsp::GSP_PAGE_SIZE;
 use core::alloc::Layout;
 
 use crate::dma::{DmaObject, SGObject};
