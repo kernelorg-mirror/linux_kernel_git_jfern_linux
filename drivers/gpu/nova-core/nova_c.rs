@@ -2,6 +2,7 @@
 
 //! Nova GPU Driver
 
+mod bar;
 mod bios;
 mod devinit;
 mod dma;
@@ -53,4 +54,18 @@ pub(crate) fn rounddown(x: usize, y: usize) -> usize {
 
 pub(crate) fn roundup(x: usize, y: usize) -> usize {
     (x + (y - 1) / y) * y
+}
+
+pub(crate) fn order_base_2(n: usize) -> u32 {
+    if n > 1 {
+	(n - 1).ilog2() + 1
+    } else {
+	0
+    }
+}
+
+pub(crate) fn is_aligned<T: Into<u64>>(x: T, a: T) -> bool {
+    let x = x.into();
+    let a = a.into();
+    (x & (a - 1)) == 0
 }

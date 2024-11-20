@@ -17,6 +17,7 @@ use kernel::{
     types::ARef,
 };
 
+use crate::bar::Bar;
 use crate::bios::Bios;
 use crate::devinit;
 use crate::dma::DmaObject;
@@ -24,6 +25,7 @@ use crate::driver::Bar0;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
+use crate::mmu::memory::InstMem;
 use crate::mmu::mm::MemRange;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
@@ -185,6 +187,7 @@ pub(crate) struct Gpu {
     pub vfn: Arc<Vfn>,
     pub gsp: Arc<dyn GspManager>,
     pub vram_mm: Arc<MemRange>,
+    pub bar: Arc<Bar>,
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -410,12 +413,23 @@ impl Gpu {
 
         let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
 
+        let instmem = InstMem::new(base.clone(), vram_mm.clone(),
+                                   pdev.resource_start(3)?)?;
+
+        let bars = Arc::new(Bar::new(instmem.clone(),
+                                     gsp.clone(),
+                                     pdev.resource_len(1)?,
+                                     Some(pdev.resource_len(3)?),
+                                     pdev.resource_start(3)?)?, GFP_KERNEL)?;
+
+        instmem.set_bar(bars.clone())?;
+
         {
             let bar = base.bar.try_access().ok_or(ENXIO)?;
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, gsp, vram_mm }))
+        Ok(pin_init!(Self { base, vfn, gsp, bar: bars, vram_mm }))
     }
 
     pub(crate) fn release(&self) {
