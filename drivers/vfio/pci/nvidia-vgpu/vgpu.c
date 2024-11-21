@@ -148,88 +148,48 @@ static int setup_mgmt_heap(struct nvidia_vgpu *vgpu)
 static int shutdown_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 {
 	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;
-	NV2080_CTRL_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK_PARAMS *ctrl;
-	void *cookie;
-
-	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
-			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK,
-					   sizeof(*ctrl), &cookie);
-	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl);;
-
-	ctrl->gfid = vgpu->info.gfid;
-
-	return nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					  ctrl, cookie);
+	return nvidia_vgpu_mgr_shutdown_vgpu_plugin_task(vgpu_mgr, &vgpu->gsp_client, vgpu->info.gfid);
 }
 
 static int cleanup_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 {
-	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;
-	NV2080_CTRL_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP_PARAMS *ctrl;
-	void *cookie;
-	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
-			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP,
-					   sizeof(*ctrl), &cookie);
-	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl);
-
-	ctrl->gfid = vgpu->info.gfid;
-
-	return nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					  ctrl, cookie);
+	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;	
+	return nvidia_vgpu_mgr_cleanup_vgpu_plugin(vgpu_mgr, &vgpu->gsp_client, vgpu->info.gfid);	
 }
 
 static int bootload_vgpu_plugin_task(struct nvidia_vgpu *vgpu)
 {
 	struct nvidia_vgpu_mgr *vgpu_mgr = vgpu->vgpu_mgr;
-	struct nvidia_vgpu_mgmt *mgmt = &vgpu->mgmt;
-	NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS *ctrl;
+	struct nvidia_vgpu_mgmt *mgmt = &vgpu->mgmt;	
+	struct bootload_vgpu params = {};
+	int i;
 	DECLARE_BITMAP(engine_bitmap, NV2080_GPU_MAX_ENGINES);
-	int ret, i;
-	void *cookie;
+	
+	params.dbdf = vgpu->info.dbdf;
+	params.gfid = vgpu->info.gfid;
 
-	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu->gsp_client,
-			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK,
-					   sizeof(*ctrl), &cookie);
-	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl);
-
-	ctrl->dbdf = vgpu->info.dbdf;
-	ctrl->gfid = vgpu->info.gfid;
-	ctrl->vmPid = 0;
-	ctrl->swizzId = 0;
-	ctrl->numChannels = vgpu->chid.num_chid;
-	ctrl->numPluginChannels = 0;
+	params.num_channels = vgpu->chid.num_chid;
 
 	bitmap_clear(engine_bitmap, 0, NV2080_GPU_MAX_ENGINES);
-
 	/* FIXME: nvkm seems not correctly record engines. two engines are missing. */
 	nvidia_vgpu_mgr_get_engine_bitmap(vgpu_mgr, engine_bitmap);
 
 	for_each_set_bit(i, engine_bitmap, NV2080_GPU_MAX_ENGINES)
-		ctrl->chidOffset[i] = vgpu->chid.chid_offset;
+		params.chid_offset[i] = vgpu->chid.chid_offset;
 
-	ctrl->bDisableDefaultSmcExecPartRestore = false;
-	ctrl->numGuestFbSegments = 1;
-	ctrl->guestFbPhysAddrList[0] = vgpu->fbmem_heap->addr;
-	ctrl->guestFbLengthList[0] = vgpu->fbmem_heap->size;
-	ctrl->pluginHeapMemoryPhysAddr = mgmt->heap_mem->addr;
-	ctrl->pluginHeapMemoryLength = mgmt->heap_mem->size;
-	ctrl->ctrlBuffOffset = 0;
-	ctrl->initTaskLogBuffOffset = mgmt->heap_mem->addr +
-				      init_task_log_buff_offset();
-	ctrl->initTaskLogBuffSize = init_task_log_buff_size();
-	ctrl->vgpuTaskLogBuffOffset = ctrl->initTaskLogBuffOffset +
-				      ctrl->initTaskLogBuffSize;
-	ctrl->vgpuTaskLogBuffSize = vgpu_task_log_buff_size();
-	ctrl->bDeviceProfilingEnabled = false;
+	params.fbmem_heap_addr = vgpu->fbmem_heap->addr;
+	params.fbmem_heap_size = vgpu->fbmem_heap->size;
+	params.heap_mem_addr = mgmt->heap_mem->addr;
+	params.heap_mem_size = mgmt->heap_mem->size;
 
-	ret = nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu->gsp_client,
-					 ctrl, cookie);
-	if (ret)
-		return ret;
-	return 0;
+	params.init_task_log_buf_offset = mgmt->heap_mem->addr +
+		init_task_log_buff_offset();
+	params.init_task_log_buf_size = init_task_log_buff_size();
+	params.vgpu_task_log_buf_offset = params.init_task_log_buf_offset +
+		params.init_task_log_buf_size;
+	params.vgpu_task_log_buf_size = vgpu_task_log_buff_size();
+
+	return nvidia_vgpu_mgr_bootload_vgpu_plugin_task(vgpu_mgr, &vgpu->gsp_client, &params);
 }
 
 /**

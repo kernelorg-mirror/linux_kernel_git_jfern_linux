@@ -53,18 +53,6 @@ static inline int nvidia_vgpu_mgr_get_handle(struct pci_dev *pdev,
 #define nvidia_vgpu_mgr_get_gsp_client_handle(m, c) \
 	m->handle.ops->get_gsp_client_handle(c)
 
-#define nvidia_vgpu_mgr_rm_ctrl_get(m, g, c, s, cook)	\
-        m->handle.ops->rm_ctrl_get(g, c, s, cook)
-
-#define nvidia_vgpu_mgr_rm_ctrl_wr(m, g, c, cook)	\
-        m->handle.ops->rm_ctrl_wr(g, c, cook)
-
-#define nvidia_vgpu_mgr_rm_ctrl_rd(m, g, c, s) \
-	m->handle.ops->rm_ctrl_rd(g, c, s)
-
-#define nvidia_vgpu_mgr_rm_ctrl_done(m, g, c) \
-	m->handle.ops->rm_ctrl_done(, c)
-
 #define nvidia_vgpu_mgr_alloc_fbmem_heap(m, s) \
 	m->handle.ops->alloc_fbmem(m->handle.pf_drvdata, s, true)
 
@@ -91,5 +79,17 @@ static inline int nvidia_vgpu_mgr_get_handle(struct pci_dev *pdev,
 
 #define nvidia_vgpu_mgr_get_engine_bitmap(m, b) \
 	m->handle.ops->get_engine_bitmap(m->handle.pf_drvdata, b)
+
+#define nvidia_vgpu_mgr_bootload_vgpu_plugin_task(m, g, params) \
+	m->handle.ops->bootload_vgpu_plugin_task(g, params)
+
+#define nvidia_vgpu_mgr_shutdown_vgpu_plugin_task(m, g, gfid) \
+	m->handle.ops->shutdown_vgpu_plugin_task(g, gfid)
+
+#define nvidia_vgpu_mgr_cleanup_vgpu_plugin(m, g, gfid)	\
+	m->handle.ops->cleanup_vgpu_plugin(g, gfid)
+
+#define nvidia_vgpu_mgr_add_vgpu_info(m, g, n, c) \
+	m->handle.ops->add_vgpu_info(g, n, c)
 
 #endif

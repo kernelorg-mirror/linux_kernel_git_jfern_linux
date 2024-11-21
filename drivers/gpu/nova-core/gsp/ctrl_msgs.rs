@@ -1,7 +1,7 @@
 #![allow(unused)]
 pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
-
+use kernel::bindings;
 use crate::gsp::*;
 use crate::gsp::rpc_msgs::*;
 
@@ -203,5 +203,132 @@ impl GetVmmuSegmentSize::ver {
     pub(crate) fn get_segment_size(&mut self) -> u64 {
         let msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS::new(self.ctrl.get_data_ptr());
         msg.get_vmmuSegmentSize()
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct ShutdownVgpuPluginTask {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl ShutdownVgpuPluginTask::ver {
+    pub(crate) fn new(device: &GspDevice, gfid: u32) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK, msg_size, false)?;
+
+        let msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_SHUTDOWN_GSP_VGPU_PLUGIN_TASK_PARAMS::new(ctrl.get_data_ptr())
+            .gfid(gfid);
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct CleanupVgpuPlugin {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl CleanupVgpuPlugin::ver {
+    pub(crate) fn new(device: &GspDevice, gfid: u32) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP, msg_size, false)?;
+
+        let msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_VGPU_PLUGIN_CLEANUP_PARAMS::new(ctrl.get_data_ptr())
+            .gfid(gfid);
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct BootloadVgpuPluginTask {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl BootloadVgpuPluginTask::ver {
+    pub(crate) fn new(device: &GspDevice, args: *const bindings::bootload_vgpu) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK, msg_size, false)?;
+
+        unsafe {
+            let mut fb_phys_addr_list = [0u64; 384];
+            let mut fb_length_list = [0u64; 384];
+            fb_phys_addr_list[0] = (*args).fbmem_heap_addr;
+            fb_length_list[0] = (*args).fbmem_heap_size;
+
+            let msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS::new(ctrl.get_data_ptr())
+                .dbdf((*args).dbdf)
+                .gfid((*args).gfid)
+                .numChannels((*args).num_channels)
+                .numGuestFbSegments(1)
+                .chidOffset((*args).chid_offset)
+                .guestFbPhysAddrList(fb_phys_addr_list)
+                .guestFbLengthList(fb_length_list)
+                .pluginHeapMemoryPhysAddr((*args).heap_mem_addr)
+                .pluginHeapMemoryLength((*args).heap_mem_size)
+                .initTaskLogBuffOffset((*args).init_task_log_buf_offset)
+                .initTaskLogBuffSize((*args).init_task_log_buf_size)
+                .vgpuTaskLogBuffOffset((*args).vgpu_task_log_buf_offset)
+                .vgpuTaskLogBuffSize((*args).vgpu_task_log_buf_size);
+        }
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct PgpuAddVgpuType {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl PgpuAddVgpuType::ver {
+    pub(crate) fn new(device: &GspDevice, vgpu_info_count: u32, args: *const core::ffi::c_void) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE, msg_size, false)?;
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS::new(ctrl.get_data_ptr())
+            .discardVgpuTypes(1)
+            .vgpuInfoCount(vgpu_info_count);
+
+        let mut info = msg.new_S_vgpuInfo(0);
+
+        // HACKS
+        unsafe {
+            core::ptr::copy_nonoverlapping(args,
+                                           info.raw() as *mut core::ffi::c_void,
+                                           fw::ver::gen::s_NVA081_CTRL_VGPU_INFO::str_size() * vgpu_info_count as usize);
+        }
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
     }
 }

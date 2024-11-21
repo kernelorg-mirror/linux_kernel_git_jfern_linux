@@ -205,32 +205,29 @@ unsafe extern "C" fn free_chids(_handle: *mut core::ffi::c_void, offset: i32, co
     pr_info!("free chids {} {}\n", offset, count);
 }
 
-unsafe extern "C" fn rm_ctrl_get(client: *mut bindings::nvidia_vgpu_gsp_client, cmd: u32,
-                                 size: u32, cookie: *mut *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+unsafe extern "C" fn shutdown_vgpu_plugin_task(client: *mut bindings::nvidia_vgpu_gsp_client,
+                                               gfid: u32) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-
-    pr_info!("rm ctrl get {:#x} {}\n", cmd, size);
-    let ctrl = device_borrow.mgr.ctrl_get(device_borrow.gsp.clone(), cmd, size, cookie);
-
-    ctrl as *mut core::ffi::c_void
+    device_borrow.mgr.shutdown_vgpu_plugin_task(device_borrow.gsp.clone(), gfid)
 }
 
-unsafe extern "C" fn rm_ctrl_wr(client: *mut bindings::nvidia_vgpu_gsp_client,
-                                ctrl: *mut core::ffi::c_void,
-                                cookie: *mut core::ffi::c_void) -> i32 {
+unsafe extern "C" fn cleanup_vgpu_plugin(client: *mut bindings::nvidia_vgpu_gsp_client,
+                                         gfid: u32) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-    pr_info!("rm ctrl wr\n");
-    device_borrow.mgr.ctrl_wr(ctrl, cookie)
+    device_borrow.mgr.cleanup_vgpu_plugin(device_borrow.gsp.clone(), gfid)
 }
 
-unsafe extern "C" fn rm_ctrl_rd(_client: *mut bindings::nvidia_vgpu_gsp_client, _cmd: u32,
-                                _size: u32) -> *mut core::ffi::c_void {
-    core::ptr::null_mut()
+unsafe extern "C" fn bootload_vgpu_plugin_task(client: *mut bindings::nvidia_vgpu_gsp_client,
+                                               params: *const bindings::bootload_vgpu) -> i32 {
+    let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
+    device_borrow.mgr.bootload_vgpu_plugin_task(device_borrow.gsp.clone(), params)
 }
 
-unsafe extern "C" fn rm_ctrl_done(_client: *mut bindings::nvidia_vgpu_gsp_client,
-                                  _ctrl: *mut core::ffi::c_void) {
-
+unsafe extern "C" fn add_vgpu_info(client: *mut bindings::nvidia_vgpu_gsp_client,
+                                   count: u32,
+                                   ptr: *const core::ffi::c_void) -> i32 {
+    let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
+    device_borrow.mgr.add_vgpu_type(device_borrow.gsp.clone(), count, ptr)
 }
 
 unsafe extern "C" fn get_engine_bitmap(handle: *mut core::ffi::c_void, bitmap: *mut u64) {
@@ -244,24 +241,24 @@ unsafe extern "C" fn get_engine_bitmap(handle: *mut core::ffi::c_void, bitmap: *
 }
 
 const NVKM_FUNCS: bindings::nvkm_vgpu_mgr_vfio_ops = bindings::nvkm_vgpu_mgr_vfio_ops {
-        vgpu_mgr_is_enabled: Some(nvkm_vgpu_mgr_is_enabled),
-        get_handle: Some(get_handle),
-        attach_handle: Some(attach_handle),
-        detach_handle: Some(detach_handle),
-        alloc_gsp_client: Some(alloc_gsp_client),
-        free_gsp_client: Some(free_gsp_client),
-        get_gsp_client_handle: Some(get_gsp_client_handle),
-        rm_ctrl_get: Some(rm_ctrl_get),
-        rm_ctrl_wr: Some(rm_ctrl_wr),
-        rm_ctrl_rd: Some(rm_ctrl_rd),
-        rm_ctrl_done: Some(rm_ctrl_done),
-        alloc_chids: Some(alloc_chids),
-        free_chids: Some(free_chids),
-        alloc_fbmem: Some(alloc_fbmem),
-        free_fbmem: Some(free_fbmem),
-        bar1_map_mem: Some(bar1_map_mem),
-        bar1_unmap_mem: Some(bar1_unmap_mem),
-        get_engine_bitmap: Some(get_engine_bitmap),
+    vgpu_mgr_is_enabled: Some(nvkm_vgpu_mgr_is_enabled),
+    get_handle: Some(get_handle),
+    attach_handle: Some(attach_handle),
+    detach_handle: Some(detach_handle),
+    alloc_gsp_client: Some(alloc_gsp_client),
+    free_gsp_client: Some(free_gsp_client),
+    get_gsp_client_handle: Some(get_gsp_client_handle),
+    shutdown_vgpu_plugin_task: Some(shutdown_vgpu_plugin_task),
+    cleanup_vgpu_plugin: Some(cleanup_vgpu_plugin),
+    bootload_vgpu_plugin_task: Some(bootload_vgpu_plugin_task),
+    add_vgpu_info: Some(add_vgpu_info),
+    alloc_chids: Some(alloc_chids),
+    free_chids: Some(free_chids),
+    alloc_fbmem: Some(alloc_fbmem),
+    free_fbmem: Some(free_fbmem),
+    bar1_map_mem: Some(bar1_map_mem),
+    bar1_unmap_mem: Some(bar1_unmap_mem),
+    get_engine_bitmap: Some(get_engine_bitmap),
 };
 
 #[no_mangle]

@@ -439,25 +439,24 @@ static unsigned char *vgpu_types[] = {
  */
 int nvidia_vgpu_mgr_init_vgpu_types(struct nvidia_vgpu_mgr *vgpu_mgr)
 {
-	NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS *ctrl;
-	int i, ret;
-	void *cookie;
-	ctrl = nvidia_vgpu_mgr_rm_ctrl_get(vgpu_mgr, &vgpu_mgr->gsp_client,
-			NV2080_CTRL_CMD_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE,
-					   sizeof(*ctrl), &cookie);
-	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl);
+	int i;
+	int ret;
+	void *tmp;
 
-	ctrl->discardVgpuTypes = true;
-	ctrl->vgpuInfoCount = ARRAY_SIZE(vgpu_types);
+	tmp = kvcalloc(ARRAY_SIZE(vgpu_types),
+			    sizeof(NVA081_CTRL_VGPU_INFO), GFP_KERNEL);
+
+	if (!tmp)
+		return -ENOMEM;
 
 	for (i = 0; i < ARRAY_SIZE(vgpu_types); i++)
-		memcpy(&ctrl->vgpuInfo[i], vgpu_types[i], sizeof(NVA081_CTRL_VGPU_INFO));
+		memcpy((char *)tmp + (sizeof(NVA081_CTRL_VGPU_INFO) * i), vgpu_types[i], sizeof(NVA081_CTRL_VGPU_INFO));
 
-	ret = nvidia_vgpu_mgr_rm_ctrl_wr(vgpu_mgr, &vgpu_mgr->gsp_client,
-					 ctrl, cookie);
-	if (ret)
-		return ret;
+	ret = nvidia_vgpu_mgr_add_vgpu_info(vgpu_mgr, &vgpu_mgr->gsp_client,
+					     ARRAY_SIZE(vgpu_types),
+					     tmp);
+
+	kvfree(tmp);
 
 	vgpu_mgr->vgpu_types = vgpu_types;
 	vgpu_mgr->num_vgpu_types = ARRAY_SIZE(vgpu_types);

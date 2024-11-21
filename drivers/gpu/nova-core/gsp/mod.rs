@@ -2,6 +2,7 @@
 
 pub(crate) use kernel::macros::versions;
 
+use kernel::bindings;
 use core::sync::atomic::{AtomicU16, Ordering};
 use kernel::prelude::*;
 use kernel::sync::{Arc, Mutex, new_mutex};
@@ -234,10 +235,10 @@ pub(crate) trait GspManager: Send + Sync {
     fn get_vmmu_segment_size(&self) -> u64;
     fn get_engine_bitmap(&self) -> u64;
 
-    // gate these on vgpu?
-    fn ctrl_get(&self, device: Arc<GspDevice>, cmd: u32, size: u32, cookie: *mut *mut core::ffi::c_void) -> *mut core::ffi::c_void;
-
-    fn ctrl_wr(&self, ctrl: *mut core::ffi::c_void, cookie: *mut core::ffi::c_void) -> i32;
+    fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
+    fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
+    fn bootload_vgpu_plugin_task(&self, device: Arc<GspDevice>, params: *const bindings::bootload_vgpu) -> i32;
+    fn add_vgpu_type(&self, device: Arc<GspDevice>, count: u32, ptr: *const core::ffi::c_void) -> i32;
 }
 
 #[versions(GSP)]
@@ -303,24 +304,44 @@ impl GspManager for GspManager::ver {
         mask
     }
 
-    fn ctrl_get(&self, device: Arc<GspDevice>, cmd: u32, size: u32,
-                cookie: *mut *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-        let mut ctrl_obj : Pin<KBox<ControlMsg::ver>> = KBox::new(ControlMsg::ver::get(&device.subdevice, cmd, size as usize, false).unwrap(), GFP_KERNEL).unwrap().into();
-
-        let ptr = ctrl_obj.get_data_ptr() as *mut core::ffi::c_void;
-        unsafe { (*cookie) = Box::into_raw(Pin::into_inner(ctrl_obj)) as *mut _ as *mut core::ffi::c_void };
-
-        ptr
-    }
-
-    fn ctrl_wr(&self, _ctrl: *mut core::ffi::c_void, cookie: *mut core::ffi::c_void) -> i32 {
-
-        let mut ctrl_obj: KBox<ControlMsg::ver> = unsafe { KBox::from_raw(cookie as *mut ControlMsg::ver) };
+    fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32 {
+        let mut msg = CleanupVgpuPlugin::ver::new(&device, gfid).unwrap();
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
-        match ctrl_obj.wr(&mut gsp_objs.queues) {
-            Err(x) => { return x.to_errno(); }
+        match msg.push(&mut gsp_objs.queues) {
+            Err(x) => { x.to_errno() }
+            _ => { 0 }
+        }
+    }
+
+    fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32 {
+        let mut msg = ShutdownVgpuPluginTask::ver::new(&device, gfid).unwrap();
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        match msg.push(&mut gsp_objs.queues) {
+            Err(x) => { x.to_errno() }
+            _ => { 0 }
+        }
+    }
+
+    fn bootload_vgpu_plugin_task(&self, device: Arc<GspDevice>, params: *const bindings::bootload_vgpu) -> i32 {
+        let mut msg = BootloadVgpuPluginTask::ver::new(&device, params).unwrap();
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        match msg.push(&mut gsp_objs.queues) {
+            Err(x) => { x.to_errno() }
+            _ => { 0 }
+        }
+    }
+
+    fn add_vgpu_type(&self, device: Arc<GspDevice>, count: u32, ptr: *const core::ffi::c_void) -> i32 {
+        let mut msg = PgpuAddVgpuType::ver::new(&device, count, ptr).unwrap();
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        match msg.push(&mut gsp_objs.queues) {
+            Err(x) => { x.to_errno() }
             _ => { 0 }
         }
     }

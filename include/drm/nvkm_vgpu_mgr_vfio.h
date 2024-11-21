@@ -26,6 +26,21 @@ struct nvidia_vgpu_mem {
 	void * __iomem bar1_vaddr;
 };
 
+struct bootload_vgpu {
+	u32 dbdf;
+	u32 gfid;
+	u32 num_channels;
+	u32 chid_offset[62];
+	u64 fbmem_heap_addr;
+	u64 fbmem_heap_size;
+	u64 heap_mem_addr;
+	u64 heap_mem_size;
+	u64 init_task_log_buf_offset;
+	u64 init_task_log_buf_size;
+	u64 vgpu_task_log_buf_offset;
+	u64 vgpu_task_log_buf_size;	
+};
+	
 struct nvkm_vgpu_mgr_vfio_ops {
 	bool (*vgpu_mgr_is_enabled)(void *handle);
 	void (*get_handle)(void *handle,
@@ -37,14 +52,16 @@ struct nvkm_vgpu_mgr_vfio_ops {
 				struct nvidia_vgpu_gsp_client *client);
 	void (*free_gsp_client)(struct nvidia_vgpu_gsp_client *client);
 	u32 (*get_gsp_client_handle)(struct nvidia_vgpu_gsp_client *client);
-	void *(*rm_ctrl_get)(struct nvidia_vgpu_gsp_client *client,
-			     u32 cmd, u32 size, void **cookie);
-	int (*rm_ctrl_wr)(struct nvidia_vgpu_gsp_client *client,
-			  void *ctrl, void *cookie);
-	void *(*rm_ctrl_rd)(struct nvidia_vgpu_gsp_client *client, u32 cmd,
-			    u32 size);
-	void (*rm_ctrl_done)(struct nvidia_vgpu_gsp_client *client,
-			     void *ctrl);
+
+	int (*shutdown_vgpu_plugin_task)(struct nvidia_vgpu_gsp_client *client,
+					 u32 gfid);
+	int (*cleanup_vgpu_plugin)(struct nvidia_vgpu_gsp_client *client,
+				   u32 gfid);
+	int (*bootload_vgpu_plugin_task)(struct nvidia_vgpu_gsp_client *client,
+					 const struct bootload_vgpu *params);
+	int (*add_vgpu_info)(struct nvidia_vgpu_gsp_client *client,
+			     u32 vgpu_info_count,
+			     const void *encoded_a081_infos);
 	int (*alloc_chids)(void *handle, int count);
 	void (*free_chids)(void *handle, int offset, int count);
 	struct nvidia_vgpu_mem *(*alloc_fbmem)(void *handle, u64 size,
