@@ -4,9 +4,11 @@ use crate::{
     driver,
     error::{to_result, Result},
     str::CStr,
-    types::{ARef, ForeignOwnable},
+    types::{ARef, ForeignOwnable, Opaque},
     ThisModule,
 };
+use core::ptr::addr_of_mut;
+use core::marker::PhantomPinned;
 use kernel::prelude::*;
 
 /// An adapter for the registration of auxiliary drivers.
@@ -103,5 +105,53 @@ impl Device {
         // SAFETY: By the type invariant `self.0.as_raw` is a pointer to the `struct device`
         // embedded in `struct pci_dev`.
         unsafe { container_of!(self.0.as_raw(), bindings::auxiliary_device, dev) as _ }
+    }
+}
+
+#[pin_data(PinnedDrop)]
+pub struct RawDevice {
+    #[pin]
+    auxdev: Opaque<bindings::auxiliary_device>,
+    #[pin]
+    _p: PhantomPinned,
+}
+
+impl RawDevice {
+    pub fn new(parent: ARef<device::Device>,
+	       release: Option<unsafe extern "C" fn(*mut bindings::device)>,
+	       name: &'static CStr,
+	       id: u32,
+	       modname: &'static CStr) -> impl PinInit<Self, Error> {
+	unsafe {
+	    init::pin_init_from_closure(move |slot: *mut Self| {
+		let auxptr = Opaque::raw_get(addr_of_mut!((*slot).auxdev));
+
+		::core::ptr::write_bytes(auxptr, 0, 1);
+		addr_of_mut!((*auxptr).dev.parent).write(parent.as_raw());
+		addr_of_mut!((*auxptr).dev.release).write(release);
+		addr_of_mut!((*auxptr).name).write(name.as_char_ptr());
+		addr_of_mut!((*auxptr).id).write(id);
+
+		bindings::auxiliary_device_init(auxptr);
+
+		let err = bindings::__auxiliary_device_add(auxptr, modname.as_char_ptr());
+		if err != 0 {
+		    bindings::auxiliary_device_uninit(auxptr);
+		    return Err(Error::from_errno(err));
+		}
+		Ok(())
+	    })
+	}
+    }
+}
+
+#[pinned_drop]
+impl PinnedDrop for RawDevice {
+    fn drop(self: Pin<&mut Self>) {
+	unsafe {
+	    let auxptr = self.auxdev.get();
+	    bindings::auxiliary_device_delete(auxptr);
+	    bindings::auxiliary_device_uninit(auxptr);
+	}
     }
 }
