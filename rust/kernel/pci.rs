@@ -459,6 +459,11 @@ impl Device {
 	unsafe { (*pdev).is_virtfn() == 1 }
     }
 
+    pub fn device_vendor_id(&self) -> (u16, u16) {
+        let pdev = self.as_raw();
+	unsafe { ((*pdev).vendor, (*pdev).device) }
+    }
+
     // TODO: check that all these &self methods use internal synchronization
     pub fn irq(&self) -> Option<u32> {
         let pdev = self.as_raw();
