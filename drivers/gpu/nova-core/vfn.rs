@@ -9,6 +9,8 @@ use crate::gpu::msi_rearm;
 use crate::driver::Bar0;
 
 const VFN_BASE: u32 = 0xb80000;
+const VFN_USER_OFFSET: u32 = 0x30000;
+const VFN_USER_SIZE: u32 = 0x10000;
 const VFN_NUM_MASKS: usize = 8;
 
 pub(crate) trait VfnHandler {
@@ -85,6 +87,11 @@ impl irq::Handler for Vfn {
 }
 
 impl Vfn {
+
+    pub(crate) fn user_info() -> (u32, u32) {
+	(VFN_BASE + VFN_USER_OFFSET, VFN_USER_SIZE)
+    }
+
     pub(crate) fn new(bar: Arc<Devres<Bar0>>) -> Result<Arc<Self>> {
 
         let vfn = UniqueArc::pin_init(pin_init!(Self {
