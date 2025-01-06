@@ -72,6 +72,21 @@ struct r535_gsp_msg {
 
 #define GSP_MSG_HDR_SIZE offsetof(struct r535_gsp_msg, data)
 
+struct nvfw_gsp_rpc {
+	u32 header_version;
+	u32 signature;
+	u32 length;
+	u32 function;
+	u32 rpc_result;
+	u32 rpc_result_private;
+	u32 sequence;
+	union {
+		u32 spare;
+		u32 cpuRmGfid;
+	};
+	u8  data[];
+};
+
 static int
 r535_rpc_status_to_errno(uint32_t rpc_status)
 {
@@ -87,12 +102,12 @@ r535_rpc_status_to_errno(uint32_t rpc_status)
 }
 
 static void *
-r535_gsp_msgq_wait(struct nvkm_gsp *gsp, u32 repc, u32 *prepc, int *ptime)
+r535_gsp_msgq_wait(struct nvkm_gsp *gsp, u32 repc, u32 *prepc, int *ptime,
+		   u8 *msg, bool skip_copy_rpc_header)
 {
 	struct r535_gsp_msg *mqe;
 	u32 size, rptr = *gsp->msgq.rptr;
 	int used;
-	u8 *msg;
 	u32 len;
 
 	size = DIV_ROUND_UP(GSP_MSG_HDR_SIZE + repc, GSP_PAGE_SIZE);
@@ -121,36 +136,115 @@ r535_gsp_msgq_wait(struct nvkm_gsp *gsp, u32 repc, u32 *prepc, int *ptime)
 		return mqe->data;
 	}
 
-	msg = kvmalloc(repc, GFP_KERNEL);
-	if (!msg)
-		return ERR_PTR(-ENOMEM);
+	size = ALIGN(repc + GSP_MSG_HDR_SIZE, GSP_PAGE_SIZE);
 
 	len = ((gsp->msgq.cnt - rptr) * GSP_PAGE_SIZE) - sizeof(*mqe);
 	len = min_t(u32, repc, len);
-	memcpy(msg, mqe->data, len);
-
-	rptr += DIV_ROUND_UP(len, GSP_PAGE_SIZE);
-	if (rptr == gsp->msgq.cnt)
-		rptr = 0;
+	if (!skip_copy_rpc_header)
+		memcpy(msg, mqe->data, len);
+	else
+		memcpy(msg, mqe->data + sizeof(struct nvfw_gsp_rpc),
+		       len - sizeof(struct nvfw_gsp_rpc));
 
 	repc -= len;
 
 	if (repc) {
 		mqe = (void *)((u8 *)gsp->shm.msgq.ptr + 0x1000 + 0 * 0x1000);
 		memcpy(msg + len, mqe, repc);
-
-		rptr += DIV_ROUND_UP(repc, GSP_PAGE_SIZE);
 	}
+
+	rptr = (rptr + DIV_ROUND_UP(size, GSP_PAGE_SIZE)) % gsp->msgq.cnt;
 
 	mb();
 	(*gsp->msgq.rptr) = rptr;
 	return msg;
 }
 
-static void *
-r535_gsp_msgq_recv(struct nvkm_gsp *gsp, u32 repc, int *ptime)
+static void
+r535_gsp_msg_dump(struct nvkm_gsp *gsp, struct nvfw_gsp_rpc *msg, int lvl)
 {
-	return r535_gsp_msgq_wait(gsp, repc, NULL, ptime);
+	if (gsp->subdev.debug >= lvl) {
+		nvkm_printk__(&gsp->subdev, lvl, info,
+			      "msg fn:%d len:0x%x/0x%zx res:0x%x resp:0x%x\n",
+			      msg->function, msg->length, msg->length - sizeof(*msg),
+			      msg->rpc_result, msg->rpc_result_private);
+		print_hex_dump(KERN_INFO, "msg: ", DUMP_PREFIX_OFFSET, 16, 1,
+			       msg->data, msg->length - sizeof(*msg), true);
+	}
+}
+
+static void *
+r535_gsp_msgq_recv_continuation(struct nvkm_gsp *gsp, u32 *payload_size,
+				u8 *buf, int *ptime)
+{
+	struct nvkm_subdev *subdev = &gsp->subdev;
+	struct nvfw_gsp_rpc *msg;
+	u32 size;
+
+	/* Peek next message */
+	msg = r535_gsp_msgq_wait(gsp, sizeof(*msg), &size, ptime, NULL,
+				 false);
+	if (IS_ERR_OR_NULL(msg))
+		return msg;
+
+	if (msg->function != NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD) {
+		nvkm_error(subdev, "Not a continuation of a large RPC\n");
+		r535_gsp_msg_dump(gsp, msg, NV_DBG_ERROR);
+		return ERR_PTR(-EIO);
+	}
+
+	*payload_size = msg->length - sizeof(*msg);
+	return r535_gsp_msgq_wait(gsp, msg->length, NULL, ptime, buf,
+				  true);
+}
+
+static void *
+r535_gsp_msgq_recv(struct nvkm_gsp *gsp, u32 msg_repc, u32 total_repc,
+		   int *ptime)
+{
+	struct nvfw_gsp_rpc *msg;
+	const u32 max_msg_size = (16 * 0x1000) - sizeof(struct r535_gsp_msg);
+	const u32 max_rpc_size = max_msg_size - sizeof(*msg);
+	u32 repc = total_repc;
+	u8 *buf, *next;
+
+	if (WARN_ON(msg_repc > max_msg_size))
+		return NULL;
+
+	buf = kvmalloc(max_t(u32, msg_repc, total_repc + sizeof(*msg)), GFP_KERNEL);
+	if (!buf)
+		return ERR_PTR(-ENOMEM);
+
+	msg = r535_gsp_msgq_wait(gsp, msg_repc, NULL, ptime, buf, false);
+	if (IS_ERR_OR_NULL(msg)) {
+		kfree(buf);
+		return msg;
+	}
+
+	if (total_repc <= max_rpc_size)
+		return buf;
+
+	next = buf;
+
+	next += msg_repc;
+	repc -= msg_repc - sizeof(*msg);
+
+	while (repc) {
+		struct nvfw_gsp_rpc *cont_msg;
+		u32 size;
+
+		cont_msg = r535_gsp_msgq_recv_continuation(gsp, &size, next,
+						      ptime);
+		if (IS_ERR_OR_NULL(cont_msg)) {
+			kfree(buf);
+			return cont_msg;
+		}
+		repc -= size;
+		next += size;
+	}
+
+	msg->length = total_repc + sizeof(*msg);
+	return buf;
 }
 
 static int
@@ -163,7 +257,7 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *argv)
 	u64 *end;
 	u64 csum = 0;
 	int free, time = 1000000;
-	u32 wptr, size;
+	u32 wptr, size, step;
 	u32 off = 0;
 
 	argc = ALIGN(GSP_MSG_HDR_SIZE + argc, GSP_PAGE_SIZE);
@@ -180,11 +274,13 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *argv)
 	cmd->checksum = upper_32_bits(csum) ^ lower_32_bits(csum);
 
 	wptr = *gsp->cmdq.wptr;
+
 	do {
 		do {
 			free = *gsp->cmdq.rptr + gsp->cmdq.cnt - wptr - 1;
 			if (free >= gsp->cmdq.cnt)
 				free -= gsp->cmdq.cnt;
+
 			if (free >= 1)
 				break;
 
@@ -197,7 +293,9 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *argv)
 		}
 
 		cqe = (void *)((u8 *)gsp->shm.cmdq.ptr + 0x1000 + wptr * 0x1000);
-		size = min_t(u32, argc, (gsp->cmdq.cnt - wptr) * GSP_PAGE_SIZE);
+		step = min_t(u32, free, (gsp->cmdq.cnt - wptr));
+		size = min_t(u32, argc, step * GSP_PAGE_SIZE);
+
 		memcpy(cqe, (u8 *)cmd + off, size);
 
 		wptr += DIV_ROUND_UP(size, 0x1000);
@@ -234,38 +332,10 @@ r535_gsp_cmdq_get(struct nvkm_gsp *gsp, u32 argc)
 	return cmd->data;
 }
 
-struct nvfw_gsp_rpc {
-	u32 header_version;
-	u32 signature;
-	u32 length;
-	u32 function;
-	u32 rpc_result;
-	u32 rpc_result_private;
-	u32 sequence;
-	union {
-		u32 spare;
-		u32 cpuRmGfid;
-	};
-	u8  data[];
-};
-
 static void
 r535_gsp_msg_done(struct nvkm_gsp *gsp, struct nvfw_gsp_rpc *msg)
 {
 	kvfree(msg);
-}
-
-static void
-r535_gsp_msg_dump(struct nvkm_gsp *gsp, struct nvfw_gsp_rpc *msg, int lvl)
-{
-	if (gsp->subdev.debug >= lvl) {
-		nvkm_printk__(&gsp->subdev, lvl, info,
-			      "msg fn:%d len:0x%x/0x%zx res:0x%x resp:0x%x\n",
-			      msg->function, msg->length, msg->length - sizeof(*msg),
-			      msg->rpc_result, msg->rpc_result_private);
-		print_hex_dump(KERN_INFO, "msg: ", DUMP_PREFIX_OFFSET, 16, 1,
-			       msg->data, msg->length - sizeof(*msg), true);
-	}
 }
 
 static struct nvfw_gsp_rpc *
@@ -277,11 +347,11 @@ r535_gsp_msg_recv(struct nvkm_gsp *gsp, int fn, u32 repc)
 	u32 size;
 
 retry:
-	msg = r535_gsp_msgq_wait(gsp, sizeof(*msg), &size, &time);
+	msg = r535_gsp_msgq_wait(gsp, sizeof(*msg), &size, &time, NULL, false);
 	if (IS_ERR_OR_NULL(msg))
 		return msg;
 
-	msg = r535_gsp_msgq_recv(gsp, msg->length, &time);
+	msg = r535_gsp_msgq_recv(gsp, msg->length, repc, &time);
 	if (IS_ERR_OR_NULL(msg))
 		return msg;
 
@@ -734,6 +804,7 @@ r535_gsp_rpc_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
 	mutex_lock(&gsp->cmdq.mutex);
 	if (rpc_size > max_rpc_size) {
 		const u32 fn = rpc->function;
+		u32 remain_rpc_size = rpc_size;
 
 		/* Adjust length, and send initial RPC. */
 		rpc->length = sizeof(*rpc) + max_rpc_size;
@@ -744,11 +815,11 @@ r535_gsp_rpc_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
 			goto done;
 
 		argv += max_rpc_size;
-		rpc_size -= max_rpc_size;
+		remain_rpc_size -= max_rpc_size;
 
 		/* Remaining chunks sent as CONTINUATION_RECORD RPCs. */
-		while (rpc_size) {
-			u32 size = min(rpc_size, max_rpc_size);
+		while (remain_rpc_size) {
+			u32 size = min(remain_rpc_size, max_rpc_size);
 			void *next;
 
 			next = r535_gsp_rpc_get(gsp, NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD, size);
@@ -764,19 +835,20 @@ r535_gsp_rpc_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
 				goto done;
 
 			argv += size;
-			rpc_size -= size;
+			remain_rpc_size -= size;
 		}
 
 		/* Wait for reply. */
-		if (wait) {
-			rpc = r535_gsp_msg_recv(gsp, fn, repc);
-			if (!IS_ERR_OR_NULL(rpc))
+		rpc = r535_gsp_msg_recv(gsp, fn, rpc_size);
+		if (!IS_ERR_OR_NULL(rpc)) {
+			if (wait)
 				repv = rpc->data;
-			else
-				repv = rpc;
-		} else {
-			repv = NULL;
-		}
+			else {
+				nvkm_gsp_rpc_done(gsp, rpc);
+				repv = NULL;
+			}
+		} else
+			repv = wait ? rpc : NULL;
 	} else {
 		repv = r535_gsp_rpc_send(gsp, argv, wait, repc);
 	}
@@ -1428,6 +1500,9 @@ r535_gsp_rpc_set_registry(struct nvkm_gsp *gsp)
 		kfree(p);
 	}
 
+	if (nvkm_vgpu_mgr_is_supported(gsp->subdev.device))
+		add_registry_num(gsp, "RMSetSriovMode", 1);
+
 	rpc = nvkm_gsp_rpc_get(gsp, NV_VGPU_MSG_FUNCTION_SET_REGISTRY, gsp->registry_rpc_size);
 	if (IS_ERR(rpc)) {
 		ret = PTR_ERR(rpc);
@@ -1644,6 +1719,9 @@ r535_gsp_rpc_set_system_info(struct nvkm_gsp *gsp)
 	info->pciConfigMirrorBase = 0x088000;
 	info->pciConfigMirrorSize = 0x001000;
 	r535_gsp_acpi_info(gsp, &info->acpiMethodData);
+
+	if (nvkm_vgpu_mgr_is_supported(device))
+		nvkm_vgpu_mgr_populate_gsp_vf_info(device, info);
 
 	return nvkm_gsp_rpc_wr(gsp, info, false);
 }
@@ -1965,6 +2043,7 @@ r535_gsp_wpr_meta_init(struct nvkm_gsp *gsp)
 	meta->vgaWorkspaceOffset = gsp->fb.bios.vga_workspace.addr;
 	meta->vgaWorkspaceSize = gsp->fb.bios.vga_workspace.size;
 	meta->bootCount = 0;
+	meta->gspFwHeapVfPartitionCount = gsp->fb.wpr2.vf_partition_count;
 	meta->partitionRpcAddr = 0;
 	meta->partitionRpcRequestOffset = 0;
 	meta->partitionRpcReplyOffset = 0;
@@ -2189,6 +2268,11 @@ nvkm_gsp_sg_free(struct nvkm_device *device, struct sg_table *sgt)
 {
 	struct scatterlist *sgl;
 	int i;
+
+	if (sgt == NULL)
+		return;
+	if (sgt->sgl == NULL)
+		return;
 
 	dma_unmap_sgtable(device->dev, sgt, DMA_BIDIRECTIONAL, 0);
 
@@ -2574,6 +2658,7 @@ r535_gsp_oneinit(struct nvkm_gsp *gsp)
 	r535_gsp_msg_ntfy_add(gsp, NV_VGPU_MSG_EVENT_PERF_BRIDGELESS_INFO_UPDATE, NULL, NULL);
 	r535_gsp_msg_ntfy_add(gsp, NV_VGPU_MSG_EVENT_UCODE_LIBOS_PRINT, NULL, NULL);
 	r535_gsp_msg_ntfy_add(gsp, NV_VGPU_MSG_EVENT_GSP_SEND_USER_SHARED_DATA, NULL, NULL);
+	r535_gsp_msg_ntfy_add(gsp, NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES, NULL, NULL);
 	ret = r535_gsp_rm_boot_ctor(gsp);
 	if (ret)
 		return ret;
@@ -2591,7 +2676,11 @@ r535_gsp_oneinit(struct nvkm_gsp *gsp)
 	gsp->fb.wpr2.elf.size = gsp->fw.len;
 	gsp->fb.wpr2.elf.addr = ALIGN_DOWN(gsp->fb.wpr2.boot.addr - gsp->fb.wpr2.elf.size, 0x10000);
 
-	{
+	if (nvkm_vgpu_mgr_is_supported(device)) {
+		gsp->fb.wpr2.heap.size = SZ_256M;
+		gsp->fb.wpr2.vf_partition_count = NVIDIA_MAX_VGPUS;
+	} else {
+
 		u32 fb_size_gb = DIV_ROUND_UP_ULL(gsp->fb.size, 1 << 30);
 
 		gsp->fb.wpr2.heap.size =

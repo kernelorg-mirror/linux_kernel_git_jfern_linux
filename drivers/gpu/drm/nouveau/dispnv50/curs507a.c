@@ -23,7 +23,6 @@
 #include "core.h"
 #include "head.h"
 
-#include <nvif/if0014.h>
 #include <nvif/timer.h>
 
 #include <nvhw/class/cl507a.h>
@@ -34,8 +33,8 @@
 bool
 curs507a_space(struct nv50_wndw *wndw)
 {
-	nvif_msec(&nouveau_drm(wndw->plane.dev)->client.device, 100,
-		if (NVIF_TV32(&wndw->wimm.base.user, NV507A, FREE, COUNT, >=, 4))
+	nvif_msec(&nouveau_drm(wndw->plane.dev)->device, 100,
+		if (NVIF_TV32(&wndw->wimm, NV507A, FREE, COUNT, >=, 4))
 			return true;
 	);
 
@@ -46,10 +45,10 @@ curs507a_space(struct nv50_wndw *wndw)
 static int
 curs507a_update(struct nv50_wndw *wndw, u32 *interlock)
 {
-	struct nvif_object *user = &wndw->wimm.base.user;
-	int ret = nvif_chan_wait(&wndw->wimm, 1);
+	struct nvif_dispchan *chan = &wndw->wimm;
+	int ret = nvif_chan_wait(chan, 1);
 	if (ret == 0) {
-		NVIF_WR32(user, NV507A, UPDATE,
+		NVIF_WR32(chan, NV507A, UPDATE,
 			  NVDEF(NV507A, UPDATE, INTERLOCK_WITH_CORE, DISABLE));
 	}
 	return ret;
@@ -58,10 +57,10 @@ curs507a_update(struct nv50_wndw *wndw, u32 *interlock)
 static int
 curs507a_point(struct nv50_wndw *wndw, struct nv50_wndw_atom *asyw)
 {
-	struct nvif_object *user = &wndw->wimm.base.user;
-	int ret = nvif_chan_wait(&wndw->wimm, 1);
+	struct nvif_dispchan *chan = &wndw->wimm;
+	int ret = nvif_chan_wait(chan, 1);
 	if (ret == 0) {
-		NVIF_WR32(user, NV507A, SET_CURSOR_HOT_SPOT_POINT_OUT,
+		NVIF_WR32(chan, NV507A, SET_CURSOR_HOT_SPOT_POINT_OUT,
 			  NVVAL(NV507A, SET_CURSOR_HOT_SPOT_POINT_OUT, X, asyw->point.x) |
 			  NVVAL(NV507A, SET_CURSOR_HOT_SPOT_POINT_OUT, Y, asyw->point.y));
 	}
@@ -78,7 +77,7 @@ static void
 curs507a_prepare(struct nv50_wndw *wndw, struct nv50_head_atom *asyh,
 		 struct nv50_wndw_atom *asyw)
 {
-	u32 handle = nv50_disp(wndw->plane.dev)->core->chan.vram.handle;
+	u32 handle = nv50_disp(wndw->plane.dev)->core->vram.object.handle;
 	u32 offset = asyw->image.offset[0];
 	if (asyh->curs.handle != handle || asyh->curs.offset != offset) {
 		asyh->curs.handle = handle;
@@ -170,30 +169,34 @@ curs507a_new_(const struct nv50_wimm_func *func, struct nouveau_drm *drm,
 	      int head, s32 oclass, u32 interlock_data,
 	      struct nv50_wndw **pwndw)
 {
-	struct nvif_disp_chan_v0 args = {
-		.id = head,
-	};
-	struct nv50_disp *disp = nv50_disp(drm->dev);
+	struct nvif_disp *disp = nv50_disp(&drm->dev)->disp;
 	struct nv50_wndw *wndw;
 	int ret;
 
-	ret = nv50_wndw_new_(&curs507a_wndw, drm->dev, DRM_PLANE_TYPE_CURSOR,
+	ret = nv50_wndw_prep(&curs507a_wndw, &drm->dev, DRM_PLANE_TYPE_CURSOR,
 			     "curs", head, curs507a_format, BIT(head),
 			     NV50_DISP_INTERLOCK_CURS, interlock_data, &wndw);
 	if (*pwndw = wndw, ret)
 		return ret;
 
-	ret = nvif_object_ctor(&disp->disp->object, "kmsCurs", 0, oclass,
-			       &args, sizeof(args), &wndw->wimm.base.user);
+	ret = nvif_dispchan_ctor(disp, "kmsChanCurs", wndw->id, oclass, NULL, &wndw->wimm);
+	if (ret)
+		goto done;
+
+	ret = disp->impl->chan.curs.new(disp->priv, wndw->id, &wndw->wimm.impl, &wndw->wimm.priv);
+	if (ret)
+		goto done;
+
+	ret = nvif_dispchan_oneinit(&wndw->wimm);
+done:
 	if (ret) {
 		NV_ERROR(drm, "curs%04x allocation failed: %d\n", oclass, ret);
 		return ret;
 	}
 
-	nvif_object_map(&wndw->wimm.base.user, NULL, 0);
 	wndw->immd = func;
 	wndw->ctxdma.parent = NULL;
-	return 0;
+	return nv50_wndw_ctor(wndw);
 }
 
 int

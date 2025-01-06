@@ -19,13 +19,12 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#define nvkm_uevent(p) container_of((p), struct nvkm_uevent, object)
 #include <core/event.h>
 #include <core/client.h>
 
-#include <nvif/if000e.h>
+#include <nvif/driverif.h>
 
-struct nvkm_uevent {
+struct nvif_event_priv {
 	struct nvkm_object object;
 	struct nvkm_object *parent;
 	nvkm_uevent_func func;
@@ -36,46 +35,41 @@ struct nvkm_uevent {
 };
 
 static int
-nvkm_uevent_mthd_block(struct nvkm_uevent *uevent, union nvif_event_block_args *args, u32 argc)
+nvkm_uevent_block(struct nvif_event_priv *uevent)
 {
-	if (argc != sizeof(args->vn))
-		return -ENOSYS;
-
 	nvkm_event_ntfy_block(&uevent->ntfy);
 	atomic_set(&uevent->allowed, 0);
 	return 0;
 }
 
 static int
-nvkm_uevent_mthd_allow(struct nvkm_uevent *uevent, union nvif_event_allow_args *args, u32 argc)
+nvkm_uevent_allow(struct nvif_event_priv *uevent)
 {
-	if (argc != sizeof(args->vn))
-		return -ENOSYS;
-
 	nvkm_event_ntfy_allow(&uevent->ntfy);
 	atomic_set(&uevent->allowed, 1);
 	return 0;
 }
 
-static int
-nvkm_uevent_mthd(struct nvkm_object *object, u32 mthd, void *argv, u32 argc)
+static void
+nvkm_uevent_del(struct nvif_event_priv *uevent)
 {
-	struct nvkm_uevent *uevent = nvkm_uevent(object);
+	struct nvkm_object *object = &uevent->object;
 
-	switch (mthd) {
-	case NVIF_EVENT_V0_ALLOW: return nvkm_uevent_mthd_allow(uevent, argv, argc);
-	case NVIF_EVENT_V0_BLOCK: return nvkm_uevent_mthd_block(uevent, argv, argc);
-	default:
-		break;
-	}
-
-	return -EINVAL;
+	nvkm_object_fini(object, false);
+	nvkm_object_del(&object);
 }
+
+static const struct nvif_event_impl
+nvkm_uevent_impl = {
+	.del = nvkm_uevent_del,
+	.allow = nvkm_uevent_allow,
+	.block = nvkm_uevent_block,
+};
 
 static int
 nvkm_uevent_fini(struct nvkm_object *object, bool suspend)
 {
-	struct nvkm_uevent *uevent = nvkm_uevent(object);
+	struct nvif_event_priv *uevent = container_of(object, typeof(*uevent), object);
 
 	nvkm_event_ntfy_block(&uevent->ntfy);
 	return 0;
@@ -84,7 +78,7 @@ nvkm_uevent_fini(struct nvkm_object *object, bool suspend)
 static int
 nvkm_uevent_init(struct nvkm_object *object)
 {
-	struct nvkm_uevent *uevent = nvkm_uevent(object);
+	struct nvif_event_priv *uevent = container_of(object, typeof(*uevent), object);
 
 	if (atomic_read(&uevent->allowed))
 		nvkm_event_ntfy_allow(&uevent->ntfy);
@@ -95,7 +89,7 @@ nvkm_uevent_init(struct nvkm_object *object)
 static void *
 nvkm_uevent_dtor(struct nvkm_object *object)
 {
-	struct nvkm_uevent *uevent = nvkm_uevent(object);
+	struct nvif_event_priv *uevent = container_of(object, typeof(*uevent), object);
 
 	nvkm_event_ntfy_del(&uevent->ntfy);
 	return uevent;
@@ -106,23 +100,22 @@ nvkm_uevent = {
 	.dtor = nvkm_uevent_dtor,
 	.init = nvkm_uevent_init,
 	.fini = nvkm_uevent_fini,
-	.mthd = nvkm_uevent_mthd,
 };
 
 static int
 nvkm_uevent_ntfy(struct nvkm_event_ntfy *ntfy, u32 bits)
 {
-	struct nvkm_uevent *uevent = container_of(ntfy, typeof(*uevent), ntfy);
+	struct nvif_event_priv *uevent = container_of(ntfy, typeof(*uevent), ntfy);
 	struct nvkm_client *client = uevent->object.client;
 
 	if (uevent->func)
 		return uevent->func(uevent->parent, uevent->object.object, bits);
 
-	return client->event(uevent->object.object, NULL, 0);
+	return nvkm_client_event(client, uevent->object.object, NULL, 0);
 }
 
 int
-nvkm_uevent_add(struct nvkm_uevent *uevent, struct nvkm_event *event, int id, u32 bits,
+nvkm_uevent_add(struct nvif_event_priv *uevent, struct nvkm_event *event, int id, u32 bits,
 		nvkm_uevent_func func)
 {
 	if (WARN_ON(uevent->func))
@@ -134,24 +127,33 @@ nvkm_uevent_add(struct nvkm_uevent *uevent, struct nvkm_event *event, int id, u3
 }
 
 int
-nvkm_uevent_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		struct nvkm_object **pobject)
+nvkm_uevent_new_(struct nvkm_object *parent, u64 handle, struct nvkm_event *event,
+		 bool wait, int id, u32 bits, nvkm_uevent_func func,
+		 const struct nvif_event_impl **pimpl, struct nvif_event_priv **ppriv)
 {
-	struct nvkm_object *parent = oclass->parent;
-	struct nvkm_uevent *uevent;
-	union nvif_event_args *args = argv;
+	struct nvif_event_priv *uevent;
+	int ret;
 
-	if (argc < sizeof(args->v0) || args->v0.version != 0)
-		return -ENOSYS;
-
-	if (!(uevent = kzalloc(sizeof(*uevent), GFP_KERNEL)))
+	uevent = kzalloc(sizeof(*uevent), GFP_KERNEL);
+	if (!uevent)
 		return -ENOMEM;
-	*pobject = &uevent->object;
 
-	nvkm_object_ctor(&nvkm_uevent, oclass, &uevent->object);
+	nvkm_object_ctor(&nvkm_uevent, &(struct nvkm_oclass) {}, &uevent->object);
+	uevent->object.object = handle;
 	uevent->parent = parent;
 	uevent->func = NULL;
-	uevent->wait = args->v0.wait;
+	uevent->wait = wait;
 	uevent->ntfy.event = NULL;
-	return parent->func->uevent(parent, &args->v0.data, argc - sizeof(args->v0), uevent);
+
+	ret = nvkm_uevent_add(uevent, event, id, bits, func);
+	if (ret) {
+		kfree(uevent);
+		return ret;
+	}
+
+	*pimpl = &nvkm_uevent_impl;
+	*ppriv = uevent;
+
+	nvkm_object_link(parent, &uevent->object);
+	return 0;
 }

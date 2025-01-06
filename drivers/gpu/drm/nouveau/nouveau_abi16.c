@@ -27,6 +27,7 @@
 #include <nvif/ioctl.h>
 #include <nvif/class.h>
 #include <nvif/cl0002.h>
+#include <nvif/cl0080.h>
 #include <nvif/unpack.h>
 
 #include "nouveau_drv.h"
@@ -90,7 +91,9 @@ struct nouveau_abi16_obj {
 	} type;
 	u64 object;
 
-	struct nvif_object engobj;
+	union {
+		struct nvif_engobj engobj;
+	};
 
 	struct list_head head; /* protected by nouveau_abi16.cli.mutex */
 };
@@ -137,32 +140,17 @@ nouveau_abi16_obj_new(struct nouveau_abi16 *abi16, enum nouveau_abi16_obj_type t
 s32
 nouveau_abi16_swclass(struct nouveau_drm *drm)
 {
-	switch (drm->client.device.info.family) {
-	case NV_DEVICE_INFO_V0_TNT:
-		return NVIF_CLASS_SW_NV04;
-	case NV_DEVICE_INFO_V0_CELSIUS:
-	case NV_DEVICE_INFO_V0_KELVIN:
-	case NV_DEVICE_INFO_V0_RANKINE:
-	case NV_DEVICE_INFO_V0_CURIE:
-		return NVIF_CLASS_SW_NV10;
-	case NV_DEVICE_INFO_V0_TESLA:
-		return NVIF_CLASS_SW_NV50;
-	case NV_DEVICE_INFO_V0_FERMI:
-	case NV_DEVICE_INFO_V0_KEPLER:
-	case NV_DEVICE_INFO_V0_MAXWELL:
-	case NV_DEVICE_INFO_V0_PASCAL:
-	case NV_DEVICE_INFO_V0_VOLTA:
-		return NVIF_CLASS_SW_GF100;
-	}
-
-	return 0x0000;
+	return nvif_fifo_engine_oclass(&drm->device, NVIF_ENGINE_SW);
 }
 
 static void
 nouveau_abi16_ntfy_fini(struct nouveau_abi16_chan *chan,
 			struct nouveau_abi16_ntfy *ntfy)
 {
-	nvif_object_dtor(&ntfy->object);
+	if (ntfy->ctxdma.impl)
+		nvif_ctxdma_dtor(&ntfy->ctxdma);
+	else
+		nvif_engobj_dtor(&ntfy->engobj);
 	nvkm_mm_free(&chan->heap, &ntfy->node);
 	list_del(&ntfy->head);
 	kfree(ntfy);
@@ -200,7 +188,7 @@ nouveau_abi16_chan_fini(struct nouveau_abi16 *abi16,
 
 	/* destroy channel object, all children will be killed too */
 	if (chan->chan) {
-		nvif_object_dtor(&chan->ce);
+		nvif_engobj_dtor(&chan->ce);
 		nouveau_channel_del(&chan->chan);
 	}
 
@@ -229,55 +217,40 @@ nouveau_abi16_fini(struct nouveau_abi16 *abi16)
 	cli->abi16 = NULL;
 }
 
-static inline int
-getparam_dma_ib_max(struct nvif_device *device)
-{
-	const struct nvif_mclass dmas[] = {
-		{ NV03_CHANNEL_DMA, 0 },
-		{ NV10_CHANNEL_DMA, 0 },
-		{ NV17_CHANNEL_DMA, 0 },
-		{ NV40_CHANNEL_DMA, 0 },
-		{}
-	};
-
-	return nvif_mclass(&device->object, dmas) < 0 ? NV50_DMA_IB_MAX : 0;
-}
-
 int
 nouveau_abi16_ioctl_getparam(ABI16_IOCTL_ARGS)
 {
 	struct nouveau_cli *cli = nouveau_cli(file_priv);
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_device *device = &drm->client.device;
+	struct nvif_device *device = &drm->device;
 	struct nvkm_device *nvkm_device = nvxx_device(drm);
 	struct nvkm_gr *gr = nvxx_gr(drm);
 	struct drm_nouveau_getparam *getparam = data;
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
 
 	switch (getparam->param) {
 	case NOUVEAU_GETPARAM_CHIPSET_ID:
-		getparam->value = device->info.chipset;
+		getparam->value = device->impl->chipset;
 		break;
 	case NOUVEAU_GETPARAM_PCI_VENDOR:
-		if (device->info.platform != NV_DEVICE_INFO_V0_SOC)
-			getparam->value = pdev->vendor;
+		if (device->impl->platform != NVIF_DEVICE_SOC)
+			getparam->value = device->impl->pci.vendor_id;
 		else
 			getparam->value = 0;
 		break;
 	case NOUVEAU_GETPARAM_PCI_DEVICE:
-		if (device->info.platform != NV_DEVICE_INFO_V0_SOC)
-			getparam->value = pdev->device;
+		if (device->impl->platform != NVIF_DEVICE_SOC)
+			getparam->value = device->impl->pci.device_id;
 		else
 			getparam->value = 0;
 		break;
 	case NOUVEAU_GETPARAM_BUS_TYPE:
-		switch (device->info.platform) {
-		case NV_DEVICE_INFO_V0_AGP : getparam->value = 0; break;
-		case NV_DEVICE_INFO_V0_PCI : getparam->value = 1; break;
-		case NV_DEVICE_INFO_V0_PCIE: getparam->value = 2; break;
-		case NV_DEVICE_INFO_V0_SOC : getparam->value = 3; break;
-		case NV_DEVICE_INFO_V0_IGP :
-			if (!pci_is_pcie(pdev))
+		switch (device->impl->platform) {
+		case NVIF_DEVICE_AGP : getparam->value = 0; break;
+		case NVIF_DEVICE_PCI : getparam->value = 1; break;
+		case NVIF_DEVICE_PCIE: getparam->value = 2; break;
+		case NVIF_DEVICE_SOC : getparam->value = 3; break;
+		case NVIF_DEVICE_IGP :
+			if (!device->impl->pci.pcie)
 				getparam->value = 1;
 			else
 				getparam->value = 2;
@@ -309,7 +282,10 @@ nouveau_abi16_ioctl_getparam(ABI16_IOCTL_ARGS)
 		getparam->value = nvkm_gr_units(gr);
 		break;
 	case NOUVEAU_GETPARAM_EXEC_PUSH_MAX: {
-		int ib_max = getparam_dma_ib_max(device);
+		int ib_max = 0;
+
+		if (device->impl->fifo.chan.oclass >= NV50_CHANNEL_GPFIFO)
+			ib_max = NV50_DMA_IB_MAX;
 
 		getparam->value = nouveau_exec_push_max_from_ib_max(ib_max);
 		break;
@@ -358,26 +334,26 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	 */
 	__nouveau_cli_disable_uvmm_noinit(cli);
 
-	engine = NV_DEVICE_HOST_RUNLIST_ENGINES_GR;
+	engine = NVIF_ENGINE_GR;
 
 	/* hack to allow channel engine type specification on kepler */
-	if (device->info.family >= NV_DEVICE_INFO_V0_KEPLER) {
+	if (device->impl->family >= NVIF_DEVICE_KEPLER) {
 		if (init->fb_ctxdma_handle == ~0) {
 			switch (init->tt_ctxdma_handle) {
 			case NOUVEAU_FIFO_ENGINE_GR:
-				engine = NV_DEVICE_HOST_RUNLIST_ENGINES_GR;
+				engine = NVIF_ENGINE_GR;
 				break;
 			case NOUVEAU_FIFO_ENGINE_VP:
-				engine = NV_DEVICE_HOST_RUNLIST_ENGINES_MSPDEC;
+				engine = NVIF_ENGINE_MSPDEC;
 				break;
 			case NOUVEAU_FIFO_ENGINE_PPP:
-				engine = NV_DEVICE_HOST_RUNLIST_ENGINES_MSPPP;
+				engine = NVIF_ENGINE_MSPPP;
 				break;
 			case NOUVEAU_FIFO_ENGINE_BSP:
-				engine = NV_DEVICE_HOST_RUNLIST_ENGINES_MSVLD;
+				engine = NVIF_ENGINE_MSVLD;
 				break;
 			case NOUVEAU_FIFO_ENGINE_CE:
-				engine = NV_DEVICE_HOST_RUNLIST_ENGINES_CE;
+				engine = NVIF_ENGINE_CE;
 				break;
 			default:
 				return nouveau_abi16_put(abi16, -ENOSYS);
@@ -388,7 +364,7 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 		}
 	}
 
-	if (engine != NV_DEVICE_HOST_RUNLIST_ENGINES_CE)
+	if (engine != NVIF_ENGINE_CE)
 		runm = nvif_fifo_runlist(device, engine);
 	else
 		runm = nvif_fifo_runlist_ce(device);
@@ -423,7 +399,7 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 
 	init->channel = chan->chan->chid;
 
-	if (device->info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (device->impl->family >= NVIF_DEVICE_TESLA)
 		init->pushbuf_domains = NOUVEAU_GEM_DOMAIN_VRAM |
 					NOUVEAU_GEM_DOMAIN_GART;
 	else
@@ -432,10 +408,10 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	else
 		init->pushbuf_domains = NOUVEAU_GEM_DOMAIN_GART;
 
-	if (device->info.family < NV_DEVICE_INFO_V0_CELSIUS) {
+	if (device->impl->family < NVIF_DEVICE_CELSIUS) {
 		init->subchan[0].handle = 0x00000000;
 		init->subchan[0].grclass = 0x0000;
-		init->subchan[1].handle = chan->chan->nvsw.handle;
+		init->subchan[1].handle = chan->chan->nvsw.object.handle;
 		init->subchan[1].grclass = 0x506e;
 		init->nr_subchan = 2;
 	}
@@ -448,16 +424,16 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	 *
 	 * Userspace was fixed prior to adding Ampere support.
 	 */
-	switch (device->info.family) {
-	case NV_DEVICE_INFO_V0_VOLTA:
-		ret = nvif_object_ctor(&chan->chan->user, "abi16CeWar", 0, VOLTA_DMA_COPY_A,
-				       NULL, 0, &chan->ce);
+	switch (device->impl->family) {
+	case NVIF_DEVICE_VOLTA:
+		ret = nvif_engobj_ctor(&chan->chan->chan, "abi16CeWar", 0, VOLTA_DMA_COPY_A,
+				       &chan->ce);
 		if (ret)
 			goto done;
 		break;
-	case NV_DEVICE_INFO_V0_TURING:
-		ret = nvif_object_ctor(&chan->chan->user, "abi16CeWar", 0, TURING_DMA_COPY_A,
-				       NULL, 0, &chan->ce);
+	case NVIF_DEVICE_TURING:
+		ret = nvif_engobj_ctor(&chan->chan->chan, "abi16CeWar", 0, TURING_DMA_COPY_A,
+				       &chan->ce);
 		if (ret)
 			goto done;
 		break;
@@ -474,7 +450,7 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	if (ret)
 		goto done;
 
-	if (device->info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (device->impl->family >= NVIF_DEVICE_TESLA) {
 		ret = nouveau_vma_new(chan->ntfy, chan->chan->vmm,
 				      &chan->ntfy_vma);
 		if (ret)
@@ -530,9 +506,8 @@ nouveau_abi16_ioctl_grobj_alloc(ABI16_IOCTL_ARGS)
 	struct nouveau_abi16 *abi16 = nouveau_abi16_get(file_priv);
 	struct nouveau_abi16_chan *chan;
 	struct nouveau_abi16_ntfy *ntfy;
-	struct nvif_sclass *sclass;
 	s32 oclass = 0;
-	int ret, i;
+	int ret;
 
 	if (unlikely(!abi16))
 		return -ENOMEM;
@@ -544,56 +519,25 @@ nouveau_abi16_ioctl_grobj_alloc(ABI16_IOCTL_ARGS)
 	if (!chan)
 		return nouveau_abi16_put(abi16, -ENOENT);
 
-	ret = nvif_object_sclass_get(&chan->chan->user, &sclass);
-	if (ret < 0)
-		return nouveau_abi16_put(abi16, ret);
-
 	if ((init->class & 0x00ff) == 0x006e) {
 		/* nvsw: compatibility with older 0x*6e class identifier */
-		for (i = 0; !oclass && i < ret; i++) {
-			switch (sclass[i].oclass) {
-			case NVIF_CLASS_SW_NV04:
-			case NVIF_CLASS_SW_NV10:
-			case NVIF_CLASS_SW_NV50:
-			case NVIF_CLASS_SW_GF100:
-				oclass = sclass[i].oclass;
-				break;
-			default:
-				break;
-			}
-		}
+		oclass = nvif_fifo_engine_oclass(&abi16->cli->drm->device, NVIF_ENGINE_SW);
 	} else
 	if ((init->class & 0x00ff) == 0x00b1) {
 		/* msvld: compatibility with incorrect version exposure */
-		for (i = 0; i < ret; i++) {
-			if ((sclass[i].oclass & 0x00ff) == 0x00b1) {
-				oclass = sclass[i].oclass;
-				break;
-			}
-		}
+		oclass = nvif_fifo_engine_oclass(&abi16->cli->drm->device, NVIF_ENGINE_MSVLD);
 	} else
 	if ((init->class & 0x00ff) == 0x00b2) { /* mspdec */
 		/* mspdec: compatibility with incorrect version exposure */
-		for (i = 0; i < ret; i++) {
-			if ((sclass[i].oclass & 0x00ff) == 0x00b2) {
-				oclass = sclass[i].oclass;
-				break;
-			}
-		}
+		oclass = nvif_fifo_engine_oclass(&abi16->cli->drm->device, NVIF_ENGINE_MSPDEC);
 	} else
 	if ((init->class & 0x00ff) == 0x00b3) { /* msppp */
 		/* msppp: compatibility with incorrect version exposure */
-		for (i = 0; i < ret; i++) {
-			if ((sclass[i].oclass & 0x00ff) == 0x00b3) {
-				oclass = sclass[i].oclass;
-				break;
-			}
-		}
+		oclass = nvif_fifo_engine_oclass(&abi16->cli->drm->device, NVIF_ENGINE_MSPPP);
 	} else {
 		oclass = init->class;
 	}
 
-	nvif_object_sclass_put(&sclass);
 	if (!oclass)
 		return nouveau_abi16_put(abi16, -EINVAL);
 
@@ -603,8 +547,8 @@ nouveau_abi16_ioctl_grobj_alloc(ABI16_IOCTL_ARGS)
 
 	list_add(&ntfy->head, &chan->notifiers);
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16EngObj", init->handle,
-			       oclass, NULL, 0, &ntfy->object);
+	ret = nvif_engobj_ctor(&chan->chan->chan, "abi16EngObj", init->handle, oclass,
+			       &ntfy->engobj);
 
 	if (ret)
 		nouveau_abi16_ntfy_fini(chan, ntfy);
@@ -628,7 +572,7 @@ nouveau_abi16_ioctl_notifierobj_alloc(ABI16_IOCTL_ARGS)
 	device = &abi16->cli->device;
 
 	/* completely unnecessary for these chipsets... */
-	if (unlikely(device->info.family >= NV_DEVICE_INFO_V0_FERMI))
+	if (unlikely(device->impl->family >= NVIF_DEVICE_FERMI))
 		return nouveau_abi16_put(abi16, -EINVAL);
 
 	chan = nouveau_abi16_chan(abi16, info->channel);
@@ -648,7 +592,7 @@ nouveau_abi16_ioctl_notifierobj_alloc(ABI16_IOCTL_ARGS)
 
 	args.start = ntfy->node->offset;
 	args.limit = ntfy->node->offset + ntfy->node->length - 1;
-	if (device->info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (device->impl->family >= NVIF_DEVICE_TESLA) {
 		args.target = NV_DMA_V0_TARGET_VM;
 		args.access = NV_DMA_V0_ACCESS_VM;
 		args.start += chan->ntfy_vma->addr;
@@ -666,9 +610,9 @@ nouveau_abi16_ioctl_notifierobj_alloc(ABI16_IOCTL_ARGS)
 		args.limit += chan->ntfy->offset;
 	}
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16Ntfy", info->handle,
-			       NV_DMA_IN_MEMORY, &args, sizeof(args),
-			       &ntfy->object);
+	ret = nvif_chan_ctxdma_ctor(&chan->chan->chan, "abi16Ntfy", info->handle,
+				    NV_DMA_IN_MEMORY, &args, sizeof(args),
+				    &ntfy->ctxdma);
 	if (ret)
 		goto done;
 
@@ -699,7 +643,7 @@ nouveau_abi16_ioctl_gpuobj_free(ABI16_IOCTL_ARGS)
 	nouveau_channel_idle(chan->chan);
 
 	list_for_each_entry(ntfy, &chan->notifiers, head) {
-		if (ntfy->object.handle == fini->handle) {
+		if (ntfy->ctxdma.object.handle == fini->handle) {
 			nouveau_abi16_ntfy_fini(chan, ntfy);
 			ret = 0;
 			break;
@@ -713,6 +657,7 @@ static int
 nouveau_abi16_ioctl_mthd(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
 	struct nouveau_cli *cli = abi16->cli;
+	struct nvif_device *device = &cli->drm->device;
 	struct nvif_ioctl_mthd_v0 *args;
 	struct nouveau_abi16_obj *obj;
 	struct nv_device_info_v0 *info;
@@ -734,8 +679,14 @@ nouveau_abi16_ioctl_mthd(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioct
 	if (info->version != 0x00)
 		return -EINVAL;
 
-	info = &cli->device.info;
-	memcpy(args->data, info, sizeof(*info));
+	info->platform = device->impl->platform;
+	info->chipset = device->impl->chipset;
+	info->revision = device->impl->revision;
+	info->family = device->impl->family;
+	info->ram_size = device->impl->ram_size;
+	info->ram_user = device->impl->ram_user;
+	strscpy(info->chip, device->impl->chip, sizeof(info->chip));
+	strscpy(info->name, device->impl->name, sizeof(info->name));
 	return 0;
 }
 
@@ -750,7 +701,7 @@ nouveau_abi16_ioctl_del(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	obj = nouveau_abi16_obj_find(abi16, ioctl->object);
 	if (obj) {
 		if (obj->type == ENGOBJ)
-			nvif_object_dtor(&obj->engobj);
+			nvif_engobj_dtor(&obj->engobj);
 		nouveau_abi16_obj_del(obj);
 	}
 
@@ -792,8 +743,8 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
-	ret = nvif_object_ctor(&chan->chan->user, "abi16EngObj", args->handle, args->oclass,
-			       NULL, 0, &obj->engobj);
+	ret = nvif_engobj_ctor(&chan->chan->chan, "abi16EngObj", args->handle, args->oclass,
+			       &obj->engobj);
 	if (ret)
 		nouveau_abi16_obj_del(obj);
 
@@ -803,10 +754,11 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 static int
 nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
+	const struct nvif_device_impl_fifo *fifo;
+	const struct nvif_device_impl_runl *runl;
 	struct nvif_ioctl_sclass_v0 *args;
 	struct nouveau_abi16_chan *chan;
-	struct nvif_sclass *sclass;
-	int ret;
+	int cnt = 0;
 
 	if (!ioctl->route || argc < sizeof(*args))
 		return -EINVAL;
@@ -820,18 +772,24 @@ nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *io
 	if (!chan)
 		return -EINVAL;
 
-	ret = nvif_object_sclass_get(&chan->chan->user, &sclass);
-	if (ret < 0)
-		return ret;
+	fifo = &chan->chan->cli->drm->device.impl->fifo;
+	runl = &fifo->runl[chan->chan->chan.runl];
 
-	for (int i = 0; i < min_t(u8, args->count, ret); i++) {
-		args->oclass[i].oclass = sclass[i].oclass;
-		args->oclass[i].minver = sclass[i].minver;
-		args->oclass[i].maxver = sclass[i].maxver;
+	for (int engi = 0; engi < runl->engn_nr; engi++) {
+		const struct nvif_device_impl_engine *engine =
+			&fifo->engine[runl->engn[engi].engine];
+
+		for (int clsi = 0; clsi < engine->oclass_nr; clsi++) {
+			if (cnt < args->count) {
+				args->oclass[cnt].oclass = engine->oclass[clsi];
+				args->oclass[cnt].minver = -1;
+				args->oclass[cnt].maxver = -1;
+			}
+			cnt++;
+		}
 	}
-	args->count = ret;
 
-	nvif_object_sclass_put(&sclass);
+	args->count = cnt;
 	return 0;
 }
 

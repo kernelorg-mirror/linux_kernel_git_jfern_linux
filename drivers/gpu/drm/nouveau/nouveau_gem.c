@@ -78,7 +78,7 @@ nouveau_gem_object_del(struct drm_gem_object *gem)
 {
 	struct nouveau_bo *nvbo = nouveau_gem_object(gem);
 	struct nouveau_drm *drm = nouveau_bdev(nvbo->bo.bdev);
-	struct device *dev = drm->dev->dev;
+	struct device *dev = drm->dev.dev;
 	int ret;
 
 	ret = pm_runtime_get_sync(dev);
@@ -102,7 +102,7 @@ nouveau_gem_object_open(struct drm_gem_object *gem, struct drm_file *file_priv)
 	struct nouveau_cli *cli = nouveau_cli(file_priv);
 	struct nouveau_bo *nvbo = nouveau_gem_object(gem);
 	struct nouveau_drm *drm = nouveau_bdev(nvbo->bo.bdev);
-	struct device *dev = drm->dev->dev;
+	struct device *dev = drm->dev.dev;
 	struct nouveau_uvmm *uvmm = nouveau_cli_uvmm(cli);
 	struct nouveau_vmm *vmm = nouveau_cli_vmm(cli);
 	struct nouveau_vma *vma;
@@ -188,7 +188,7 @@ nouveau_gem_object_close(struct drm_gem_object *gem, struct drm_file *file_priv)
 	struct nouveau_cli *cli = nouveau_cli(file_priv);
 	struct nouveau_bo *nvbo = nouveau_gem_object(gem);
 	struct nouveau_drm *drm = nouveau_bdev(nvbo->bo.bdev);
-	struct device *dev = drm->dev->dev;
+	struct device *dev = drm->dev.dev;
 	struct nouveau_vmm *vmm = nouveau_cli_vmm(cli);
 	struct nouveau_vma *vma;
 	int ret;
@@ -262,7 +262,7 @@ nouveau_gem_new(struct nouveau_cli *cli, u64 size, int align, uint32_t domain,
 
 	/* Initialize the embedded gem-object. We return a single gem-reference
 	 * to the caller, instead of a normal nouveau_bo ttm reference. */
-	ret = drm_gem_object_init(drm->dev, &nvbo->bo.base, size);
+	ret = drm_gem_object_init(&drm->dev, &nvbo->bo.base, size);
 	if (ret) {
 		drm_gem_object_release(&nvbo->bo.base);
 		kfree(nvbo);
@@ -286,7 +286,7 @@ nouveau_gem_new(struct nouveau_cli *cli, u64 size, int align, uint32_t domain,
 	 */
 	nvbo->valid_domains = NOUVEAU_GEM_DOMAIN_VRAM |
 			      NOUVEAU_GEM_DOMAIN_GART;
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA)
 		nvbo->valid_domains &= domain;
 
 	if (nvbo->no_share) {
@@ -305,6 +305,7 @@ nouveau_gem_info(struct drm_file *file_priv, struct drm_gem_object *gem,
 	struct nouveau_cli *cli = nouveau_cli(file_priv);
 	struct nouveau_bo *nvbo = nouveau_gem_object(gem);
 	struct nouveau_vmm *vmm = nouveau_cli_vmm(cli);
+	struct nouveau_drm *drm = cli->drm;
 	struct nouveau_vma *vma;
 
 	if (is_power_of_2(nvbo->valid_domains))
@@ -328,10 +329,10 @@ nouveau_gem_info(struct drm_file *file_priv, struct drm_gem_object *gem,
 	rep->map_handle = drm_vma_node_offset_addr(&nvbo->bo.base.vma_node);
 	rep->tile_mode = nvbo->mode;
 	rep->tile_flags = nvbo->contig ? 0 : NOUVEAU_GEM_TILE_NONCONTIG;
-	if (cli->device.info.family >= NV_DEVICE_INFO_V0_FERMI)
+	if (drm->device.impl->family >= NVIF_DEVICE_FERMI)
 		rep->tile_flags |= nvbo->kind << 8;
 	else
-	if (cli->device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA)
 		rep->tile_flags |= nvbo->kind << 8 | nvbo->comp << 16;
 	else
 		rep->tile_flags |= nvbo->zeta;
@@ -600,7 +601,7 @@ validate_list(struct nouveau_channel *chan,
 			return ret;
 		}
 
-		if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {
+		if (drm->device.impl->family < NVIF_DEVICE_TESLA) {
 			if (nvbo->offset == b->presumed.offset &&
 			    ((nvbo->bo.resource->mem_type == TTM_PL_VRAM &&
 			      b->presumed.domain & NOUVEAU_GEM_DOMAIN_VRAM) ||
@@ -870,7 +871,7 @@ revalidate:
 			nv50_dma_push(chan, addr, length, no_prefetch);
 		}
 	} else
-	if (drm->client.device.info.chipset >= 0x25) {
+	if (drm->device.impl->chipset >= 0x25) {
 		ret = PUSH_WAIT(&chan->chan.push, req->nr_push * 2);
 		if (ret) {
 			NV_PRINTK(err, cli, "cal_space: %d\n", ret);
@@ -965,7 +966,7 @@ out_next:
 		req->suffix0 = 0x00000000;
 		req->suffix1 = 0x00000000;
 	} else
-	if (drm->client.device.info.chipset >= 0x25) {
+	if (drm->device.impl->chipset >= 0x25) {
 		req->suffix0 = 0x00020000;
 		req->suffix1 = 0x00000000;
 	} else {

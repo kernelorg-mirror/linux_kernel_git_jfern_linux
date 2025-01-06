@@ -97,17 +97,17 @@ nouveau_vma_new(struct nouveau_bo *nvbo, struct nouveau_vmm *vmm,
 	list_add_tail(&vma->head, &nvbo->vma_list);
 
 	if (nvbo->bo.resource->mem_type != TTM_PL_SYSTEM &&
-	    mem->mem.page == nvbo->page) {
-		ret = nvif_vmm_get(&vmm->vmm, LAZY, false, mem->mem.page, 0,
-				   mem->mem.size, &tmp);
+	    mem->mem.impl->page == nvbo->page) {
+		ret = nvif_vmm_get(&vmm->vmm, NVIF_VMM_GET_LAZY, false, mem->mem.impl->page, 0,
+				   mem->mem.impl->size, &tmp);
 		if (ret)
 			goto done;
 
 		vma->addr = tmp.addr;
 		ret = nouveau_vma_map(vma, mem);
 	} else {
-		ret = nvif_vmm_get(&vmm->vmm, PTES, false, mem->mem.page, 0,
-				   mem->mem.size, &tmp);
+		ret = nvif_vmm_get(&vmm->vmm, NVIF_VMM_GET_PTES, false, mem->mem.impl->page, 0,
+				   mem->mem.impl->size, &tmp);
 		if (ret)
 			goto done;
 
@@ -129,9 +129,9 @@ nouveau_vmm_fini(struct nouveau_vmm *vmm)
 }
 
 int
-nouveau_vmm_init(struct nouveau_cli *cli, s32 oclass, struct nouveau_vmm *vmm)
+nouveau_vmm_init(struct nouveau_cli *cli, struct nouveau_vmm *vmm)
 {
-	int ret = nvif_vmm_ctor(&cli->mmu, "drmVmm", oclass, UNMANAGED,
+	int ret = nvif_vmm_ctor(&cli->mmu, "drmVmm", NVIF_VMM_TYPE_UNMANAGED,
 				PAGE_SIZE, 0, NULL, 0, &vmm->vmm);
 	if (ret)
 		return ret;

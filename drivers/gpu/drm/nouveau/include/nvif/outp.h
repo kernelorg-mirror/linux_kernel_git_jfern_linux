@@ -2,52 +2,14 @@
 #ifndef __NVIF_OUTP_H__
 #define __NVIF_OUTP_H__
 #include <nvif/object.h>
-#include <nvif/if0012.h>
+#include <nvif/driverif.h>
 #include <drm/display/drm_dp.h>
 struct nvif_disp;
 
 struct nvif_outp {
+	const struct nvif_outp_impl *impl;
+	struct nvif_outp_priv *priv;
 	struct nvif_object object;
-	u32 id;
-
-	struct {
-		enum {
-			NVIF_OUTP_DAC,
-			NVIF_OUTP_SOR,
-			NVIF_OUTP_PIOR,
-		} type;
-
-		enum {
-			NVIF_OUTP_RGB_CRT,
-			NVIF_OUTP_TMDS,
-			NVIF_OUTP_LVDS,
-			NVIF_OUTP_DP,
-		} proto;
-
-		u8 heads;
-#define NVIF_OUTP_DDC_INVALID 0xff
-		u8 ddc;
-		u8 conn;
-
-		union {
-			struct {
-				u32 freq_max;
-			} rgb_crt;
-			struct {
-				bool dual;
-			} tmds;
-			struct {
-				bool acpi_edid;
-			} lvds;
-			struct {
-				u8   aux;
-				bool mst;
-				bool increased_wm;
-				u8   link_nr;
-				u32  link_bw;
-			} dp;
-		};
-	} info;
 
 	struct {
 		int id;
@@ -57,12 +19,6 @@ struct nvif_outp {
 
 int nvif_outp_ctor(struct nvif_disp *, const char *name, int id, struct nvif_outp *);
 void nvif_outp_dtor(struct nvif_outp *);
-
-enum nvif_outp_detect_status {
-	NOT_PRESENT,
-	PRESENT,
-	UNKNOWN,
-};
 
 enum nvif_outp_detect_status nvif_outp_detect(struct nvif_outp *);
 int nvif_outp_edid_get(struct nvif_outp *, u8 **pedid);
@@ -92,16 +48,12 @@ int nvif_outp_lvds(struct nvif_outp *, bool dual, bool bpc8);
 int nvif_outp_hdmi(struct nvif_outp *, int head, bool enable, u8 max_ac_packet, u8 rekey, u32 khz,
 		   bool scdc, bool scdc_scrambling, bool scdc_low_rates);
 
-int nvif_outp_infoframe(struct nvif_outp *, u8 type, struct nvif_outp_infoframe_v0 *, u32 size);
+int nvif_outp_infoframe(struct nvif_outp *, int head, enum nvif_outp_infoframe_type,
+			u8 *data, u8 size);
 int nvif_outp_hda_eld(struct nvif_outp *, int head, void *data, u32 size);
 
 int nvif_outp_dp_aux_pwr(struct nvif_outp *, bool enable);
 int nvif_outp_dp_aux_xfer(struct nvif_outp *, u8 type, u8 *size, u32 addr, u8 *data);
-
-struct nvif_outp_dp_rate {
-	int dpcd; /* -1 for non-indexed rates */
-	u32 rate;
-};
 
 int nvif_outp_dp_rates(struct nvif_outp *, struct nvif_outp_dp_rate *rate, int rate_nr);
 int nvif_outp_dp_train(struct nvif_outp *, u8 dpcd[DP_RECEIVER_CAP_SIZE],

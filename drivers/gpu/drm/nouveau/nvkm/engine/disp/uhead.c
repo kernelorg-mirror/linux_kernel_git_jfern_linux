@@ -19,109 +19,114 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#define nvkm_uhead(p) container_of((p), struct nvkm_head, object)
-#include "head.h"
+#include "uhead.h"
 #include <core/event.h>
-
-#include <nvif/if0013.h>
 
 #include <nvif/event.h>
 
+struct nvif_head_priv {
+	struct nvkm_object object;
+	struct nvkm_head *head;
+};
+
 static int
-nvkm_uhead_uevent(struct nvkm_object *object, void *argv, u32 argc, struct nvkm_uevent *uevent)
+nvkm_uhead_vblank(struct nvif_head_priv *uhead, u64 handle,
+		  const struct nvif_event_impl **pimpl, struct nvif_event_priv **ppriv)
 {
-	struct nvkm_head *head = nvkm_uhead(object);
-	union nvif_head_event_args *args = argv;
+	struct nvkm_head *head = uhead->head;
 
-	if (!uevent)
-		return 0;
-	if (argc != sizeof(args->vn))
-		return -ENOSYS;
-
-	return nvkm_uevent_add(uevent, &head->disp->vblank, head->id,
-			       NVKM_DISP_HEAD_EVENT_VBLANK, NULL);
+	return nvkm_uevent_new_(&uhead->object, handle, &head->disp->vblank, false, head->id,
+				NVKM_DISP_HEAD_EVENT_VBLANK, NULL, pimpl, ppriv);
 }
 
 static int
-nvkm_uhead_mthd_scanoutpos(struct nvkm_head *head, void *argv, u32 argc)
+nvkm_uhead_scanoutpos(struct nvif_head_priv *uhead, s64 time[2],
+		      u16 *vblanks, u16 *vblanke, u16 *vtotal, u16 *vline,
+		      u16 *hblanks, u16 *hblanke, u16 *htotal, u16 *hline)
 {
-	union nvif_head_scanoutpos_args *args = argv;
-
-	if (argc != sizeof(args->v0) || args->v0.version != 0)
-		return -ENOSYS;
+	struct nvkm_head *head = uhead->head;
 
 	head->func->state(head, &head->arm);
-	args->v0.vtotal  = head->arm.vtotal;
-	args->v0.vblanks = head->arm.vblanks;
-	args->v0.vblanke = head->arm.vblanke;
-	args->v0.htotal  = head->arm.htotal;
-	args->v0.hblanks = head->arm.hblanks;
-	args->v0.hblanke = head->arm.hblanke;
+	*vtotal  = head->arm.vtotal;
+	*vblanks = head->arm.vblanks;
+	*vblanke = head->arm.vblanke;
+	*htotal  = head->arm.htotal;
+	*hblanks = head->arm.hblanks;
+	*hblanke = head->arm.hblanke;
 
 	/* We don't support reading htotal/vtotal on pre-NV50 VGA,
 	 * so we have to give up and trigger the timestamping
 	 * fallback in the drm core.
 	 */
-	if (!args->v0.vtotal || !args->v0.htotal)
+	if (!*vtotal || !*htotal)
 		return -ENOTSUPP;
 
-	args->v0.time[0] = ktime_to_ns(ktime_get());
-	head->func->rgpos(head, &args->v0.hline, &args->v0.vline);
-	args->v0.time[1] = ktime_to_ns(ktime_get());
+	time[0] = ktime_to_ns(ktime_get());
+	head->func->rgpos(head, hline, vline);
+	time[1] = ktime_to_ns(ktime_get());
 	return 0;
 }
 
-static int
-nvkm_uhead_mthd(struct nvkm_object *object, u32 mthd, void *argv, u32 argc)
+static void
+nvkm_uhead_del(struct nvif_head_priv *uhead)
 {
-	struct nvkm_head *head = nvkm_uhead(object);
+	struct nvkm_object *object = &uhead->object;
 
-	switch (mthd) {
-	case NVIF_HEAD_V0_SCANOUTPOS: return nvkm_uhead_mthd_scanoutpos(head, argv, argc);
-	default:
-		return -EINVAL;
-	}
+	nvkm_object_del(&object);
 }
+
+static const struct nvif_head_impl
+nvkm_uhead_impl = {
+	.del = nvkm_uhead_del,
+	.scanoutpos = nvkm_uhead_scanoutpos,
+	.vblank = nvkm_uhead_vblank,
+};
 
 static void *
 nvkm_uhead_dtor(struct nvkm_object *object)
 {
-	struct nvkm_head *head = nvkm_uhead(object);
-	struct nvkm_disp *disp = head->disp;
+	struct nvif_head_priv *uhead = container_of(object, struct nvif_head_priv, object);
+	struct nvkm_disp *disp = uhead->head->disp;
 
-	spin_lock(&disp->client.lock);
-	head->object.func = NULL;
-	spin_unlock(&disp->client.lock);
-	return NULL;
+	spin_lock(&disp->user.lock);
+	uhead->head->user = false;
+	spin_unlock(&disp->user.lock);
+	return uhead;
 }
 
 static const struct nvkm_object_func
 nvkm_uhead = {
 	.dtor = nvkm_uhead_dtor,
-	.mthd = nvkm_uhead_mthd,
-	.uevent = nvkm_uhead_uevent,
 };
 
 int
-nvkm_uhead_new(const struct nvkm_oclass *oclass, void *argv, u32 argc, struct nvkm_object **pobject)
+nvkm_uhead_new(struct nvkm_disp *disp, u8 id, const struct nvif_head_impl **pimpl,
+	       struct nvif_head_priv **ppriv, struct nvkm_object **pobject)
 {
-	struct nvkm_disp *disp = nvkm_udisp(oclass->parent);
 	struct nvkm_head *head;
-	union nvif_head_args *args = argv;
-	int ret;
+	struct nvif_head_priv *uhead;
 
-	if (argc != sizeof(args->v0) || args->v0.version != 0)
-		return -ENOSYS;
-	if (!(head = nvkm_head_find(disp, args->v0.id)))
+	if (!(head = nvkm_head_find(disp, id)))
 		return -EINVAL;
 
-	ret = -EBUSY;
-	spin_lock(&disp->client.lock);
-	if (!head->object.func) {
-		nvkm_object_ctor(&nvkm_uhead, oclass, &head->object);
-		*pobject = &head->object;
-		ret = 0;
+	uhead = kzalloc(sizeof(*uhead), GFP_KERNEL);
+	if (!uhead)
+		return -ENOMEM;
+
+	spin_lock(&disp->user.lock);
+	if (head->user) {
+		spin_unlock(&disp->user.lock);
+		kfree(uhead);
+		return -EBUSY;
 	}
-	spin_unlock(&disp->client.lock);
-	return ret;
+	head->user = true;
+	spin_unlock(&disp->user.lock);
+
+	nvkm_object_ctor(&nvkm_uhead, &(struct nvkm_oclass) {}, &uhead->object);
+	uhead->head = head;
+
+	*pimpl = &nvkm_uhead_impl;
+	*ppriv = uhead;
+	*pobject = &uhead->object;
+	return 0;
 }

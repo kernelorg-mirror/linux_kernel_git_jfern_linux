@@ -42,7 +42,6 @@
 
 #include <nvif/class.h>
 #include <nvif/if0011.h>
-#include <nvif/if0013.h>
 #include <dispnv50/crc.h>
 
 int
@@ -85,18 +84,20 @@ nouveau_display_scanoutpos_head(struct drm_crtc *crtc, int *vpos, int *hpos,
 {
 	struct drm_vblank_crtc *vblank = drm_crtc_vblank_crtc(crtc);
 	struct nvif_head *head = &nouveau_crtc(crtc)->head;
-	struct nvif_head_scanoutpos_v0 args;
+	u16 vblanks, vblanke, vtotal, vline;
+	u16 hblanks, hblanke, htotal, hline;
+	s64 time[2];
 	int retry = 20;
 	bool ret = false;
 
-	args.version = 0;
-
 	do {
-		ret = nvif_mthd(&head->object, NVIF_HEAD_V0_SCANOUTPOS, &args, sizeof(args));
+		ret = head->impl->scanoutpos(head->priv, time,
+					     &vblanks, &vblanke, &vtotal, &vline,
+					     &hblanks, &hblanke, &htotal, &hline);
 		if (ret != 0)
 			return false;
 
-		if (args.vline) {
+		if (vline) {
 			ret = true;
 			break;
 		}
@@ -104,10 +105,10 @@ nouveau_display_scanoutpos_head(struct drm_crtc *crtc, int *vpos, int *hpos,
 		if (retry) ndelay(vblank->linedur_ns);
 	} while (retry--);
 
-	*hpos = args.hline;
-	*vpos = calc(args.vblanks, args.vblanke, args.vtotal, args.vline);
-	if (stime) *stime = ns_to_ktime(args.time[0]);
-	if (etime) *etime = ns_to_ktime(args.time[1]);
+	*hpos = hline;
+	*vpos = calc(vblanks, vblanke, vtotal, vline);
+	if (stime) *stime = ns_to_ktime(time[0]);
+	if (etime) *etime = ns_to_ktime(time[1]);
 
 	return ret;
 }
@@ -133,7 +134,7 @@ nouveau_decode_mod(struct nouveau_drm *drm,
 		   uint32_t *tile_mode,
 		   uint8_t *kind)
 {
-	struct nouveau_display *disp = nouveau_display(drm->dev);
+	struct nouveau_display *disp = nouveau_display(&drm->dev);
 	BUG_ON(!tile_mode || !kind);
 
 	if (modifier == DRM_FORMAT_MOD_LINEAR) {
@@ -154,7 +155,7 @@ nouveau_decode_mod(struct nouveau_drm *drm,
 		*tile_mode = (uint32_t)(modifier & 0xF);
 		*kind = (uint8_t)((modifier >> 12) & 0xFF);
 
-		if (drm->client.device.info.chipset >= 0xc0)
+		if (drm->device.impl->chipset >= 0xc0)
 			*tile_mode <<= 4;
 	}
 }
@@ -192,12 +193,11 @@ nouveau_validate_decode_mod(struct nouveau_drm *drm,
 			    uint32_t *tile_mode,
 			    uint8_t *kind)
 {
-	struct nouveau_display *disp = nouveau_display(drm->dev);
+	struct nouveau_display *disp = nouveau_display(&drm->dev);
 	int mod;
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA)
 		return -EINVAL;
-	}
 
 	BUG_ON(!disp->format_modifiers);
 
@@ -239,9 +239,9 @@ nouveau_get_height_in_blocks(struct nouveau_drm *drm,
 	uint32_t log_gob_height;
 	uint32_t log_block_height;
 
-	BUG_ON(drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA);
+	BUG_ON(drm->device.impl->family < NVIF_DEVICE_TESLA);
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_FERMI)
+	if (drm->device.impl->family < NVIF_DEVICE_FERMI)
 		log_gob_height = 2;
 	else
 		log_gob_height = 3;
@@ -259,9 +259,9 @@ nouveau_check_bl_size(struct nouveau_drm *drm, struct nouveau_bo *nvbo,
 	uint32_t gob_size, bw, bh;
 	uint64_t bl_size;
 
-	BUG_ON(drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA);
+	BUG_ON(drm->device.impl->family < NVIF_DEVICE_TESLA);
 
-	if (drm->client.device.info.chipset >= 0xc0) {
+	if (drm->device.impl->chipset >= 0xc0) {
 		if (tile_mode & 0xF)
 			return -EINVAL;
 		tile_mode >>= 4;
@@ -270,7 +270,7 @@ nouveau_check_bl_size(struct nouveau_drm *drm, struct nouveau_bo *nvbo,
 	if (tile_mode & 0xFFFFFFF0)
 		return -EINVAL;
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_FERMI)
+	if (drm->device.impl->family < NVIF_DEVICE_FERMI)
 		gob_size = 256;
 	else
 		gob_size = 512;
@@ -306,7 +306,7 @@ nouveau_framebuffer_new(struct drm_device *dev,
 	int ret;
 
         /* YUV overlays have special requirements pre-NV50 */
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA &&
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA &&
 
 	    (mode_cmd->pixel_format == DRM_FORMAT_YUYV ||
 	     mode_cmd->pixel_format == DRM_FORMAT_UYVY ||
@@ -461,7 +461,7 @@ static void
 nouveau_display_hpd_work(struct work_struct *work)
 {
 	struct nouveau_drm *drm = container_of(work, typeof(*drm), hpd_work);
-	struct drm_device *dev = drm->dev;
+	struct drm_device *dev = &drm->dev;
 	struct drm_connector *connector;
 	struct drm_connector_list_iter conn_iter;
 	u32 pending;
@@ -534,7 +534,7 @@ nouveau_display_hpd_work(struct work_struct *work)
 	if (first_changed_connector)
 		drm_connector_put(first_changed_connector);
 
-	pm_runtime_mark_last_busy(drm->dev->dev);
+	pm_runtime_mark_last_busy(dev->dev);
 noop:
 	pm_runtime_put_autosuspend(dev->dev);
 }
@@ -551,20 +551,20 @@ nouveau_display_acpi_ntfy(struct notifier_block *nb, unsigned long val,
 
 	if (!strcmp(info->device_class, ACPI_VIDEO_CLASS)) {
 		if (info->type == ACPI_VIDEO_NOTIFY_PROBE) {
-			ret = pm_runtime_get(drm->dev->dev);
+			ret = pm_runtime_get(drm->dev.dev);
 			if (ret == 1 || ret == -EACCES) {
 				/* If the GPU is already awake, or in a state
 				 * where we can't wake it up, it can handle
 				 * it's own hotplug events.
 				 */
-				pm_runtime_put_autosuspend(drm->dev->dev);
+				pm_runtime_put_autosuspend(drm->dev.dev);
 			} else if (ret == 0 || ret == -EINPROGRESS) {
 				/* We've started resuming the GPU already, so
 				 * it will handle scheduling a full reprobe
 				 * itself
 				 */
 				NV_DEBUG(drm, "ACPI requested connector reprobe\n");
-				pm_runtime_put_noidle(drm->dev->dev);
+				pm_runtime_put_noidle(drm->dev.dev);
 			} else {
 				NV_WARN(drm, "Dropped ACPI reprobe event due to RPM error: %d\n",
 					ret);
@@ -697,15 +697,15 @@ nouveau_display_create(struct drm_device *dev)
 
 	dev->mode_config.min_width = 0;
 	dev->mode_config.min_height = 0;
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_CELSIUS) {
+	if (drm->device.impl->family < NVIF_DEVICE_CELSIUS) {
 		dev->mode_config.max_width = 2048;
 		dev->mode_config.max_height = 2048;
 	} else
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA) {
 		dev->mode_config.max_width = 4096;
 		dev->mode_config.max_height = 4096;
 	} else
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_FERMI) {
+	if (drm->device.impl->family < NVIF_DEVICE_FERMI) {
 		dev->mode_config.max_width = 8192;
 		dev->mode_config.max_height = 8192;
 	} else {
@@ -716,7 +716,7 @@ nouveau_display_create(struct drm_device *dev)
 	dev->mode_config.preferred_depth = 24;
 	dev->mode_config.prefer_shadow = 1;
 
-	if (drm->client.device.info.chipset < 0x11)
+	if (drm->device.impl->chipset < 0x11)
 		dev->mode_config.async_page_flip = false;
 	else
 		dev->mode_config.async_page_flip = true;
@@ -725,7 +725,7 @@ nouveau_display_create(struct drm_device *dev)
 	drm_kms_helper_poll_disable(dev);
 
 	if (nouveau_modeset != 2) {
-		ret = nvif_disp_ctor(&drm->client.device, "kmsDisp", 0, &disp->disp);
+		ret = nvif_disp_ctor(&drm->device, "kmsDisp", &disp->disp);
 		/* no display hw */
 		if (ret == -ENODEV) {
 			ret = 0;
@@ -854,7 +854,7 @@ nouveau_display_dumb_create(struct drm_file *file_priv, struct drm_device *dev,
 	args->size = roundup(args->size, PAGE_SIZE);
 
 	/* Use VRAM if there is any ; otherwise fallback to system memory */
-	if (nouveau_drm(dev)->client.device.info.ram_size != 0)
+	if (nouveau_drm(dev)->device.impl->ram_size != 0)
 		domain = NOUVEAU_GEM_DOMAIN_VRAM;
 	else
 		domain = NOUVEAU_GEM_DOMAIN_GART;

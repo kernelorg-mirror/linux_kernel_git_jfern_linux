@@ -1,14 +1,10 @@
 #ifndef __NVKM_UVMM_H__
 #define __NVKM_UVMM_H__
-#define nvkm_uvmm(p) container_of((p), struct nvkm_uvmm, object)
-#include <core/object.h>
 #include "vmm.h"
+#include <nvif/driverif.h>
 
-struct nvkm_uvmm {
-	struct nvkm_object object;
-	struct nvkm_vmm *vmm;
-};
-
-int nvkm_uvmm_new(const struct nvkm_oclass *, void *argv, u32 argc,
+int nvkm_uvmm_new(struct nvkm_mmu *mmu, u8 type, u64 addr, u64 size,
+		  void *, u32, const struct nvif_vmm_impl **, struct nvif_vmm_priv **,
 		  struct nvkm_object **);
+struct nvkm_vmm *nvkm_uvmm_ref(struct nvif_vmm_priv *);
 #endif

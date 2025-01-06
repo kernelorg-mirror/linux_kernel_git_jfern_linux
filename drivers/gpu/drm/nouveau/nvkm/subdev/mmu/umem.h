@@ -1,25 +1,9 @@
 #ifndef __NVKM_UMEM_H__
 #define __NVKM_UMEM_H__
-#define nvkm_umem(p) container_of((p), struct nvkm_umem, object)
-#include <core/object.h>
 #include "mem.h"
+#include <nvif/driverif.h>
 
-struct nvkm_umem {
-	struct nvkm_object object;
-	struct nvkm_mmu *mmu;
-	u8 type:8;
-	bool mappable:1;
-	bool io:1;
-
-	struct nvkm_memory *memory;
-	struct list_head head;
-
-	union {
-		struct nvkm_vma *bar;
-		void *map;
-	};
-};
-
-int nvkm_umem_new(const struct nvkm_oclass *, void *argv, u32 argc,
-		  struct nvkm_object **);
+int nvkm_umem_new(struct nvkm_mmu *, u8 type, u8 page, u64 size, void *, u32,
+		  const struct nvif_mem_impl **, struct nvif_mem_priv **, struct nvkm_object **);
+struct nvkm_memory *nvkm_umem_ref(struct nvif_mem_priv *);
 #endif

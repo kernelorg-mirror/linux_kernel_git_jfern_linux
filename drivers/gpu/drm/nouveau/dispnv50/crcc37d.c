@@ -41,7 +41,7 @@ crcc37d_set_src(struct nv50_head *head, int or, enum nv50_crc_source_type source
 		return ret;
 
 	if (source) {
-		PUSH_MTHD(push, NVC37D, HEAD_SET_CONTEXT_DMA_CRC(i), ctx->ntfy.handle);
+		PUSH_MTHD(push, NVC37D, HEAD_SET_CONTEXT_DMA_CRC(i), ctx->ntfy.object.handle);
 		PUSH_MTHD(push, NVC37D, HEAD_SET_CRC_CONTROL(i), crc_args);
 	} else {
 		PUSH_MTHD(push, NVC37D, HEAD_SET_CRC_CONTROL(i), 0);
@@ -60,14 +60,14 @@ int crcc37d_set_ctx(struct nv50_head *head, struct nv50_crc_notifier_ctx *ctx)
 	if ((ret = PUSH_WAIT(push, 2)))
 		return ret;
 
-	PUSH_MTHD(push, NVC37D, HEAD_SET_CONTEXT_DMA_CRC(i), ctx ? ctx->ntfy.handle : 0);
+	PUSH_MTHD(push, NVC37D, HEAD_SET_CONTEXT_DMA_CRC(i), ctx ? ctx->ntfy.object.handle : 0);
 	return 0;
 }
 
 u32 crcc37d_get_entry(struct nv50_head *head, struct nv50_crc_notifier_ctx *ctx,
 		      enum nv50_crc_source source, int idx)
 {
-	struct crcc37d_notifier __iomem *notifier = ctx->mem.object.map.ptr;
+	struct crcc37d_notifier __iomem *notifier = ctx->map.ptr;
 	struct crcc37d_entry __iomem *entry = &notifier->entries[idx];
 	u32 __iomem *crc_addr;
 
@@ -82,7 +82,7 @@ u32 crcc37d_get_entry(struct nv50_head *head, struct nv50_crc_notifier_ctx *ctx,
 bool crcc37d_ctx_finished(struct nv50_head *head, struct nv50_crc_notifier_ctx *ctx)
 {
 	struct nouveau_drm *drm = nouveau_drm(head->base.base.dev);
-	struct crcc37d_notifier __iomem *notifier = ctx->mem.object.map.ptr;
+	struct crcc37d_notifier __iomem *notifier = ctx->map.ptr;
 	const u32 status = ioread32_native(&notifier->status);
 	const u32 overflow = status & 0x0000007e;
 

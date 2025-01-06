@@ -3,7 +3,10 @@
 #define __NVKM_DEVICE_H__
 #include <core/oclass.h>
 #include <core/intr.h>
+#include <vgpu_mgr/vgpu_mgr.h>
 enum nvkm_subdev_type;
+
+#include <linux/auxiliary_bus.h>
 
 enum nvkm_device_type {
 	NVKM_DEVICE_PCI,
@@ -22,7 +25,6 @@ struct nvkm_device {
 	const char *cfgopt;
 	const char *dbgopt;
 
-	struct list_head head;
 	struct mutex mutex;
 	int refcount;
 
@@ -56,6 +58,12 @@ struct nvkm_device {
 		struct notifier_block nb;
 	} acpi;
 
+	enum {
+		NVKM_DEVICE_RUNPM_NONE = 0,
+		NVKM_DEVICE_RUNPM_V1,
+		NVKM_DEVICE_RUNPM_OPTIMUS,
+	} runpm;
+
 #define NVKM_LAYOUT_ONCE(type,data,ptr) data *ptr;
 #define NVKM_LAYOUT_INST(type,data,ptr,cnt) data *ptr[cnt];
 #include <core/layout.h>
@@ -72,6 +80,11 @@ struct nvkm_device {
 		bool armed;
 		bool legacy_done;
 	} intr;
+
+	struct nvkm_vgpu_mgr vgpu_mgr;
+
+	struct auxiliary_device auxdev;
+	const struct nvif_driver_func *driver;
 };
 
 struct nvkm_subdev *nvkm_device_subdev(struct nvkm_device *, int type, int inst);
@@ -108,8 +121,6 @@ struct nvkm_device_chip {
 #undef NVKM_LAYOUT_ONCE
 };
 
-struct nvkm_device *nvkm_device_find(u64 name);
-
 /* privileged register interface accessor macros */
 #define nvkm_rd08(d,a) ioread8((d)->pri + (a))
 #define nvkm_rd16(d,a) ioread16_native((d)->pri + (a))
@@ -131,8 +142,6 @@ struct nvkm_device_oclass {
 		    void *data, u32 size, struct nvkm_object **);
 	struct nvkm_sclass base;
 };
-
-extern const struct nvkm_sclass nvkm_udevice_sclass;
 
 /* device logging */
 #define nvdev_printk_(d,l,p,f,a...) do {                                       \

@@ -21,7 +21,6 @@
  */
 #include "base.h"
 
-#include <nvif/if0014.h>
 #include <nvif/push507c.h>
 #include <nvif/timer.h>
 
@@ -304,22 +303,27 @@ base507c_new_(const struct nv50_wndw_func *func, const u32 *format,
 	      struct nouveau_drm *drm, int head, s32 oclass, u32 interlock_data,
 	      struct nv50_wndw **pwndw)
 {
-	struct nvif_disp_chan_v0 args = {
-		.id = head,
-	};
-	struct nv50_disp *disp50 = nv50_disp(drm->dev);
+	struct nvif_disp *disp = nv50_disp(&drm->dev)->disp;
 	struct nv50_wndw *wndw;
 	int ret;
 
-	ret = nv50_wndw_new_(func, drm->dev, DRM_PLANE_TYPE_PRIMARY,
+	ret = nv50_wndw_prep(func, &drm->dev, DRM_PLANE_TYPE_PRIMARY,
 			     "base", head, format, BIT(head),
 			     NV50_DISP_INTERLOCK_BASE, interlock_data, &wndw);
 	if (*pwndw = wndw, ret)
 		return ret;
 
-	ret = nv50_dmac_create(drm,
-			       &oclass, head, &args, sizeof(args),
-			       disp50->sync->offset, &wndw->wndw);
+	ret = nvif_dispchan_ctor(disp, "kmsChanBase", head, oclass, &drm->mmu, &wndw->wndw);
+	if (ret)
+		goto done;
+
+	ret = disp->impl->chan.base.new(disp->priv, head, wndw->wndw.push.mem.priv,
+					&wndw->wndw.impl, &wndw->wndw.priv);
+	if (ret)
+		goto done;
+
+	ret = nvif_dispchan_oneinit(&wndw->wndw);
+done:
 	if (ret) {
 		NV_ERROR(drm, "base%04x allocation failed: %d\n", oclass, ret);
 		return ret;
@@ -328,7 +332,7 @@ base507c_new_(const struct nv50_wndw_func *func, const u32 *format,
 	wndw->ntfy = NV50_DISP_BASE_NTFY(wndw->id);
 	wndw->sema = NV50_DISP_BASE_SEM0(wndw->id);
 	wndw->data = 0x00000000;
-	return 0;
+	return nv50_wndw_ctor(wndw);
 }
 
 int

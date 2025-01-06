@@ -24,46 +24,42 @@
 
 #include <nvif/client.h>
 #include <nvif/driver.h>
+#include <nvif/driverif.h>
 #include <nvif/ioctl.h>
-
-#include <nvif/class.h>
-#include <nvif/if0000.h>
+#include <nvif/printf.h>
 
 int
 nvif_client_suspend(struct nvif_client *client)
 {
-	return client->driver->suspend(client->object.priv);
+	return client->driver->suspend(client->priv);
 }
 
 int
 nvif_client_resume(struct nvif_client *client)
 {
-	return client->driver->resume(client->object.priv);
+	return client->driver->resume(client->priv);
 }
 
 void
 nvif_client_dtor(struct nvif_client *client)
 {
-	nvif_object_dtor(&client->object);
+	client->impl->del(client->priv);
+	client->impl = NULL;
+	client->object.client = NULL;
 	client->driver = NULL;
 }
 
 int
 nvif_client_ctor(struct nvif_client *parent, const char *name, struct nvif_client *client)
 {
-	struct nvif_client_v0 args = {};
 	int ret;
 
-	strscpy_pad(args.name, name, sizeof(args.name));
-	ret = nvif_object_ctor(parent != client ? &parent->object : NULL,
-			       name ? name : "nvifClient", 0,
-			       NVIF_CLASS_CLIENT, &args, sizeof(args),
-			       &client->object);
+	ret = parent->impl->client.new(parent->priv, &client->impl, &client->priv);
+	NVIF_ERRON(ret, &parent->object, "[NEW client]");
 	if (ret)
 		return ret;
 
-	client->object.client = client;
-	client->object.handle = ~0;
+	nvif_object_ctor(&parent->object, name ?: "nvifClient", 0, 0, &client->object);
 	client->driver = parent->driver;
 	return 0;
 }

@@ -27,15 +27,22 @@
 #include <nvhw/drf.h>
 
 struct nvif_push {
-	int (*wait)(struct nvif_push *push, u32 size);
-	void (*kick)(struct nvif_push *push);
-
 	struct nvif_mem mem;
+	struct nvif_map map;
+
+	struct {
+		u32 cur;
+		u32 put;
+		u32 max;
+	} hw;
 
 	u32 *bgn;
 	u32 *cur;
 	u32 *seg;
 	u32 *end;
+
+	int (*wait)(struct nvif_push *push, u32 size);
+	int (*kick)(struct nvif_push *push);
 };
 
 static inline __must_check int
@@ -55,14 +62,13 @@ PUSH_WAIT(struct nvif_push *push, u32 size)
 static inline int
 PUSH_KICK(struct nvif_push *push)
 {
-	push->kick(push);
-	return 0;
+	return push->kick(push);
 }
 
 #ifdef CONFIG_NOUVEAU_DEBUG_PUSH
 #define PUSH_PRINTF(p,f,a...) do {                              \
 	struct nvif_push *_ppp = (p);                           \
-	u32 __o = _ppp->cur - (u32 *)_ppp->mem.object.map.ptr;  \
+	u32 __o = _ppp->cur - (u32 *)_ppp->map.ptr;             \
 	NVIF_DEBUG(&_ppp->mem.object, "%08x: "f, __o * 4, ##a); \
 	(void)__o;                                              \
 } while(0)

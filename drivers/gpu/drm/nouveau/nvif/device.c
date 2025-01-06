@@ -23,17 +23,30 @@
  */
 #include <nvif/device.h>
 #include <nvif/client.h>
+#include <nvif/ctxdma.h>
+#include <nvif/printf.h>
+
+int
+nvif_device_ctxdma_ctor(struct nvif_device *device, const char *name, s32 oclass,
+			void *argv, u32 argc, struct nvif_ctxdma *ctxdma)
+{
+	int ret;
+
+	ret = device->impl->ctxdma.new(device->priv, oclass, argv, argc,
+				       &ctxdma->impl, &ctxdma->priv);
+	NVIF_ERRON(ret, &device->object, "[NEW ctxdma%04x]", oclass);
+	if (ret)
+		return ret;
+
+	nvif_ctxdma_ctor(&device->object, name ?: "nvifDeviceCtxDma", 0, oclass, ctxdma);
+	return 0;
+}
 
 u64
 nvif_device_time(struct nvif_device *device)
 {
-	if (!device->user.func) {
-		struct nv_device_time_v0 args = {};
-		int ret = nvif_object_mthd(&device->object, NV_DEVICE_V0_TIME,
-					   &args, sizeof(args));
-		WARN_ON_ONCE(ret != 0);
-		return args.time;
-	}
+	if (!device->user.func)
+		return device->impl->time(device->priv);
 
 	return device->user.func->time(&device->user);
 }
@@ -41,29 +54,36 @@ nvif_device_time(struct nvif_device *device)
 int
 nvif_device_map(struct nvif_device *device)
 {
-	return nvif_object_map(&device->object, NULL, 0);
+	return nvif_object_map_cpu(&device->object, &device->impl->map, &device->map);
 }
 
 void
 nvif_device_dtor(struct nvif_device *device)
 {
+	if (!device->impl)
+		return;
+
 	nvif_user_dtor(device);
-	kfree(device->runlist);
-	device->runlist = NULL;
-	nvif_object_dtor(&device->object);
+
+	nvif_object_unmap_cpu(&device->map);
+
+	device->impl->del(device->priv);
+	device->impl = NULL;
 }
 
 int
 nvif_device_ctor(struct nvif_client *client, const char *name, struct nvif_device *device)
 {
-	int ret = nvif_object_ctor(&client->object, name ? name : "nvifDevice", 0,
-				   0x0080, NULL, 0, &device->object);
-	device->runlist = NULL;
+	int ret;
+
 	device->user.func = NULL;
-	if (ret == 0) {
-		device->info.version = 0;
-		ret = nvif_object_mthd(&device->object, NV_DEVICE_V0_INFO,
-				       &device->info, sizeof(device->info));
-	}
-	return ret;
+
+	ret = client->impl->device.new(client->priv, &device->impl, &device->priv);
+	NVIF_ERRON(ret, &client->object, "[NEW device]");
+	if (ret)
+		return ret;
+
+	nvif_object_ctor(&client->object, name ?: "nvifDevice", 0, 0, &device->object);
+	device->object.client = client;
+	return 0;
 }

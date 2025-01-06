@@ -29,83 +29,54 @@ int
 nvif_outp_dp_mst_vcpi(struct nvif_outp *outp, int head,
 		      u8 start_slot, u8 num_slots, u16 pbn, u16 aligned_pbn)
 {
-	struct nvif_outp_dp_mst_vcpi_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.head = head;
-	args.start_slot = start_slot;
-	args.num_slots = num_slots;
-	args.pbn = pbn;
-	args.aligned_pbn = aligned_pbn;
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_MST_VCPI, &args, sizeof(args));
+	ret = outp->impl->dp.mst_vcpi(outp->priv, head, start_slot, num_slots, pbn, aligned_pbn);
 	NVIF_ERRON(ret, &outp->object,
 		   "[DP_MST_VCPI head:%d start_slot:%02x num_slots:%02x pbn:%04x aligned_pbn:%04x]",
-		   args.head, args.start_slot, args.num_slots, args.pbn, args.aligned_pbn);
+		   head, start_slot, num_slots, pbn, aligned_pbn);
 	return ret;
 }
 
 int
 nvif_outp_dp_mst_id_put(struct nvif_outp *outp, u32 id)
 {
-	struct nvif_outp_dp_mst_id_get_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.id = id;
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_MST_ID_PUT, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DP_MST_ID_PUT id:%08x]", args.id);
+	ret = outp->impl->dp.mst_id_put(outp->priv, id);
+	NVIF_ERRON(ret, &outp->object, "[DP_MST_ID_PUT id:%08x]", id);
 	return ret;
 }
 
 int
 nvif_outp_dp_mst_id_get(struct nvif_outp *outp, u32 *id)
 {
-	struct nvif_outp_dp_mst_id_get_v0 args;
 	int ret;
 
-	args.version = 0;
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_MST_ID_GET, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DP_MST_ID_GET] id:%08x", args.id);
-	if (ret)
-		return ret;
-
-	*id = args.id;
-	return 0;
+	ret = outp->impl->dp.mst_id_get(outp->priv, id);
+	NVIF_ERRON(ret, &outp->object, "[DP_MST_ID_GET] id:%08x", *id);
+	return ret;
 }
 
 int
 nvif_outp_dp_sst(struct nvif_outp *outp, int head, u32 watermark, u32 hblanksym, u32 vblanksym)
 {
-	struct nvif_outp_dp_sst_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.head = head;
-	args.watermark = watermark;
-	args.hblanksym = hblanksym;
-	args.vblanksym = vblanksym;
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_SST, &args, sizeof(args));
+	ret = outp->impl->dp.sst(outp->priv, head, watermark, hblanksym, vblanksym);
 	NVIF_ERRON(ret, &outp->object,
 		   "[DP_SST head:%d watermark:%d hblanksym:%d vblanksym:%d]",
-		   args.head, args.watermark, args.hblanksym, args.vblanksym);
+		   head, watermark, hblanksym, vblanksym);
 	return ret;
 }
 
 int
-nvif_outp_dp_drive(struct nvif_outp *outp, u8 link_nr, u8 pe[4], u8 vs[4])
+nvif_outp_dp_drive(struct nvif_outp *outp, u8 lanes, u8 pe[4], u8 vs[4])
 {
-	struct nvif_outp_dp_drive_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.lanes   = link_nr;
-	memcpy(args.pe, pe, sizeof(args.pe));
-	memcpy(args.vs, vs, sizeof(args.vs));
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_DRIVE, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DP_DRIVE lanes:%d]", args.lanes);
+	ret = outp->impl->dp.drive(outp->priv, lanes, pe, vs);
+	NVIF_ERRON(ret, &outp->object, "[DP_DRIVE lanes:%d]", lanes);
 	return ret;
 }
 
@@ -113,114 +84,69 @@ int
 nvif_outp_dp_train(struct nvif_outp *outp, u8 dpcd[DP_RECEIVER_CAP_SIZE], u8 lttprs,
 		   u8 link_nr, u32 link_bw, bool mst, bool post_lt_adj, bool retrain)
 {
-	struct nvif_outp_dp_train_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.retrain = retrain;
-	args.mst = mst;
-	args.lttprs = lttprs;
-	args.post_lt_adj = post_lt_adj;
-	args.link_nr = link_nr;
-	args.link_bw = link_bw;
-	memcpy(args.dpcd, dpcd, sizeof(args.dpcd));
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_TRAIN, &args, sizeof(args));
+	ret = outp->impl->dp.train(outp->priv, dpcd, lttprs, link_nr, link_bw, mst,
+				   post_lt_adj, retrain);
 	NVIF_ERRON(ret, &outp->object,
 		   "[DP_TRAIN retrain:%d mst:%d lttprs:%d post_lt_adj:%d nr:%d bw:%d]",
-		   args.retrain, args.mst, args.lttprs, args.post_lt_adj, args.link_nr,
-		   args.link_bw);
+		   retrain, mst, lttprs, post_lt_adj, link_nr, link_bw);
 	return ret;
 }
 
 int
-nvif_outp_dp_rates(struct nvif_outp *outp, struct nvif_outp_dp_rate *rate, int rate_nr)
+nvif_outp_dp_rates(struct nvif_outp *outp, struct nvif_outp_dp_rate *rate, int rates)
 {
-	struct nvif_outp_dp_rates_v0 args;
 	int ret;
 
-	if (rate_nr > ARRAY_SIZE(args.rate))
-		return -EINVAL;
-
-	args.version = 0;
-	args.rates = rate_nr;
-	for (int i = 0; i < args.rates; i++, rate++) {
-		args.rate[i].dpcd = rate->dpcd;
-		args.rate[i].rate = rate->rate;
-	}
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_RATES, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DP_RATES rates:%d]", args.rates);
+	ret = outp->impl->dp.rates(outp->priv, rate, rates);
+	NVIF_ERRON(ret, &outp->object, "[DP_RATES rates:%d]", rates);
 	return ret;
 }
 
 int
 nvif_outp_dp_aux_xfer(struct nvif_outp *outp, u8 type, u8 *psize, u32 addr, u8 *data)
 {
-	struct nvif_outp_dp_aux_xfer_v0 args;
 	u8 size = *psize;
 	int ret;
 
-	args.version = 0;
-	args.type = type;
-	args.size = size;
-	args.addr = addr;
-	memcpy(args.data, data, size);
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_AUX_XFER, &args, sizeof(args));
+	ret = outp->impl->dp.aux_xfer(outp->priv, type, addr, data, &size);
 	NVIF_DEBUG(&outp->object, "[DP_AUX_XFER type:%d size:%d addr:%05x] %d size:%d (ret: %d)",
-		   args.type, size, args.addr, ret, args.size, ret);
+		   type, *psize, addr, ret, size, ret);
 	if (ret < 0)
 		return ret;
 
-	*psize = args.size;
-
-	memcpy(data, args.data, size);
+	*psize = size;
 	return ret;
 }
 
 int
 nvif_outp_dp_aux_pwr(struct nvif_outp *outp, bool enable)
 {
-	struct nvif_outp_dp_aux_pwr_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.state = enable;
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_DP_AUX_PWR, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DP_AUX_PWR state:%d]", args.state);
+	ret = outp->impl->dp.aux_pwr(outp->priv, enable);
+	NVIF_ERRON(ret, &outp->object, "[DP_AUX_PWR state:%d]", enable);
 	return ret;
 }
 
 int
 nvif_outp_hda_eld(struct nvif_outp *outp, int head, void *data, u32 size)
 {
-	struct {
-		struct nvif_outp_hda_eld_v0 mthd;
-		u8 data[128];
-	} args;
 	int ret;
 
-	if (WARN_ON(size > ARRAY_SIZE(args.data)))
-		return -EINVAL;
-
-	args.mthd.version = 0;
-	args.mthd.head = head;
-
-	memcpy(args.data, data, size);
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_HDA_ELD, &args, sizeof(args.mthd) + size);
+	ret = outp->impl->hda.eld(outp->priv, head, data, size);
 	NVIF_ERRON(ret, &outp->object, "[HDA_ELD head:%d size:%d]", head, size);
 	return ret;
 }
 
 int
-nvif_outp_infoframe(struct nvif_outp *outp, u8 type, struct nvif_outp_infoframe_v0 *args, u32 size)
+nvif_outp_infoframe(struct nvif_outp *outp, int head, enum nvif_outp_infoframe_type type,
+		    u8 *data, u8 size)
 {
 	int ret;
 
-	args->type = type;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_INFOFRAME, args, sizeof(*args) + size);
+	ret = outp->impl->hdmi.infoframe(outp->priv, head, type, data, size);
 	NVIF_ERRON(ret, &outp->object, "[INFOFRAME type:%d size:%d]", type, size);
 	return ret;
 }
@@ -229,331 +155,238 @@ int
 nvif_outp_hdmi(struct nvif_outp *outp, int head, bool enable, u8 max_ac_packet, u8 rekey,
 	       u32 khz, bool scdc, bool scdc_scrambling, bool scdc_low_rates)
 {
-	struct nvif_outp_hdmi_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.head = head;
-	args.enable = enable;
-	args.max_ac_packet = max_ac_packet;
-	args.rekey = rekey;
-	args.khz = khz;
-	args.scdc = scdc;
-	args.scdc_scrambling = scdc_scrambling;
-	args.scdc_low_rates = scdc_low_rates;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_HDMI, &args, sizeof(args));
+	ret = outp->impl->hdmi.config(outp->priv, head, enable, max_ac_packet, rekey, khz,
+				      scdc, scdc_scrambling, scdc_low_rates);
 	NVIF_ERRON(ret, &outp->object,
 		   "[HDMI head:%d enable:%d max_ac_packet:%d rekey:%d khz:%d scdc:%d "
 		   "scdc_scrambling:%d scdc_low_rates:%d]",
-		   args.head, args.enable, args.max_ac_packet, args.rekey, args.khz,
-		   args.scdc, args.scdc_scrambling, args.scdc_low_rates);
+		   head, enable, max_ac_packet, rekey, khz,
+		   scdc, scdc_scrambling, scdc_low_rates);
 	return ret;
 }
 
 int
 nvif_outp_lvds(struct nvif_outp *outp, bool dual, bool bpc8)
 {
-	struct nvif_outp_lvds_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.dual = dual;
-	args.bpc8 = bpc8;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_LVDS, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[LVDS dual:%d 8bpc:%d]", args.dual, args.bpc8);
+	ret = outp->impl->lvds.config(outp->priv, dual, bpc8);
+	NVIF_ERRON(ret, &outp->object, "[LVDS dual:%d 8bpc:%d]", dual, bpc8);
 	return ret;
 }
 
 int
 nvif_outp_bl_set(struct nvif_outp *outp, int level)
 {
-	struct nvif_outp_bl_set_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.level = level;
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_BL_SET, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[BL_SET level:%d]", args.level);
+	ret = outp->impl->bl.set(outp->priv, level);
+	NVIF_ERRON(ret, &outp->object, "[BL_SET level:%d]", level);
 	return ret;
 }
 
 int
 nvif_outp_bl_get(struct nvif_outp *outp)
 {
-	struct nvif_outp_bl_get_v0 args;
+	u8 level;
 	int ret;
 
-	args.version = 0;
-
-	ret = nvif_object_mthd(&outp->object, NVIF_OUTP_V0_BL_GET, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[BL_GET level:%d]", args.level);
-	return ret ? ret : args.level;
+	ret = outp->impl->bl.get(outp->priv, &level);
+	NVIF_ERRON(ret, &outp->object, "[BL_GET level:%d]", level);
+	return ret ? ret : level;
 }
 
 void
 nvif_outp_release(struct nvif_outp *outp)
 {
-	int ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_RELEASE, NULL, 0);
+	int ret = outp->impl->release(outp->priv);
 	NVIF_ERRON(ret, &outp->object, "[RELEASE]");
 	outp->or.id = -1;
 }
 
 static inline int
-nvif_outp_acquire(struct nvif_outp *outp, u8 type, struct nvif_outp_acquire_v0 *args)
+nvif_outp_acquire(struct nvif_outp *outp, enum nvif_outp_type type, bool hda)
 {
+	u8 or, link;
 	int ret;
 
-	args->version = 0;
-	args->type = type;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_ACQUIRE, args, sizeof(*args));
+	ret = outp->impl->acquire(outp->priv, type, hda, &or, &link);
 	if (ret)
 		return ret;
 
-	outp->or.id = args->or;
-	outp->or.link = args->link;
+	outp->or.id = or;
+	outp->or.link = link;
 	return 0;
 }
 
 int
 nvif_outp_acquire_pior(struct nvif_outp *outp)
 {
-	struct nvif_outp_acquire_v0 args;
 	int ret;
 
-	ret = nvif_outp_acquire(outp, NVIF_OUTP_ACQUIRE_V0_PIOR, &args);
-	NVIF_ERRON(ret, &outp->object, "[ACQUIRE PIOR] or:%d", args.or);
+	ret = nvif_outp_acquire(outp, NVIF_OUTP_PIOR, false);
+	NVIF_ERRON(ret, &outp->object, "[ACQUIRE PIOR] or:%d", outp->or.id);
 	return ret;
 }
 
 int
 nvif_outp_acquire_sor(struct nvif_outp *outp, bool hda)
 {
-	struct nvif_outp_acquire_v0 args;
 	int ret;
 
-	args.sor.hda = hda;
-
-	ret = nvif_outp_acquire(outp, NVIF_OUTP_ACQUIRE_V0_SOR, &args);
-	NVIF_ERRON(ret, &outp->object, "[ACQUIRE SOR] or:%d link:%d", args.or, args.link);
+	ret = nvif_outp_acquire(outp, NVIF_OUTP_SOR, hda);
+	NVIF_ERRON(ret, &outp->object, "[ACQUIRE SOR] or:%d link:%d", outp->or.id, outp->or.link);
 	return ret;
 }
 
 int
 nvif_outp_acquire_dac(struct nvif_outp *outp)
 {
-	struct nvif_outp_acquire_v0 args;
 	int ret;
 
-	ret = nvif_outp_acquire(outp, NVIF_OUTP_ACQUIRE_V0_DAC, &args);
-	NVIF_ERRON(ret, &outp->object, "[ACQUIRE DAC] or:%d", args.or);
+	ret = nvif_outp_acquire(outp, NVIF_OUTP_DAC, false);
+	NVIF_ERRON(ret, &outp->object, "[ACQUIRE DAC] or:%d", outp->or.id);
 	return ret;
 }
 
 static int
-nvif_outp_inherit(struct nvif_outp *outp,
-		  u8 proto,
-		  struct nvif_outp_inherit_v0 *args,
-		  u8 *proto_out)
+nvif_outp_inherit(struct nvif_outp *outp, enum nvif_outp_proto proto, u8 *head, u8 *proto_evo)
 {
+	u8 or, link;
 	int ret;
 
-	args->version = 0;
-	args->proto = proto;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_INHERIT, args, sizeof(*args));
+	ret = outp->impl->inherit(outp->priv, proto, &or, &link, head, proto_evo);
 	if (ret)
 		return ret;
 
-	outp->or.id = args->or;
-	outp->or.link = args->link;
-	*proto_out = args->proto;
+	outp->or.id = or;
+	outp->or.link = link;
 	return 0;
 }
 
 int
 nvif_outp_inherit_lvds(struct nvif_outp *outp, u8 *proto_out)
 {
-	struct nvif_outp_inherit_v0 args;
+	u8 head;
 	int ret;
 
-	ret = nvif_outp_inherit(outp, NVIF_OUTP_INHERIT_V0_LVDS, &args, proto_out);
+	ret = nvif_outp_inherit(outp, NVIF_OUTP_LVDS, &head, proto_out);
 	NVIF_ERRON(ret && ret != -ENODEV, &outp->object, "[INHERIT proto:LVDS] ret:%d", ret);
-	return ret ?: args.head;
+	return ret ?: head;
 }
 
 int
 nvif_outp_inherit_tmds(struct nvif_outp *outp, u8 *proto_out)
 {
-	struct nvif_outp_inherit_v0 args;
+	u8 head;
 	int ret;
 
-	ret = nvif_outp_inherit(outp, NVIF_OUTP_INHERIT_V0_TMDS, &args, proto_out);
+	ret = nvif_outp_inherit(outp, NVIF_OUTP_TMDS, &head, proto_out);
 	NVIF_ERRON(ret && ret != -ENODEV, &outp->object, "[INHERIT proto:TMDS] ret:%d", ret);
-	return ret ?: args.head;
+	return ret ?: head;
 }
 
 int
 nvif_outp_inherit_dp(struct nvif_outp *outp, u8 *proto_out)
 {
-	struct nvif_outp_inherit_v0 args;
+	u8 head;
 	int ret;
 
-	ret = nvif_outp_inherit(outp, NVIF_OUTP_INHERIT_V0_DP, &args, proto_out);
+	ret = nvif_outp_inherit(outp, NVIF_OUTP_DP, &head, proto_out);
 	NVIF_ERRON(ret && ret != -ENODEV, &outp->object, "[INHERIT proto:DP] ret:%d", ret);
 
 	// TODO: Get current link info
 
-	return ret ?: args.head;
+	return ret ?: head;
 }
 
 int
 nvif_outp_inherit_rgb_crt(struct nvif_outp *outp, u8 *proto_out)
 {
-	struct nvif_outp_inherit_v0 args;
+	u8 head;
 	int ret;
 
-	ret = nvif_outp_inherit(outp, NVIF_OUTP_INHERIT_V0_RGB_CRT, &args, proto_out);
+	ret = nvif_outp_inherit(outp, NVIF_OUTP_RGB_CRT, &head, proto_out);
 	NVIF_ERRON(ret && ret != -ENODEV, &outp->object, "[INHERIT proto:RGB_CRT] ret:%d", ret);
-	return ret ?: args.head;
+	return ret ?: head;
 }
 
 int
 nvif_outp_load_detect(struct nvif_outp *outp, u32 loadval)
 {
-	struct nvif_outp_load_detect_v0 args;
+	u8 load;
 	int ret;
 
-	args.version = 0;
-	args.data = loadval;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_LOAD_DETECT, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[LOAD_DETECT data:%08x] load:%02x", args.data, args.load);
-	return ret < 0 ? ret : args.load;
+	ret = outp->impl->load_detect(outp->priv, loadval, &load);
+	NVIF_ERRON(ret, &outp->object, "[LOAD_DETECT data:%08x] load:%02x", loadval, load);
+	return ret < 0 ? ret : load;
 }
 
 int
 nvif_outp_edid_get(struct nvif_outp *outp, u8 **pedid)
 {
-	struct nvif_outp_edid_get_v0 *args;
+	u16 size = 2048;
+	u8 *data;
 	int ret;
 
-	args = kmalloc(sizeof(*args), GFP_KERNEL);
-	if (!args)
+	data = kmalloc(size, GFP_KERNEL);
+	if (!data)
 		return -ENOMEM;
 
-	args->version = 0;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_EDID_GET, args, sizeof(*args));
-	NVIF_ERRON(ret, &outp->object, "[EDID_GET] size:%d", args->size);
+	ret = outp->impl->edid_get(outp->priv, data, &size);
+	NVIF_ERRON(ret, &outp->object, "[EDID_GET] size:%d", size);
 	if (ret)
 		goto done;
 
-	*pedid = kmemdup(args->data, args->size, GFP_KERNEL);
+	*pedid = kmemdup(data, size, GFP_KERNEL);
 	if (!*pedid) {
 		ret = -ENOMEM;
 		goto done;
 	}
 
-	ret = args->size;
+	ret = size;
 done:
-	kfree(args);
+	kfree(data);
 	return ret;
 }
 
 enum nvif_outp_detect_status
 nvif_outp_detect(struct nvif_outp *outp)
 {
-	struct nvif_outp_detect_v0 args;
+	enum nvif_outp_detect_status status;
 	int ret;
 
-	args.version = 0;
-
-	ret = nvif_mthd(&outp->object, NVIF_OUTP_V0_DETECT, &args, sizeof(args));
-	NVIF_ERRON(ret, &outp->object, "[DETECT] status:%02x", args.status);
+	ret = outp->impl->detect(outp->priv, &status);
+	NVIF_ERRON(ret, &outp->object, "[DETECT] status:%02x", status);
 	if (ret)
-		return UNKNOWN;
+		return NVIF_OUTP_DETECT_UNKNOWN;
 
-	switch (args.status) {
-	case NVIF_OUTP_DETECT_V0_NOT_PRESENT: return NOT_PRESENT;
-	case NVIF_OUTP_DETECT_V0_PRESENT: return PRESENT;
-	case NVIF_OUTP_DETECT_V0_UNKNOWN: return UNKNOWN;
-	default:
-		WARN_ON(1);
-		break;
-	}
-
-	return UNKNOWN;
+	return status;
 }
 
 void
 nvif_outp_dtor(struct nvif_outp *outp)
 {
-	nvif_object_dtor(&outp->object);
+	if (!outp->impl)
+		return;
+
+	outp->impl->del(outp->priv);
+	outp->impl = NULL;
 }
 
 int
 nvif_outp_ctor(struct nvif_disp *disp, const char *name, int id, struct nvif_outp *outp)
 {
-	struct nvif_outp_v0 args;
 	int ret;
 
-	args.version = 0;
-	args.id = id;
-
-	ret = nvif_object_ctor(&disp->object, name ?: "nvifOutp", id, NVIF_CLASS_OUTP,
-			       &args, sizeof(args), &outp->object);
+	ret = disp->impl->outp.new(disp->priv, id, &outp->impl, &outp->priv);
 	NVIF_ERRON(ret, &disp->object, "[NEW outp id:%d]", id);
 	if (ret)
 		return ret;
 
-	outp->id = args.id;
-
-	switch (args.type) {
-	case NVIF_OUTP_V0_TYPE_DAC : outp->info.type = NVIF_OUTP_DAC; break;
-	case NVIF_OUTP_V0_TYPE_SOR : outp->info.type = NVIF_OUTP_SOR; break;
-	case NVIF_OUTP_V0_TYPE_PIOR: outp->info.type = NVIF_OUTP_PIOR; break;
-		break;
-	default:
-		WARN_ON(1);
-		nvif_outp_dtor(outp);
-		return -EINVAL;
-	}
-
-	switch (args.proto) {
-	case NVIF_OUTP_V0_PROTO_RGB_CRT:
-		outp->info.proto = NVIF_OUTP_RGB_CRT;
-		outp->info.rgb_crt.freq_max = args.rgb_crt.freq_max;
-		break;
-	case NVIF_OUTP_V0_PROTO_TMDS:
-		outp->info.proto = NVIF_OUTP_TMDS;
-		outp->info.tmds.dual = args.tmds.dual;
-		break;
-	case NVIF_OUTP_V0_PROTO_LVDS:
-		outp->info.proto = NVIF_OUTP_LVDS;
-		outp->info.lvds.acpi_edid = args.lvds.acpi_edid;
-		break;
-	case NVIF_OUTP_V0_PROTO_DP:
-		outp->info.proto = NVIF_OUTP_DP;
-		outp->info.dp.aux = args.dp.aux;
-		outp->info.dp.mst = args.dp.mst;
-		outp->info.dp.increased_wm = args.dp.increased_wm;
-		outp->info.dp.link_nr = args.dp.link_nr;
-		outp->info.dp.link_bw = args.dp.link_bw;
-		break;
-	default:
-		WARN_ON(1);
-		nvif_outp_dtor(outp);
-		return -EINVAL;
-	}
-
-	outp->info.heads = args.heads;
-	outp->info.ddc = args.ddc;
-	outp->info.conn = args.conn;
-
+	nvif_object_ctor(&disp->object, name ?: "nvifOutp", id, 0, &outp->object);
 	outp->or.id = -1;
 	return 0;
 }

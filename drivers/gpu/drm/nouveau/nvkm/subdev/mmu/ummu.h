@@ -1,14 +1,17 @@
 #ifndef __NVKM_UMMU_H__
 #define __NVKM_UMMU_H__
-#define nvkm_ummu(p) container_of((p), struct nvkm_ummu, object)
 #include <core/object.h>
-#include "priv.h"
+struct nvkm_device;
 
-struct nvkm_ummu {
+#include <nvif/driverif.h>
+
+struct nvif_mmu_priv {
 	struct nvkm_object object;
 	struct nvkm_mmu *mmu;
+
+	struct nvif_mmu_impl impl;
 };
 
-int nvkm_ummu_new(struct nvkm_device *, const struct nvkm_oclass *,
-		  void *argv, u32 argc, struct nvkm_object **);
+int nvkm_ummu_new(struct nvkm_device *, const struct nvif_mmu_impl **, struct nvif_mmu_priv **,
+		  struct nvkm_object **);
 #endif

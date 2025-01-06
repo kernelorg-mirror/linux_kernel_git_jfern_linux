@@ -2,34 +2,36 @@
 #ifndef __NOUVEAU_CHAN_H__
 #define __NOUVEAU_CHAN_H__
 #include <nvif/object.h>
+#include <nvif/ctxdma.h>
 #include <nvif/event.h>
-#include <nvif/push.h>
+#include <nvif/chan.h>
 struct nvif_device;
 
 struct nouveau_channel {
-	struct {
-		struct nvif_push push;
-	} chan;
+	char name[TASK_COMM_LEN+16];
+	struct nvif_chan chan;
 
 	struct nouveau_cli *cli;
 	struct nouveau_vmm *vmm;
 
-	struct nvif_mem mem_userd;
-	struct nvif_object *userd;
+	struct {
+		struct nvif_mem mem;
+		struct nvif_map map;
+	} userd;
 
 	int runlist;
 	int chid;
 	u64 inst;
 	u32 token;
 
-	struct nvif_object vram;
-	struct nvif_object gart;
-	struct nvif_object nvsw;
+	struct nvif_ctxdma vram;
+	struct nvif_ctxdma gart;
+	struct nvif_engobj nvsw;
 
 	struct {
 		struct nouveau_bo *buffer;
 		struct nouveau_vma *vma;
-		struct nvif_object ctxdma;
+		struct nvif_ctxdma ctxdma;
 		u64 addr;
 	} push;
 
@@ -50,8 +52,7 @@ struct nouveau_channel {
 	u32 user_get;
 	u32 user_put;
 
-	struct nvif_object user;
-	struct nvif_object blit;
+	struct nvif_engobj blit;
 
 	struct nvif_event kill;
 	atomic_t killed;

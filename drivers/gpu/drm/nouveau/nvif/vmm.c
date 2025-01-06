@@ -20,244 +20,104 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 #include <nvif/vmm.h>
+#include <nvif/driverif.h>
 #include <nvif/mem.h>
-
-#include <nvif/if000c.h>
+#include <nvif/printf.h>
 
 int
 nvif_vmm_unmap(struct nvif_vmm *vmm, u64 addr)
 {
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_UNMAP,
-				&(struct nvif_vmm_unmap_v0) { .addr = addr },
-				sizeof(struct nvif_vmm_unmap_v0));
+	return vmm->impl->unmap(vmm->priv, addr);
 }
 
 int
 nvif_vmm_map(struct nvif_vmm *vmm, u64 addr, u64 size, void *argv, u32 argc,
 	     struct nvif_mem *mem, u64 offset)
 {
-	struct nvif_vmm_map_v0 *args;
-	u8 stack[48];
-	int ret;
-
-	if (sizeof(*args) + argc > sizeof(stack)) {
-		if (!(args = kmalloc(sizeof(*args) + argc, GFP_KERNEL)))
-			return -ENOMEM;
-	} else {
-		args = (void *)stack;
-	}
-
-	args->version = 0;
-	args->addr = addr;
-	args->size = size;
-	args->memory = nvif_handle(&mem->object);
-	args->offset = offset;
-	memcpy(args->data, argv, argc);
-
-	ret = nvif_object_mthd(&vmm->object, NVIF_VMM_V0_MAP,
-			       args, sizeof(*args) + argc);
-	if (args != (void *)stack)
-		kfree(args);
-	return ret;
+	return vmm->impl->map(vmm->priv, addr, size, argv, argc, mem->priv, offset);
 }
 
 void
 nvif_vmm_put(struct nvif_vmm *vmm, struct nvif_vma *vma)
 {
-	if (vma->size) {
-		WARN_ON(nvif_object_mthd(&vmm->object, NVIF_VMM_V0_PUT,
-					 &(struct nvif_vmm_put_v0) {
-						.addr = vma->addr,
-					 }, sizeof(struct nvif_vmm_put_v0)));
+	if (vmm && vma->size) {
+		WARN_ON(vmm->impl->put(vmm->priv, vma->addr));
 		vma->size = 0;
 	}
 }
 
 int
-nvif_vmm_get(struct nvif_vmm *vmm, enum nvif_vmm_get type, bool sparse,
+nvif_vmm_get(struct nvif_vmm *vmm, enum nvif_vmm_get_type type, bool sparse,
 	     u8 page, u8 align, u64 size, struct nvif_vma *vma)
 {
-	struct nvif_vmm_get_v0 args;
 	int ret;
 
-	args.version = vma->size = 0;
-	args.sparse = sparse;
-	args.page = page;
-	args.align = align;
-	args.size = size;
+	vma->size = 0;
 
-	switch (type) {
-	case ADDR: args.type = NVIF_VMM_GET_V0_ADDR; break;
-	case PTES: args.type = NVIF_VMM_GET_V0_PTES; break;
-	case LAZY: args.type = NVIF_VMM_GET_V0_LAZY; break;
-	default:
-		WARN_ON(1);
-		return -EINVAL;
-	}
+	ret = vmm->impl->get(vmm->priv, type, sparse, page, align, size, &vma->addr);
+	if (ret)
+		return ret;
 
-	ret = nvif_object_mthd(&vmm->object, NVIF_VMM_V0_GET,
-			       &args, sizeof(args));
-	if (ret == 0) {
-		vma->addr = args.addr;
-		vma->size = args.size;
-	}
-	return ret;
+	vma->size = size;
+	return 0;
 }
 
 int
 nvif_vmm_raw_get(struct nvif_vmm *vmm, u64 addr, u64 size,
 		 u8 shift)
 {
-	struct nvif_vmm_raw_v0 args = {
-		.version = 0,
-		.op = NVIF_VMM_RAW_V0_GET,
-		.addr = addr,
-		.size = size,
-		.shift = shift,
-	};
-
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_RAW,
-				&args, sizeof(args));
+	return vmm->impl->raw.get(vmm->priv, shift, addr, size);
 }
 
 int
 nvif_vmm_raw_put(struct nvif_vmm *vmm, u64 addr, u64 size, u8 shift)
 {
-	struct nvif_vmm_raw_v0 args = {
-		.version = 0,
-		.op = NVIF_VMM_RAW_V0_PUT,
-		.addr = addr,
-		.size = size,
-		.shift = shift,
-	};
-
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_RAW,
-				&args, sizeof(args));
+	return vmm->impl->raw.put(vmm->priv, shift, addr, size);
 }
 
 int
 nvif_vmm_raw_map(struct nvif_vmm *vmm, u64 addr, u64 size, u8 shift,
 		 void *argv, u32 argc, struct nvif_mem *mem, u64 offset)
 {
-	struct nvif_vmm_raw_v0 args = {
-		.version = 0,
-		.op = NVIF_VMM_RAW_V0_MAP,
-		.addr = addr,
-		.size = size,
-		.shift = shift,
-		.memory = nvif_handle(&mem->object),
-		.offset = offset,
-		.argv = (u64)(uintptr_t)argv,
-		.argc = argc,
-	};
-
-
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_RAW,
-				&args, sizeof(args));
+	return vmm->impl->raw.map(vmm->priv, shift, addr, size, argv, argc, mem->priv, offset);
 }
 
 int
 nvif_vmm_raw_unmap(struct nvif_vmm *vmm, u64 addr, u64 size,
 		   u8 shift, bool sparse)
 {
-	struct nvif_vmm_raw_v0 args = {
-		.version = 0,
-		.op = NVIF_VMM_RAW_V0_UNMAP,
-		.addr = addr,
-		.size = size,
-		.shift = shift,
-		.sparse = sparse,
-	};
-
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_RAW,
-				&args, sizeof(args));
+	return vmm->impl->raw.unmap(vmm->priv, shift, addr, size, sparse);
 }
 
 int
 nvif_vmm_raw_sparse(struct nvif_vmm *vmm, u64 addr, u64 size, bool ref)
 {
-	struct nvif_vmm_raw_v0 args = {
-		.version = 0,
-		.op = NVIF_VMM_RAW_V0_SPARSE,
-		.addr = addr,
-		.size = size,
-		.ref = ref,
-	};
-
-	return nvif_object_mthd(&vmm->object, NVIF_VMM_V0_RAW,
-				&args, sizeof(args));
+	return vmm->impl->raw.sparse(vmm->priv, addr, size, ref);
 }
 
 void
 nvif_vmm_dtor(struct nvif_vmm *vmm)
 {
-	kfree(vmm->page);
-	nvif_object_dtor(&vmm->object);
+	if (!vmm->impl)
+		return;
+
+	vmm->impl->del(vmm->priv);
+	vmm->impl = NULL;
 }
 
 int
-nvif_vmm_ctor(struct nvif_mmu *mmu, const char *name, s32 oclass,
+nvif_vmm_ctor(struct nvif_mmu *mmu, const char *name,
 	      enum nvif_vmm_type type, u64 addr, u64 size, void *argv, u32 argc,
 	      struct nvif_vmm *vmm)
 {
-	struct nvif_vmm_v0 *args;
-	u32 argn = sizeof(*args) + argc;
-	int ret = -ENOSYS, i;
+	const u32 oclass = mmu->impl->vmm.oclass;
+	int ret;
 
-	vmm->object.client = NULL;
-	vmm->page = NULL;
-
-	if (!(args = kmalloc(argn, GFP_KERNEL)))
-		return -ENOMEM;
-	args->version = 0;
-	args->addr = addr;
-	args->size = size;
-
-	switch (type) {
-	case UNMANAGED: args->type = NVIF_VMM_V0_TYPE_UNMANAGED; break;
-	case MANAGED: args->type = NVIF_VMM_V0_TYPE_MANAGED; break;
-	case RAW: args->type = NVIF_VMM_V0_TYPE_RAW; break;
-	default:
-		WARN_ON(1);
-		return -EINVAL;
-	}
-
-	memcpy(args->data, argv, argc);
-
-	ret = nvif_object_ctor(&mmu->object, name ? name : "nvifVmm", 0,
-			       oclass, args, argn, &vmm->object);
+	ret = mmu->impl->vmm.new(mmu->priv, type, addr, size, argv, argc, &vmm->impl, &vmm->priv);
+	NVIF_ERRON(ret, &mmu->object, "[NEW vmm%08x]", oclass);
 	if (ret)
-		goto done;
+		return ret;
 
-	vmm->start = args->addr;
-	vmm->limit = args->size;
-
-	vmm->page_nr = args->page_nr;
-	vmm->page = kmalloc_array(vmm->page_nr, sizeof(*vmm->page),
-				  GFP_KERNEL);
-	if (!vmm->page) {
-		ret = -ENOMEM;
-		goto done;
-	}
-
-	for (i = 0; i < vmm->page_nr; i++) {
-		struct nvif_vmm_page_v0 args = { .index = i };
-
-		ret = nvif_object_mthd(&vmm->object, NVIF_VMM_V0_PAGE,
-				       &args, sizeof(args));
-		if (ret)
-			break;
-
-		vmm->page[i].shift = args.shift;
-		vmm->page[i].sparse = args.sparse;
-		vmm->page[i].vram = args.vram;
-		vmm->page[i].host = args.host;
-		vmm->page[i].comp = args.comp;
-	}
-
-done:
-	if (ret)
-		nvif_vmm_dtor(vmm);
-	kfree(args);
+	nvif_object_ctor(&mmu->object, name ?: "nvifVmm", 0, oclass, &vmm->object);
 	return ret;
 }

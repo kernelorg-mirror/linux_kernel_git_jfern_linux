@@ -52,7 +52,7 @@ nv10_fence_sync(struct nouveau_fence *fence,
 u32
 nv10_fence_read(struct nouveau_channel *chan)
 {
-	return NVIF_RD32(&chan->user, NV06E, REFERENCE);
+	return NVIF_RD32(&chan->userd, NV06E, REFERENCE);
 }
 
 void
@@ -60,7 +60,7 @@ nv10_fence_context_del(struct nouveau_channel *chan)
 {
 	struct nv10_fence_chan *fctx = chan->fence;
 	nouveau_fence_context_del(&fctx->base);
-	nvif_object_dtor(&fctx->sema);
+	nvif_ctxdma_dtor(&fctx->sema);
 	chan->fence = NULL;
 	nouveau_fence_context_free(&fctx->base);
 }

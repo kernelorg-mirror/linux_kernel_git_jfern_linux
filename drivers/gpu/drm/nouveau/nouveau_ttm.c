@@ -70,7 +70,7 @@ nouveau_vram_manager_new(struct ttm_resource_manager *man,
 	struct nouveau_drm *drm = nouveau_bdev(bo->bdev);
 	int ret;
 
-	if (drm->client.device.info.ram_size == 0)
+	if (drm->device.impl->ram_size == 0)
 		return -ENOMEM;
 
 	ret = nouveau_mem_new(drm, nvbo->kind, nvbo->comp, res);
@@ -138,7 +138,7 @@ nv04_gart_manager_new(struct ttm_resource_manager *man,
 
 	mem = nouveau_mem(*res);
 	ttm_resource_init(bo, place, *res);
-	ret = nvif_vmm_get(&drm->client.vmm.vmm, PTES, false, 12, 0,
+	ret = nvif_vmm_get(&drm->cli.vmm.vmm, NVIF_VMM_GET_PTES, false, 12, 0,
 			   (long)(*res)->size, &mem->vma[0]);
 	if (ret) {
 		nouveau_mem_del(man, *res);
@@ -159,7 +159,7 @@ const struct ttm_resource_manager_func nv04_gart_manager = {
 static int
 nouveau_ttm_init_host(struct nouveau_drm *drm, u8 kind)
 {
-	struct nvif_mmu *mmu = &drm->client.mmu;
+	struct nvif_mmu *mmu = &drm->cli.mmu;
 	int typei;
 
 	typei = nvif_mmu_type(mmu, NVIF_MEM_HOST | NVIF_MEM_MAPPABLE |
@@ -180,7 +180,7 @@ nouveau_ttm_init_host(struct nouveau_drm *drm, u8 kind)
 static int
 nouveau_ttm_init_vram(struct nouveau_drm *drm)
 {
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA) {
 		struct ttm_resource_manager *man = kzalloc(sizeof(*man), GFP_KERNEL);
 
 		if (!man)
@@ -204,7 +204,7 @@ nouveau_ttm_fini_vram(struct nouveau_drm *drm)
 {
 	struct ttm_resource_manager *man = ttm_manager_type(&drm->ttm.bdev, TTM_PL_VRAM);
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA) {
 		ttm_resource_manager_set_used(man, false);
 		ttm_resource_manager_evict_all(&drm->ttm.bdev, man);
 		ttm_resource_manager_cleanup(man);
@@ -221,7 +221,7 @@ nouveau_ttm_init_gtt(struct nouveau_drm *drm)
 	unsigned long size_pages = drm->gem.gart_available >> PAGE_SHIFT;
 	const struct ttm_resource_manager_func *func = NULL;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA)
 		func = &nouveau_gart_manager;
 	else if (!drm->agp.bridge)
 		func = &nv04_gart_manager;
@@ -246,8 +246,7 @@ nouveau_ttm_fini_gtt(struct nouveau_drm *drm)
 {
 	struct ttm_resource_manager *man = ttm_manager_type(&drm->ttm.bdev, TTM_PL_TT);
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA &&
-	    drm->agp.bridge)
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA && drm->agp.bridge)
 		ttm_range_man_fini(&drm->ttm.bdev, TTM_PL_TT);
 	else {
 		ttm_resource_manager_set_used(man, false);
@@ -263,23 +262,23 @@ nouveau_ttm_init(struct nouveau_drm *drm)
 {
 	struct nvkm_device *device = nvxx_device(drm);
 	struct nvkm_pci *pci = device->pci;
-	struct nvif_mmu *mmu = &drm->client.mmu;
-	struct drm_device *dev = drm->dev;
+	struct nvif_mmu *mmu = &drm->cli.mmu;
+	struct drm_device *dev = &drm->dev;
 	int typei, ret;
 
 	ret = nouveau_ttm_init_host(drm, 0);
 	if (ret)
 		return ret;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA &&
-	    drm->client.device.info.chipset != 0x50) {
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA &&
+	    drm->device.impl->chipset != 0x50) {
 		ret = nouveau_ttm_init_host(drm, NVIF_MEM_KIND);
 		if (ret)
 			return ret;
 	}
 
-	if (drm->client.device.info.platform != NV_DEVICE_INFO_V0_SOC &&
-	    drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->platform != NVIF_DEVICE_SOC &&
+	    drm->device.impl->family >= NVIF_DEVICE_TESLA) {
 		typei = nvif_mmu_type(mmu, NVIF_MEM_VRAM | NVIF_MEM_MAPPABLE |
 					   NVIF_MEM_KIND |
 					   NVIF_MEM_COMP |
@@ -299,18 +298,18 @@ nouveau_ttm_init(struct nouveau_drm *drm)
 		drm->agp.cma = pci->agp.cma;
 	}
 
-	ret = ttm_device_init(&drm->ttm.bdev, &nouveau_bo_driver, drm->dev->dev,
+	ret = ttm_device_init(&drm->ttm.bdev, &nouveau_bo_driver, dev->dev->parent,
 				  dev->anon_inode->i_mapping,
 				  dev->vma_offset_manager,
-				  drm_need_swiotlb(drm->client.mmu.dmabits),
-				  drm->client.mmu.dmabits <= 32);
+				  drm_need_swiotlb(drm->mmu.impl->dmabits),
+				  drm->mmu.impl->dmabits <= 32);
 	if (ret) {
 		NV_ERROR(drm, "error initialising bo driver, %d\n", ret);
 		return ret;
 	}
 
 	/* VRAM init */
-	drm->gem.vram_available = drm->client.device.info.ram_user;
+	drm->gem.vram_available = drm->device.impl->ram_user;
 
 	arch_io_reserve_memtype_wc(device->func->resource_addr(device, 1),
 				   device->func->resource_size(device, 1));
@@ -326,7 +325,7 @@ nouveau_ttm_init(struct nouveau_drm *drm)
 
 	/* GART init */
 	if (!drm->agp.bridge) {
-		drm->gem.gart_available = drm->client.vmm.vmm.limit;
+		drm->gem.gart_available = drm->cli.vmm.vmm.impl->limit;
 	} else {
 		drm->gem.gart_available = drm->agp.size;
 	}

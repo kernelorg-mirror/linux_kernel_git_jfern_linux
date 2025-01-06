@@ -23,104 +23,103 @@
  */
 #include <core/client.h>
 #include <core/device.h>
+#include <core/event.h>
 #include <core/option.h>
+#include <device/user.h>
 
 #include <nvif/class.h>
+#include <nvif/driverif.h>
 #include <nvif/event.h>
-#include <nvif/if0000.h>
 #include <nvif/unpack.h>
 
-static int
-nvkm_uclient_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		 struct nvkm_object **pobject)
+int
+nvkm_client_event(struct nvkm_client *client, u64 token, void *repv, u32 repc)
 {
-	union {
-		struct nvif_client_v0 v0;
-	} *args = argv;
-	struct nvkm_client *client;
-	int ret = -ENOSYS;
+	enum nvif_event_stat stat = client->device->driver->event(token, repv, repc);
 
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, false))){
-		args->v0.name[sizeof(args->v0.name) - 1] = 0;
-		ret = nvkm_client_new(args->v0.name, oclass->client->device, NULL,
-				      NULL, oclass->client->event, &client);
-		if (ret)
-			return ret;
-	} else
+	if (stat == NVIF_EVENT_KEEP)
+		return NVKM_EVENT_KEEP;
+
+	return NVKM_EVENT_DROP;
+}
+
+static int
+nvkm_client_new_device(struct nvif_client_priv *client,
+		       const struct nvif_device_impl **pimpl, struct nvif_device_priv **ppriv)
+{
+	struct nvkm_object *object;
+	int ret;
+
+	ret = nvkm_udevice_new(client->device, pimpl, ppriv, &object);
+	if (ret)
 		return ret;
 
-	client->object.client = oclass->client;
-	client->object.handle = oclass->handle;
-	client->object.object = oclass->object;
-	client->debug = oclass->client->debug;
-	*pobject = &client->object;
+	nvkm_object_link_(client, &client->object, object);
 	return 0;
 }
 
-static const struct nvkm_sclass
-nvkm_uclient_sclass = {
-	.oclass = NVIF_CLASS_CLIENT,
-	.minver = 0,
-	.maxver = 0,
-	.ctor = nvkm_uclient_new,
+static int
+nvkm_client_new_client(struct nvif_client_priv *parent,
+		       const struct nvif_client_impl **pimpl, struct nvif_client_priv **ppriv)
+{
+	struct nvkm_client *client;
+	int ret;
+
+	ret = nvkm_client_new("client", parent->device, pimpl, &client);
+	if (ret)
+		return ret;
+
+	*ppriv = client;
+
+	nvkm_object_link_(parent, &parent->object, &client->object);
+	return 0;
+}
+
+static void
+nvkm_client_del(struct nvif_client_priv *client)
+{
+	struct nvkm_object *object = &client->object;
+
+	nvkm_object_del(&object);
+}
+
+const struct nvif_client_impl
+nvkm_client_impl = {
+	.del = nvkm_client_del,
+	.client.new = nvkm_client_new_client,
+	.device.new = nvkm_client_new_device,
 };
-
-static int
-nvkm_client_child_new(const struct nvkm_oclass *oclass,
-		      void *data, u32 size, struct nvkm_object **pobject)
-{
-	return oclass->base.ctor(oclass, data, size, pobject);
-}
-
-static int
-nvkm_client_child_get(struct nvkm_object *object, int index,
-		      struct nvkm_oclass *oclass)
-{
-	const struct nvkm_sclass *sclass;
-
-	switch (index) {
-	case 0: sclass = &nvkm_uclient_sclass; break;
-	case 1: sclass = &nvkm_udevice_sclass; break;
-	default:
-		return -EINVAL;
-	}
-
-	oclass->ctor = nvkm_client_child_new;
-	oclass->base = *sclass;
-	return 0;
-}
 
 static void *
 nvkm_client_dtor(struct nvkm_object *object)
 {
-	return nvkm_client(object);
+	return container_of(object, struct nvkm_client, object);
 }
 
 static const struct nvkm_object_func
 nvkm_client = {
 	.dtor = nvkm_client_dtor,
-	.sclass = nvkm_client_child_get,
 };
 
 int
-nvkm_client_new(const char *name, u64 device, const char *cfg, const char *dbg,
-		int (*event)(u64, void *, u32), struct nvkm_client **pclient)
+nvkm_client_new(const char *name, struct nvkm_device *device,
+		const struct nvif_client_impl **pimpl, struct nvif_client_priv **ppriv)
 {
-	struct nvkm_oclass oclass = { .base = nvkm_uclient_sclass };
+	struct nvkm_oclass oclass = {};
 	struct nvkm_client *client;
 
-	if (!(client = *pclient = kzalloc(sizeof(*client), GFP_KERNEL)))
+	client = kzalloc(sizeof(*client), GFP_KERNEL);
+	if (!client)
 		return -ENOMEM;
 	oclass.client = client;
 
 	nvkm_object_ctor(&nvkm_client, &oclass, &client->object);
 	snprintf(client->name, sizeof(client->name), "%s", name);
 	client->device = device;
-	client->debug = nvkm_dbgopt(dbg, "CLIENT");
-	client->objroot = RB_ROOT;
+	client->debug = NV_DBG_ERROR;
 	spin_lock_init(&client->obj_lock);
-	client->event = event;
-	INIT_LIST_HEAD(&client->umem);
-	spin_lock_init(&client->lock);
+
+	*pimpl = &nvkm_client_impl;
+	*ppriv = client;
 	return 0;
 }

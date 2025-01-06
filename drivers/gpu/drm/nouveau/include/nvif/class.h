@@ -3,10 +3,6 @@
 #define __NVIF_CLASS_H__
 
 /* these class numbers are made up by us, and not nvidia-assigned */
-#define NVIF_CLASS_CLIENT                            /* if0000.h */ -0x00000000
-
-#define NVIF_CLASS_CONTROL                           /* if0001.h */ -0x00000001
-
 #define NVIF_CLASS_SW_NV04                           /* if0004.h */ -0x00000004
 #define NVIF_CLASS_SW_NV10                           /* if0005.h */ -0x00000005
 #define NVIF_CLASS_SW_NV50                           /* if0005.h */ -0x00000006
@@ -37,7 +33,6 @@
 #define NVIF_CLASS_HEAD                              /* if0013.h */  0x80000013
 #define NVIF_CLASS_DISP_CHAN                         /* if0014.h */  0x80000014
 
-#define NVIF_CLASS_CHAN                              /* if0020.h */  0x80000020
 #define NVIF_CLASS_CGRP                              /* if0021.h */  0x80000021
 
 /* the below match nvidia-assigned (either in hw, or sw) class numbers */

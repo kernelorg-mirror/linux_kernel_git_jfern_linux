@@ -51,15 +51,14 @@ nv50_fence_context_new(struct nouveau_channel *chan)
 	fctx->base.read = nv10_fence_read;
 	fctx->base.sync = nv17_fence_sync;
 
-	ret = nvif_object_ctor(&chan->user, "fenceCtxDma", NvSema,
-			       NV_DMA_IN_MEMORY,
-			       &(struct nv_dma_v0) {
+	ret = nvif_chan_ctxdma_ctor(&chan->chan, "fenceCtxDma", NvSema, NV_DMA_IN_MEMORY,
+				    &(struct nv_dma_v0) {
 					.target = NV_DMA_V0_TARGET_VRAM,
 					.access = NV_DMA_V0_ACCESS_RDWR,
 					.start = start,
 					.limit = limit,
-			       }, sizeof(struct nv_dma_v0),
-			       &fctx->sema);
+				    }, sizeof(struct nv_dma_v0),
+				    &fctx->sema);
 	if (ret)
 		nv10_fence_context_del(chan);
 	return ret;
@@ -81,7 +80,7 @@ nv50_fence_create(struct nouveau_drm *drm)
 	priv->base.context_del = nv10_fence_context_del;
 	spin_lock_init(&priv->lock);
 
-	ret = nouveau_bo_new(&drm->client, 4096, 0x1000,
+	ret = nouveau_bo_new(&drm->cli, 4096, 0x1000,
 			     NOUVEAU_GEM_DOMAIN_VRAM,
 			     0, 0x0000, NULL, NULL, &priv->bo);
 	if (!ret) {

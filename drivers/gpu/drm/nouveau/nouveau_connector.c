@@ -410,7 +410,7 @@ static struct nouveau_encoder *
 nouveau_connector_ddc_detect(struct drm_connector *connector)
 {
 	struct drm_device *dev = connector->dev;
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	struct pci_dev *pdev = to_pci_dev(dev->dev->parent);
 	struct nouveau_connector *conn = nouveau_connector(connector);
 	struct nouveau_encoder *nv_encoder = NULL, *found = NULL;
 	struct drm_encoder *encoder;
@@ -434,11 +434,11 @@ nouveau_connector_ddc_detect(struct drm_connector *connector)
 			} else {
 				status = nvif_outp_detect(&nv_encoder->outp);
 				switch (status) {
-				case PRESENT:
+				case NVIF_OUTP_DETECT_PRESENT:
 					return nv_encoder;
-				case NOT_PRESENT:
+				case NVIF_OUTP_DETECT_NOT_PRESENT:
 					continue;
-				case UNKNOWN:
+				case NVIF_OUTP_DETECT_UNKNOWN:
 					break;
 				default:
 					WARN_ON(1);
@@ -476,7 +476,7 @@ nouveau_connector_of_detect(struct drm_connector *connector)
 	struct drm_device *dev = connector->dev;
 	struct nouveau_connector *nv_connector = nouveau_connector(connector);
 	struct nouveau_encoder *nv_encoder;
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	struct pci_dev *pdev = to_pci_dev(dev->dev->parent);
 	struct device_node *cn, *dn = pci_device_to_OF_node(pdev);
 
 	if (!dn ||
@@ -507,19 +507,18 @@ nouveau_connector_set_encoder(struct drm_connector *connector,
 	struct nouveau_connector *nv_connector = nouveau_connector(connector);
 	struct nouveau_drm *drm = nouveau_drm(connector->dev);
 	struct drm_device *dev = connector->dev;
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
 
 	if (nv_connector->detected_encoder == nv_encoder)
 		return;
 	nv_connector->detected_encoder = nv_encoder;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA) {
 		if (nv_encoder->dcb->type == DCB_OUTPUT_DP)
 			connector->interlace_allowed =
 				nv_encoder->caps.dp_interlace;
 		else
 			connector->interlace_allowed =
-				drm->client.device.info.family < NV_DEVICE_INFO_V0_VOLTA;
+				drm->device.impl->family < NVIF_DEVICE_VOLTA;
 		connector->doublescan_allowed = true;
 	} else
 	if (nv_encoder->dcb->type == DCB_OUTPUT_LVDS ||
@@ -528,10 +527,10 @@ nouveau_connector_set_encoder(struct drm_connector *connector,
 		connector->interlace_allowed = false;
 	} else {
 		connector->doublescan_allowed = true;
-		if (drm->client.device.info.family == NV_DEVICE_INFO_V0_KELVIN ||
-		    (drm->client.device.info.family == NV_DEVICE_INFO_V0_CELSIUS &&
-		     (pdev->device & 0x0ff0) != 0x0100 &&
-		     (pdev->device & 0x0ff0) != 0x0150))
+		if (drm->device.impl->family == NVIF_DEVICE_KELVIN ||
+		    (drm->device.impl->family == NVIF_DEVICE_CELSIUS &&
+		     (drm->device.impl->pci.device_id & 0x0ff0) != 0x0100 &&
+		     (drm->device.impl->pci.device_id & 0x0ff0) != 0x0150))
 			/* HW is broken */
 			connector->interlace_allowed = false;
 		else
@@ -1048,7 +1047,7 @@ get_tmds_link_bandwidth(struct drm_connector *connector)
 		/* Note: these limits are conservative, some Fermi's
 		 * can do 297 MHz. Unclear how this can be determined.
 		 */
-		if (drm->client.device.info.chipset >= 0x120) {
+		if (drm->device.impl->chipset >= 0x120) {
 			const int max_tmds_clock =
 				info->hdmi.scdc.scrambling.supported ?
 				594000 : 340000;
@@ -1056,18 +1055,18 @@ get_tmds_link_bandwidth(struct drm_connector *connector)
 				min(info->max_tmds_clock, max_tmds_clock) :
 				max_tmds_clock;
 		}
-		if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_KEPLER)
+		if (drm->device.impl->family >= NVIF_DEVICE_KEPLER)
 			return 297000;
-		if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_FERMI)
+		if (drm->device.impl->family >= NVIF_DEVICE_FERMI)
 			return 225000;
 	}
 
 	if (dcb->location != DCB_LOC_ON_CHIP ||
-	    drm->client.device.info.chipset >= 0x46)
+	    drm->device.impl->chipset >= 0x46)
 		return 165000 * duallink_scale;
-	else if (drm->client.device.info.chipset >= 0x40)
+	else if (drm->device.impl->chipset >= 0x40)
 		return 155000 * duallink_scale;
-	else if (drm->client.device.info.chipset >= 0x18)
+	else if (drm->device.impl->chipset >= 0x18)
 		return 135000 * duallink_scale;
 	else
 		return 112000 * duallink_scale;
@@ -1202,7 +1201,7 @@ nouveau_connector_hpd(struct nouveau_connector *nv_connector, u64 bits)
 	spin_unlock_irqrestore(&drm->hpd_lock, flags);
 }
 
-static int
+static enum nvif_event_stat
 nouveau_connector_irq(struct nvif_event *event, void *repv, u32 repc)
 {
 	struct nouveau_connector *nv_connector = container_of(event, typeof(*nv_connector), irq);
@@ -1211,7 +1210,7 @@ nouveau_connector_irq(struct nvif_event *event, void *repv, u32 repc)
 	return NVIF_EVENT_KEEP;
 }
 
-static int
+static enum nvif_event_stat
 nouveau_connector_hotplug(struct nvif_event *event, void *repv, u32 repc)
 {
 	struct nouveau_connector *nv_connector = container_of(event, typeof(*nv_connector), hpd);
@@ -1314,7 +1313,7 @@ nouveau_connector_create(struct drm_device *dev, int index)
 			return ERR_PTR(ret);
 		}
 
-		switch (nv_connector->conn.info.type) {
+		switch (nv_connector->conn.impl->type) {
 		case NVIF_CONN_VGA      : type = DCB_CONNECTOR_VGA; break;
 		case NVIF_CONN_DVI_I    : type = DCB_CONNECTOR_DVI_I; break;
 		case NVIF_CONN_DVI_D    : type = DCB_CONNECTOR_DVI_D; break;
@@ -1351,7 +1350,7 @@ nouveau_connector_create(struct drm_device *dev, int index)
 		 * figure out something suitable ourselves
 		 */
 		if (nv_connector->type == DCB_CONNECTOR_NONE &&
-		    !WARN_ON(drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)) {
+		    !WARN_ON(drm->device.impl->family >= NVIF_DEVICE_TESLA)) {
 			struct dcb_table *dcbt = &drm->vbios.dcb;
 			u32 encoders = 0;
 			int i;

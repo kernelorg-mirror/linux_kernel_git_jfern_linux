@@ -791,44 +791,13 @@ gv100_disp_core = {
 	.mthd = &gv100_disp_core_mthd,
 };
 
-#define gv100_disp_caps(p) container_of((p), struct gv100_disp_caps, object)
-
-struct gv100_disp_caps {
-	struct nvkm_object object;
-	struct nvkm_disp *disp;
-};
-
-static int
-gv100_disp_caps_map(struct nvkm_object *object, void *argv, u32 argc,
-		    enum nvkm_object_map *type, u64 *addr, u64 *size)
+void
+gv100_disp_caps(struct nvkm_disp *disp, u64 *addr, u64 *size)
 {
-	struct gv100_disp_caps *caps = gv100_disp_caps(object);
-	struct nvkm_device *device = caps->disp->engine.subdev.device;
-	*type = NVKM_OBJECT_MAP_IO;
+	struct nvkm_device *device = disp->engine.subdev.device;
+
 	*addr = 0x640000 + device->func->resource_addr(device, 0);
 	*size = 0x1000;
-	return 0;
-}
-
-static const struct nvkm_object_func
-gv100_disp_caps = {
-	.map = gv100_disp_caps_map,
-};
-
-int
-gv100_disp_caps_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		    struct nvkm_object **pobject)
-{
-	struct nvkm_disp *disp = nvkm_udisp(oclass->parent);
-	struct gv100_disp_caps *caps;
-
-	if (!(caps = kzalloc(sizeof(*caps), GFP_KERNEL)))
-		return -ENOMEM;
-	*pobject = &caps->object;
-
-	nvkm_object_ctor(&gv100_disp_caps, oclass, &caps->object);
-	caps->disp = disp;
-	return 0;
 }
 
 void
@@ -1235,14 +1204,13 @@ gv100_disp = {
 	.head = { .cnt = gv100_head_cnt, .new = gv100_head_new },
 	.sor = { .cnt = gv100_sor_cnt, .new = gv100_sor_new },
 	.ramht_size = 0x2000,
-	.root = {  0, 0,GV100_DISP },
 	.user = {
-		{{-1,-1,GV100_DISP_CAPS                  }, gv100_disp_caps_new },
-		{{ 0, 0,GV100_DISP_CURSOR                },  nvkm_disp_chan_new, &gv100_disp_curs },
-		{{ 0, 0,GV100_DISP_WINDOW_IMM_CHANNEL_DMA},  nvkm_disp_wndw_new, &gv100_disp_wimm },
-		{{ 0, 0,GV100_DISP_CORE_CHANNEL_DMA      },  nvkm_disp_core_new, &gv100_disp_core },
-		{{ 0, 0,GV100_DISP_WINDOW_CHANNEL_DMA    },  nvkm_disp_wndw_new, &gv100_disp_wndw },
-		{}
+		.root = { GV100_DISP },
+		.caps = { GV100_DISP_CAPS                  ,  gv100_disp_caps },
+		.curs = { GV100_DISP_CURSOR                , &gv100_disp_curs },
+		.wimm = { GV100_DISP_WINDOW_IMM_CHANNEL_DMA, &gv100_disp_wimm },
+		.core = { GV100_DISP_CORE_CHANNEL_DMA      , &gv100_disp_core },
+		.wndw = { GV100_DISP_WINDOW_CHANNEL_DMA    , &gv100_disp_wndw },
 	},
 };
 

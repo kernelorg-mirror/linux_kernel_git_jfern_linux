@@ -24,59 +24,88 @@
 #include <nvif/printf.h>
 
 #include <nvif/class.h>
-#include <nvif/if0010.h>
+
+void
+nvif_disp_caps_dtor(struct nvif_disp_caps *caps)
+{
+	if (!caps->impl)
+		return;
+
+	nvif_object_unmap_cpu(&caps->map);
+
+	caps->impl->del(caps->priv);
+	caps->impl = NULL;
+}
+
+int
+nvif_disp_caps_ctor(struct nvif_disp *disp, const char *name, struct nvif_disp_caps *caps)
+{
+	const u32 oclass = disp->impl->caps.oclass;
+	int ret;
+
+	ret = disp->impl->caps.new(disp->priv, &caps->impl, &caps->priv);
+	NVIF_ERRON(ret, &disp->object, "[NEW caps%04x]", oclass);
+	if (ret)
+		return ret;
+
+	nvif_object_ctor(&disp->object, name ?: "nvifDispCaps", 0, oclass, &caps->object);
+
+	ret = nvif_object_map_cpu(&caps->object, &caps->impl->map, &caps->map);
+	if (ret)
+		nvif_disp_caps_dtor(caps);
+
+	return ret;
+}
 
 void
 nvif_disp_dtor(struct nvif_disp *disp)
 {
-	nvif_object_dtor(&disp->object);
+	if (!disp->impl)
+		return;
+
+	disp->impl->del(disp->priv);
+	disp->impl = NULL;
 }
 
 int
-nvif_disp_ctor(struct nvif_device *device, const char *name, s32 oclass, struct nvif_disp *disp)
+nvif_disp_ctor(struct nvif_device *device, const char *name, struct nvif_disp *disp)
 {
-	static const struct nvif_mclass disps[] = {
-		{ AD102_DISP, 0 },
-		{ GA102_DISP, 0 },
-		{ TU102_DISP, 0 },
-		{ GV100_DISP, 0 },
-		{ GP102_DISP, 0 },
-		{ GP100_DISP, 0 },
-		{ GM200_DISP, 0 },
-		{ GM107_DISP, 0 },
-		{ GK110_DISP, 0 },
-		{ GK104_DISP, 0 },
-		{ GF110_DISP, 0 },
-		{ GT214_DISP, 0 },
-		{ GT206_DISP, 0 },
-		{ GT200_DISP, 0 },
-		{   G82_DISP, 0 },
-		{  NV50_DISP, 0 },
-		{  NV04_DISP, 0 },
-		{}
-	};
-	struct nvif_disp_v0 args;
-	int cid, ret;
+	const u32 oclass = device->impl->disp.oclass;
+	int ret;
 
-	cid = nvif_sclass(&device->object, disps, oclass);
-	disp->object.client = NULL;
-	if (cid < 0) {
+	switch (oclass) {
+	case AD102_DISP:
+	case GA102_DISP:
+	case TU102_DISP:
+	case GV100_DISP:
+	case GP102_DISP:
+	case GP100_DISP:
+	case GM200_DISP:
+	case GM107_DISP:
+	case GK110_DISP:
+	case GK104_DISP:
+	case GF110_DISP:
+	case GT214_DISP:
+	case GT206_DISP:
+	case GT200_DISP:
+	case   G82_DISP:
+	case  NV50_DISP:
+	case  NV04_DISP:
+		break;
+	default:
 		NVIF_DEBUG(&device->object, "[NEW disp%04x] not supported", oclass);
-		return cid;
+		return -ENODEV;
 	}
 
-	args.version = 0;
-
-	ret = nvif_object_ctor(&device->object, name ?: "nvifDisp", 0,
-			       disps[cid].oclass, &args, sizeof(args), &disp->object);
-	NVIF_ERRON(ret, &device->object, "[NEW disp%04x]", disps[cid].oclass);
+	ret = device->impl->disp.new(device->priv, &disp->impl, &disp->priv);
+	NVIF_ERRON(ret, &device->object, "[NEW disp%04x]", oclass);
 	if (ret)
 		return ret;
 
-	NVIF_DEBUG(&disp->object, "[NEW] conn_mask:%08x outp_mask:%08x head_mask:%08x",
-		   args.conn_mask, args.outp_mask, args.head_mask);
-	disp->conn_mask = args.conn_mask;
-	disp->outp_mask = args.outp_mask;
-	disp->head_mask = args.head_mask;
+	nvif_object_ctor(&device->object, name ?: "nvifDisp", 0, oclass, &disp->object);
+	disp->device = device;
+	disp->conn_mask = disp->impl->conn.mask;
+	disp->outp_mask = disp->impl->outp.mask;
+	disp->head_mask = disp->impl->head.mask;
 	return 0;
 }

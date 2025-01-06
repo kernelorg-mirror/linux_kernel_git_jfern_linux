@@ -30,7 +30,6 @@
 #include <nvif/class.h>
 #include <nvif/object.h>
 #include <nvif/push906f.h>
-#include <nvif/if000c.h>
 #include <nvif/if500b.h>
 #include <nvif/if900b.h>
 
@@ -141,7 +140,7 @@ static void nouveau_dmem_fence_done(struct nouveau_fence **fence)
 static int nouveau_dmem_copy_one(struct nouveau_drm *drm, struct page *spage,
 				struct page *dpage, dma_addr_t *dma_addr)
 {
-	struct device *dev = drm->dev->dev;
+	struct device *dev = drm->dev.dev;
 
 	lock_page(dpage);
 
@@ -174,7 +173,7 @@ static vm_fault_t nouveau_dmem_migrate_to_ram(struct vm_fault *vmf)
 		.end		= vmf->address + PAGE_SIZE,
 		.src		= &src,
 		.dst		= &dst,
-		.pgmap_owner	= drm->dev,
+		.pgmap_owner	= &drm->dev,
 		.fault_page	= vmf->page,
 		.flags		= MIGRATE_VMA_SELECT_DEVICE_PRIVATE,
 	};
@@ -212,7 +211,7 @@ static vm_fault_t nouveau_dmem_migrate_to_ram(struct vm_fault *vmf)
 	nouveau_fence_new(&fence, dmem->migrate.chan);
 	migrate_vma_pages(&args);
 	nouveau_dmem_fence_done(&fence);
-	dma_unmap_page(drm->dev->dev, dma_addr, PAGE_SIZE, DMA_BIDIRECTIONAL);
+	dma_unmap_page(drm->dev.dev, dma_addr, PAGE_SIZE, DMA_BIDIRECTIONAL);
 done:
 	migrate_vma_finalize(&args);
 	return ret;
@@ -253,9 +252,9 @@ nouveau_dmem_chunk_alloc(struct nouveau_drm *drm, struct page **ppage)
 	chunk->pagemap.range.end = res->end;
 	chunk->pagemap.nr_range = 1;
 	chunk->pagemap.ops = &nouveau_dmem_pagemap_ops;
-	chunk->pagemap.owner = drm->dev;
+	chunk->pagemap.owner = &drm->dev;
 
-	ret = nouveau_bo_new(&drm->client, DMEM_CHUNK_SIZE, 0,
+	ret = nouveau_bo_new(&drm->cli, DMEM_CHUNK_SIZE, 0,
 			     NOUVEAU_GEM_DOMAIN_VRAM, 0, 0, NULL, NULL,
 			     &chunk->bo);
 	if (ret)
@@ -409,7 +408,7 @@ nouveau_dmem_evict_chunk(struct nouveau_dmem_chunk *chunk)
 	kvfree(src_pfns);
 	kvfree(dst_pfns);
 	for (i = 0; i < npages; i++)
-		dma_unmap_page(chunk->drm->dev->dev, dma_addrs[i], PAGE_SIZE, DMA_BIDIRECTIONAL);
+		dma_unmap_page(chunk->drm->dev.dev, dma_addrs[i], PAGE_SIZE, DMA_BIDIRECTIONAL);
 	kvfree(dma_addrs);
 }
 
@@ -571,7 +570,7 @@ nvc0b5_migrate_clear(struct nouveau_drm *drm, u32 length,
 static int
 nouveau_dmem_migrate_init(struct nouveau_drm *drm)
 {
-	switch (drm->ttm.copy.oclass) {
+	switch (drm->ttm.copy.object.oclass) {
 	case PASCAL_DMA_COPY_A:
 	case PASCAL_DMA_COPY_B:
 	case  VOLTA_DMA_COPY_A:
@@ -592,7 +591,7 @@ nouveau_dmem_init(struct nouveau_drm *drm)
 	int ret;
 
 	/* This only make sense on PASCAL or newer */
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_PASCAL)
+	if (drm->device.impl->family < NVIF_DEVICE_PASCAL)
 		return;
 
 	if (!(drm->dmem = kzalloc(sizeof(*drm->dmem), GFP_KERNEL)))
@@ -616,7 +615,7 @@ static unsigned long nouveau_dmem_migrate_copy_one(struct nouveau_drm *drm,
 		struct nouveau_svmm *svmm, unsigned long src,
 		dma_addr_t *dma_addr, u64 *pfn)
 {
-	struct device *dev = drm->dev->dev;
+	struct device *dev = drm->dev.dev;
 	struct page *dpage, *spage;
 	unsigned long paddr;
 
@@ -645,10 +644,10 @@ static unsigned long nouveau_dmem_migrate_copy_one(struct nouveau_drm *drm,
 	}
 
 	dpage->zone_device_data = svmm;
-	*pfn = NVIF_VMM_PFNMAP_V0_V | NVIF_VMM_PFNMAP_V0_VRAM |
-		((paddr >> PAGE_SHIFT) << NVIF_VMM_PFNMAP_V0_ADDR_SHIFT);
+	*pfn = NVIF_VMM_PFNMAP_V | NVIF_VMM_PFNMAP_VRAM |
+		((paddr >> PAGE_SHIFT) << NVIF_VMM_PFNMAP_ADDR_SHIFT);
 	if (src & MIGRATE_PFN_WRITE)
-		*pfn |= NVIF_VMM_PFNMAP_V0_W;
+		*pfn |= NVIF_VMM_PFNMAP_W;
 	return migrate_pfn(page_to_pfn(dpage));
 
 out_dma_unmap:
@@ -656,7 +655,7 @@ out_dma_unmap:
 out_free_page:
 	nouveau_dmem_page_free_locked(drm, dpage);
 out:
-	*pfn = NVIF_VMM_PFNMAP_V0_NONE;
+	*pfn = NVIF_VMM_PFNMAP_NONE;
 	return 0;
 }
 
@@ -670,7 +669,7 @@ static void nouveau_dmem_migrate_chunk(struct nouveau_drm *drm,
 	for (i = 0; addr < args->end; i++) {
 		args->dst[i] = nouveau_dmem_migrate_copy_one(drm, svmm,
 				args->src[i], dma_addrs + nr_dma, pfns + i);
-		if (!dma_mapping_error(drm->dev->dev, dma_addrs[nr_dma]))
+		if (!dma_mapping_error(drm->dev.dev, dma_addrs[nr_dma]))
 			nr_dma++;
 		addr += PAGE_SIZE;
 	}
@@ -681,7 +680,7 @@ static void nouveau_dmem_migrate_chunk(struct nouveau_drm *drm,
 	nouveau_pfns_map(svmm, args->vma->vm_mm, args->start, pfns, i);
 
 	while (nr_dma--) {
-		dma_unmap_page(drm->dev->dev, dma_addrs[nr_dma], PAGE_SIZE,
+		dma_unmap_page(drm->dev.dev, dma_addrs[nr_dma], PAGE_SIZE,
 				DMA_BIDIRECTIONAL);
 	}
 	migrate_vma_finalize(args);
@@ -700,7 +699,7 @@ nouveau_dmem_migrate_vma(struct nouveau_drm *drm,
 	struct migrate_vma args = {
 		.vma		= vma,
 		.start		= start,
-		.pgmap_owner	= drm->dev,
+		.pgmap_owner	= &drm->dev,
 		.flags		= MIGRATE_VMA_SELECT_SYSTEM,
 	};
 	unsigned long i;

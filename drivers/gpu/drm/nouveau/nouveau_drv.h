@@ -40,7 +40,9 @@
 
 #include <linux/notifier.h>
 
+#include <nvif/chan.h>
 #include <nvif/client.h>
+#include <nvif/ctxdma.h>
 #include <nvif/device.h>
 #include <nvif/ioctl.h>
 #include <nvif/mmu.h>
@@ -59,7 +61,6 @@
 #include "uapi/drm/nouveau_drm.h"
 
 struct nouveau_channel;
-struct platform_device;
 
 #include "nouveau_fence.h"
 #include "nouveau_bios.h"
@@ -99,8 +100,6 @@ struct nouveau_cli {
 	} uvmm;
 
 	struct nouveau_sched *sched;
-
-	const struct nvif_mclass *mem;
 
 	struct list_head head;
 	void *abi16;
@@ -201,15 +200,16 @@ u_memcpya(uint64_t user, unsigned int nmemb, unsigned int size)
 #include <nvif/parent.h>
 
 struct nouveau_drm {
+	struct drm_device dev;
+
 	struct nvkm_device *nvkm;
 	struct nvif_parent parent;
-	struct mutex client_mutex;
-	struct nvif_client _client;
+	struct nvif_driver_func driver;
+	struct nvif_client client;
 	struct nvif_device device;
 	struct nvif_mmu mmu;
 
-	struct nouveau_cli client;
-	struct drm_device *dev;
+	struct nouveau_cli cli;
 
 	struct list_head clients;
 
@@ -217,8 +217,6 @@ struct nouveau_drm {
 	 * @clients_lock: Protects access to the @clients list of &struct nouveau_cli.
 	 */
 	struct mutex clients_lock;
-
-	u8 old_pm_cap;
 
 	struct {
 		struct agp_bridge_data *bridge;
@@ -235,7 +233,7 @@ struct nouveau_drm {
 			    struct ttm_buffer_object *,
 			    struct ttm_resource *, struct ttm_resource *);
 		struct nouveau_channel *chan;
-		struct nvif_object copy;
+		struct nvif_engobj copy;
 		int mtrr;
 		int type_vram;
 		int type_host[2];
@@ -270,7 +268,7 @@ struct nouveau_drm {
 	struct nouveau_channel *cechan;
 	struct nouveau_channel *channel;
 	struct nvkm_gpuobj *notify;
-	struct nvif_object ntfy;
+	struct nvif_ctxdma ntfy;
 
 	/* nv10-nv40 tiling regions */
 	struct {
@@ -296,8 +294,6 @@ struct nouveau_drm {
 	/* led management */
 	struct nouveau_led *led;
 
-	struct dev_pm_domain vga_pm_domain;
-
 	struct nouveau_svm *svm;
 
 	struct nouveau_dmem *dmem;
@@ -318,28 +314,22 @@ nouveau_drm(struct drm_device *dev)
 static inline bool
 nouveau_drm_use_coherent_gpu_mapping(struct nouveau_drm *drm)
 {
-	struct nvif_mmu *mmu = &drm->client.mmu;
-	return !(mmu->type[drm->ttm.type_host[0]].type & NVIF_MEM_UNCACHED);
+	struct nvif_mmu *mmu = &drm->mmu;
+
+	return !(mmu->impl->type[drm->ttm.type_host[0]].type & NVIF_MEM_UNCACHED);
 }
 
 int nouveau_pmops_suspend(struct device *);
 int nouveau_pmops_resume(struct device *);
-bool nouveau_pmops_runtime(void);
-
-#include <nvkm/core/tegra.h>
-
-struct drm_device *
-nouveau_platform_device_create(const struct nvkm_device_tegra_func *,
-			       struct platform_device *, struct nvkm_device **);
-void nouveau_drm_device_remove(struct nouveau_drm *);
+bool nouveau_pmops_runtime(struct device *);
 
 #define NV_PRINTK(l,c,f,a...) do {                                             \
 	struct nouveau_cli *_cli = (c);                                        \
-	dev_##l(_cli->drm->dev->dev, "%s: "f, _cli->name, ##a);                \
+	dev_##l(_cli->drm->dev.dev, "%s: "f, _cli->name, ##a);                 \
 } while(0)
 
-#define NV_PRINTK_(l,drm,f,a...) do {             \
-	dev_##l((drm)->nvkm->dev, "drm: "f, ##a); \
+#define NV_PRINTK_(l,drm,f,a...) do {          \
+	dev_##l(drm->dev.dev, "drm: "f, ##a);  \
 } while(0)
 #define NV_FATAL(drm,f,a...) NV_PRINTK_(crit, (drm), f, ##a)
 #define NV_ERROR(drm,f,a...) NV_PRINTK_(err, (drm), f, ##a)
@@ -357,9 +347,9 @@ void nouveau_drm_device_remove(struct nouveau_drm *);
 
 #define NV_PRINTK_ONCE(l,c,f,a...) NV_PRINTK(l##_once,c,f, ##a)
 
-#define NV_ERROR_ONCE(drm,f,a...) NV_PRINTK_ONCE(err, &(drm)->client, f, ##a)
-#define NV_WARN_ONCE(drm,f,a...) NV_PRINTK_ONCE(warn, &(drm)->client, f, ##a)
-#define NV_INFO_ONCE(drm,f,a...) NV_PRINTK_ONCE(info, &(drm)->client, f, ##a)
+#define NV_ERROR_ONCE(drm,f,a...) NV_PRINTK_ONCE(err, &(drm)->cli, f, ##a)
+#define NV_WARN_ONCE(drm,f,a...) NV_PRINTK_ONCE(warn, &(drm)->cli, f, ##a)
+#define NV_INFO_ONCE(drm,f,a...) NV_PRINTK_ONCE(info, &(drm)->cli, f, ##a)
 
 extern int nouveau_modeset;
 

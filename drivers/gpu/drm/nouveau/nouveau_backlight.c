@@ -65,8 +65,7 @@ nv40_get_intensity(struct backlight_device *bd)
 {
 	struct nouveau_encoder *nv_encoder = bl_get_data(bd);
 	struct nouveau_drm *drm = nouveau_drm(nv_encoder->base.base.dev);
-	struct nvif_object *device = &drm->client.device.object;
-	int val = (nvif_rd32(device, NV40_PMC_BACKLIGHT) &
+	int val = (nvif_rd32(&drm->device, NV40_PMC_BACKLIGHT) &
 		   NV40_PMC_BACKLIGHT_MASK) >> 16;
 
 	return val;
@@ -77,7 +76,7 @@ nv40_set_intensity(struct backlight_device *bd)
 {
 	struct nouveau_encoder *nv_encoder = bl_get_data(bd);
 	struct nouveau_drm *drm = nouveau_drm(nv_encoder->base.base.dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 	int val = bd->props.brightness;
 	int reg = nvif_rd32(device, NV40_PMC_BACKLIGHT);
 
@@ -99,9 +98,8 @@ nv40_backlight_init(struct nouveau_encoder *encoder,
 		    const struct backlight_ops **ops)
 {
 	struct nouveau_drm *drm = nouveau_drm(encoder->base.base.dev);
-	struct nvif_object *device = &drm->client.device.object;
 
-	if (!(nvif_rd32(device, NV40_PMC_BACKLIGHT) & NV40_PMC_BACKLIGHT_MASK))
+	if (!(nvif_rd32(&drm->device, NV40_PMC_BACKLIGHT) & NV40_PMC_BACKLIGHT_MASK))
 		return -ENODEV;
 
 	props->max_brightness = 31;
@@ -292,7 +290,7 @@ nouveau_backlight_init(struct drm_connector *connector)
 	struct nouveau_drm *drm = nouveau_drm(connector->dev);
 	struct nouveau_backlight *bl;
 	struct nouveau_encoder *nv_encoder = NULL;
-	struct nvif_device *device = &drm->client.device;
+	struct nvif_device *device = &drm->device;
 	char backlight_name[BL_NAME_SIZE];
 	struct backlight_properties props = {0};
 	const struct backlight_ops *ops;
@@ -317,18 +315,18 @@ nouveau_backlight_init(struct drm_connector *connector)
 	if (!bl)
 		return -ENOMEM;
 
-	switch (device->info.family) {
-	case NV_DEVICE_INFO_V0_CURIE:
+	switch (device->impl->family) {
+	case NVIF_DEVICE_CURIE:
 		ret = nv40_backlight_init(nv_encoder, &props, &ops);
 		break;
-	case NV_DEVICE_INFO_V0_TESLA:
-	case NV_DEVICE_INFO_V0_FERMI:
-	case NV_DEVICE_INFO_V0_KEPLER:
-	case NV_DEVICE_INFO_V0_MAXWELL:
-	case NV_DEVICE_INFO_V0_PASCAL:
-	case NV_DEVICE_INFO_V0_VOLTA:
-	case NV_DEVICE_INFO_V0_TURING:
-	case NV_DEVICE_INFO_V0_AMPERE: //XXX: not confirmed
+	case NVIF_DEVICE_TESLA:
+	case NVIF_DEVICE_FERMI:
+	case NVIF_DEVICE_KEPLER:
+	case NVIF_DEVICE_MAXWELL:
+	case NVIF_DEVICE_PASCAL:
+	case NVIF_DEVICE_VOLTA:
+	case NVIF_DEVICE_TURING:
+	case NVIF_DEVICE_AMPERE: //XXX: not confirmed
 		ret = nv50_backlight_init(bl, nouveau_connector(connector),
 					  nv_encoder, &props, &ops);
 		break;

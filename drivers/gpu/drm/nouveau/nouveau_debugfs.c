@@ -29,8 +29,6 @@
  */
 
 #include <linux/debugfs.h>
-#include <nvif/class.h>
-#include <nvif/if0001.h>
 #include "nouveau_debugfs.h"
 #include "nouveau_drv.h"
 
@@ -53,17 +51,17 @@ nouveau_debugfs_strap_peek(struct seq_file *m, void *data)
 	struct nouveau_drm *drm = nouveau_drm(node->minor->dev);
 	int ret;
 
-	ret = pm_runtime_get_sync(drm->dev->dev);
+	ret = pm_runtime_get_sync(drm->dev.dev);
 	if (ret < 0 && ret != -EACCES) {
-		pm_runtime_put_autosuspend(drm->dev->dev);
+		pm_runtime_put_autosuspend(drm->dev.dev);
 		return ret;
 	}
 
 	seq_printf(m, "0x%08x\n",
-		   nvif_rd32(&drm->client.device.object, 0x101000));
+		   nvif_rd32(&drm->device, 0x101000));
 
-	pm_runtime_mark_last_busy(drm->dev->dev);
-	pm_runtime_put_autosuspend(drm->dev->dev);
+	pm_runtime_mark_last_busy(drm->dev.dev);
+	pm_runtime_put_autosuspend(drm->dev.dev);
 
 	return 0;
 }
@@ -73,28 +71,23 @@ nouveau_debugfs_pstate_get(struct seq_file *m, void *data)
 {
 	struct drm_device *drm = m->private;
 	struct nouveau_debugfs *debugfs = nouveau_debugfs(drm);
-	struct nvif_object *ctrl;
-	struct nvif_control_pstate_info_v0 info = {};
+	struct nvif_control_pstate_info info = {};
 	int ret, i;
 
 	if (!debugfs)
 		return -ENODEV;
 
-	ctrl = &debugfs->ctrl;
-	ret = nvif_mthd(ctrl, NVIF_CONTROL_PSTATE_INFO, &info, sizeof(info));
-	if (ret)
-		return ret;
+	debugfs->impl->pstate.info(debugfs->priv, &info);
 
 	for (i = 0; i < info.count + 1; i++) {
 		const s32 state = i < info.count ? i :
-			NVIF_CONTROL_PSTATE_ATTR_V0_STATE_CURRENT;
-		struct nvif_control_pstate_attr_v0 attr = {
+			NVIF_CONTROL_PSTATE_ATTR_STATE_CURRENT;
+		struct nvif_control_pstate_attr attr = {
 			.state = state,
 			.index = 0,
 		};
 
-		ret = nvif_mthd(ctrl, NVIF_CONTROL_PSTATE_ATTR,
-				&attr, sizeof(attr));
+		ret = debugfs->impl->pstate.attr(debugfs->priv, &attr);
 		if (ret)
 			return ret;
 
@@ -107,8 +100,7 @@ nouveau_debugfs_pstate_get(struct seq_file *m, void *data)
 		attr.index = 0;
 		do {
 			attr.state = state;
-			ret = nvif_mthd(ctrl, NVIF_CONTROL_PSTATE_ATTR,
-					&attr, sizeof(attr));
+			ret = debugfs->impl->pstate.attr(debugfs->priv, &attr);
 			if (ret)
 				return ret;
 
@@ -145,7 +137,7 @@ nouveau_debugfs_pstate_set(struct file *file, const char __user *ubuf,
 	struct seq_file *m = file->private_data;
 	struct drm_device *drm = m->private;
 	struct nouveau_debugfs *debugfs = nouveau_debugfs(drm);
-	struct nvif_control_pstate_user_v0 args = { .pwrsrc = -EINVAL };
+	struct nvif_control_pstate_user args = { .pwrsrc = -EINVAL };
 	char buf[32] = {}, *tmp, *cur = buf;
 	long value, ret;
 
@@ -171,10 +163,10 @@ nouveau_debugfs_pstate_set(struct file *file, const char __user *ubuf,
 	}
 
 	if (!strcasecmp(cur, "none"))
-		args.ustate = NVIF_CONTROL_PSTATE_USER_V0_STATE_UNKNOWN;
+		args.ustate = NVIF_CONTROL_PSTATE_USER_STATE_UNKNOWN;
 	else
 	if (!strcasecmp(cur, "auto"))
-		args.ustate = NVIF_CONTROL_PSTATE_USER_V0_STATE_PERFMON;
+		args.ustate = NVIF_CONTROL_PSTATE_USER_STATE_PERFMON;
 	else {
 		ret = kstrtol(cur, 16, &value);
 		if (ret)
@@ -188,8 +180,7 @@ nouveau_debugfs_pstate_set(struct file *file, const char __user *ubuf,
 		return ret;
 	}
 
-	ret = nvif_mthd(&debugfs->ctrl, NVIF_CONTROL_PSTATE_USER,
-			&args, sizeof(args));
+	ret = debugfs->impl->pstate.user(debugfs->priv, &args);
 	pm_runtime_put_autosuspend(drm->dev);
 	if (ret < 0)
 		return ret;
@@ -295,20 +286,29 @@ nouveau_drm_debugfs_init(struct drm_minor *minor)
 int
 nouveau_debugfs_init(struct nouveau_drm *drm)
 {
+	int ret;
+
+	if (!drm->device.impl->control.new)
+		return -ENODEV;
+
 	drm->debugfs = kzalloc(sizeof(*drm->debugfs), GFP_KERNEL);
 	if (!drm->debugfs)
 		return -ENOMEM;
 
-	return nvif_object_ctor(&drm->client.device.object, "debugfsCtrl", 0,
-				NVIF_CLASS_CONTROL, NULL, 0,
-				&drm->debugfs->ctrl);
+	ret = drm->device.impl->control.new(drm->device.priv, &drm->debugfs->impl,
+					    &drm->debugfs->priv);
+	if (ret)
+		return ret;
+
+	nvif_object_ctor(&drm->device.object, "debugfsCtrl", 0, 0, &drm->debugfs->ctrl);
+	return 0;
 }
 
 void
 nouveau_debugfs_fini(struct nouveau_drm *drm)
 {
-	if (drm->debugfs && drm->debugfs->ctrl.priv)
-		nvif_object_dtor(&drm->debugfs->ctrl);
+	if (drm->debugfs && drm->debugfs->impl)
+		drm->debugfs->impl->del(drm->debugfs->priv);
 
 	kfree(drm->debugfs);
 	drm->debugfs = NULL;

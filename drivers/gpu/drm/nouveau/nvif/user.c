@@ -21,14 +21,19 @@
  */
 #include <nvif/user.h>
 #include <nvif/device.h>
+#include <nvif/driverif.h>
+#include <nvif/printf.h>
 
 #include <nvif/class.h>
 
 void
 nvif_user_dtor(struct nvif_device *device)
 {
-	if (device->user.func) {
-		nvif_object_dtor(&device->user.object);
+	if (device->user.impl) {
+		nvif_object_unmap_cpu(&device->user.map);
+
+		device->user.impl->del(device->user.priv);
+		device->user.impl = NULL;
 		device->user.func = NULL;
 	}
 }
@@ -36,32 +41,35 @@ nvif_user_dtor(struct nvif_device *device)
 int
 nvif_user_ctor(struct nvif_device *device, const char *name)
 {
-	struct {
-		s32 oclass;
-		int version;
-		const struct nvif_user_func *func;
-	} users[] = {
-		{ AMPERE_USERMODE_A, -1, &nvif_userc361 },
-		{ TURING_USERMODE_A, -1, &nvif_userc361 },
-		{  VOLTA_USERMODE_A, -1, &nvif_userc361 },
-		{}
-	};
-	int cid, ret;
+	const u32 oclass = device->impl->usermode.oclass;
+	const struct nvif_user_func *func;
+	int ret;
 
 	if (device->user.func)
 		return 0;
 
-	cid = nvif_mclass(&device->object, users);
-	if (cid < 0)
-		return cid;
+	switch (oclass) {
+	case AMPERE_USERMODE_A: func = &nvif_userc361; break;
+	case TURING_USERMODE_A: func = &nvif_userc361; break;
+	case  VOLTA_USERMODE_A: func = &nvif_userc361; break;
+	default:
+		NVIF_DEBUG(&device->object, "[NEW usermode%04x] not supported", oclass);
+		return -ENODEV;
+	}
 
-	ret = nvif_object_ctor(&device->object, name ? name : "nvifUsermode",
-			       0, users[cid].oclass, NULL, 0,
-			       &device->user.object);
+	ret = device->impl->usermode.new(device->priv, &device->user.impl, &device->user.priv);
+	NVIF_ERRON(ret, &device->object, "[NEW usermode%04x]", oclass);
 	if (ret)
 		return ret;
 
-	nvif_object_map(&device->user.object, NULL, 0);
-	device->user.func = users[cid].func;
+	nvif_object_ctor(&device->object, name ?: "nvifUsermode", 0, oclass, &device->user.object);
+	device->user.func = func;
+
+	ret = nvif_object_map_cpu(&device->user.object, &device->user.impl->map, &device->user.map);
+	if (ret) {
+		nvif_user_dtor(device);
+		return ret;
+	}
+
 	return 0;
 }

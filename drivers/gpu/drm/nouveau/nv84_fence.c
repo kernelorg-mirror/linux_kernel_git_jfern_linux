@@ -38,7 +38,7 @@ nv84_fence_emit32(struct nouveau_channel *chan, u64 virtual, u32 sequence)
 	struct nvif_push *push = &chan->chan.push;
 	int ret = PUSH_WAIT(push, 8);
 	if (ret == 0) {
-		PUSH_MTHD(push, NV826F, SET_CONTEXT_DMA_SEMAPHORE, chan->vram.handle);
+		PUSH_MTHD(push, NV826F, SET_CONTEXT_DMA_SEMAPHORE, chan->vram.object.handle);
 
 		PUSH_MTHD(push, NV826F, SEMAPHOREA,
 			  NVVAL(NV826F, SEMAPHOREA, OFFSET_UPPER, upper_32_bits(virtual)),
@@ -61,7 +61,7 @@ nv84_fence_sync32(struct nouveau_channel *chan, u64 virtual, u32 sequence)
 	struct nvif_push *push = &chan->chan.push;
 	int ret = PUSH_WAIT(push, 7);
 	if (ret == 0) {
-		PUSH_MTHD(push, NV826F, SET_CONTEXT_DMA_SEMAPHORE, chan->vram.handle);
+		PUSH_MTHD(push, NV826F, SET_CONTEXT_DMA_SEMAPHORE, chan->vram.object.handle);
 
 		PUSH_MTHD(push, NV826F, SEMAPHOREA,
 			  NVVAL(NV826F, SEMAPHOREA, OFFSET_UPPER, upper_32_bits(virtual)),
@@ -215,14 +215,14 @@ nv84_fence_create(struct nouveau_drm *drm)
 	mutex_init(&priv->mutex);
 
 	/* Use VRAM if there is any ; otherwise fallback to system memory */
-	domain = drm->client.device.info.ram_size != 0 ?
+	domain = drm->device.impl->ram_size != 0 ?
 		NOUVEAU_GEM_DOMAIN_VRAM :
 		 /*
 		  * fences created in sysmem must be non-cached or we
 		  * will lose CPU/GPU coherency!
 		  */
 		NOUVEAU_GEM_DOMAIN_GART | NOUVEAU_GEM_DOMAIN_COHERENT;
-	ret = nouveau_bo_new(&drm->client, 16 * drm->chan_total, 0,
+	ret = nouveau_bo_new(&drm->cli, 16 * drm->chan_total, 0,
 			     domain, 0, 0, NULL, NULL, &priv->bo);
 	if (ret == 0) {
 		ret = nouveau_bo_pin(priv->bo, domain, false);

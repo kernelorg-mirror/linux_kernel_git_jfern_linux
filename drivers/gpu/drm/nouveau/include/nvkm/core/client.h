@@ -1,27 +1,24 @@
 /* SPDX-License-Identifier: MIT */
 #ifndef __NVKM_CLIENT_H__
 #define __NVKM_CLIENT_H__
-#define nvkm_client(p) container_of((p), struct nvkm_client, object)
 #include <core/object.h>
+
+#include <nvif/driverif.h>
 
 struct nvkm_client {
 	struct nvkm_object object;
 	char name[32];
-	u64 device;
+	struct nvkm_device *device;
 	u32 debug;
 
-	struct rb_root objroot;
 	spinlock_t obj_lock;
 
 	void *data;
-	int (*event)(u64 token, void *argv, u32 argc);
-
-	struct list_head umem;
-	spinlock_t lock;
 };
 
-int  nvkm_client_new(const char *name, u64 device, const char *cfg, const char *dbg,
-		     int (*)(u64, void *, u32), struct nvkm_client **);
+int nvkm_client_new(const char *name, struct nvkm_device *,
+		    const struct nvif_client_impl **, struct nvif_client_priv **);
+int nvkm_client_event(struct nvkm_client *client, u64 token, void *repv, u32 repc);
 
 /* logging for client-facing objects */
 #define nvif_printk(o,l,p,f,a...) do {                                         \
@@ -36,5 +33,4 @@ int  nvkm_client_new(const char *name, u64 device, const char *cfg, const char *
 #define nvif_debug(o,f,a...) nvif_printk((o), DEBUG, INFO, f, ##a)
 #define nvif_trace(o,f,a...) nvif_printk((o), TRACE, INFO, f, ##a)
 #define nvif_info(o,f,a...)  nvif_printk((o),  INFO, INFO, f, ##a)
-#define nvif_ioctl(o,f,a...) nvif_trace((o), "ioctl: "f, ##a)
 #endif

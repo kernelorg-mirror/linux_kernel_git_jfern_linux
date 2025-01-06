@@ -1,0 +1,302 @@
+/* SPDX-License-Identifier: MIT */
+
+#include <core/device.h>
+#include <engine/chid.h>
+#include <engine/fifo.h>
+#include <engine/fifo/runl.h>
+#include <subdev/bar.h>
+#include <subdev/fb.h>
+#include <subdev/gsp.h>
+#include <subdev/mmu.h>
+
+#include <vgpu_mgr/vgpu_mgr.h>
+#include <drm/nvkm_vgpu_mgr_vfio.h>
+
+static bool vgpu_mgr_is_enabled(void *handle)
+{
+	struct nvkm_device *device = handle;
+
+	return nvkm_vgpu_mgr_is_enabled(device);
+}
+
+static void get_handle(void *handle,
+		       struct nvidia_vgpu_vfio_handle_data *data)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+
+	if (vgpu_mgr->vfio_handle_data.priv)
+		memcpy(data, &vgpu_mgr->vfio_handle_data, sizeof(*data));
+}
+
+static void detach_handle(void *handle)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+
+	vgpu_mgr->vfio_handle_data.priv = NULL;
+}
+
+static int attach_handle(void *handle,
+			 struct nvidia_vgpu_vfio_handle_data *data)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+
+	if (vgpu_mgr->vfio_handle_data.priv)
+		return -EEXIST;
+
+	memcpy(&vgpu_mgr->vfio_handle_data, data, sizeof(*data));
+	return 0;
+}
+
+static int alloc_gsp_client(void *handle,
+			    struct nvidia_vgpu_gsp_client *client)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_gsp *gsp = device->gsp;
+	int ret = -ENOMEM;
+
+	client->gsp_device = kzalloc(sizeof(struct nvkm_gsp_device),
+				     GFP_KERNEL);
+	if (!client->gsp_device)
+		return ret;
+
+	client->gsp_client = kzalloc(sizeof(struct nvkm_gsp_client),
+				     GFP_KERNEL);
+	if (!client->gsp_client)
+		goto fail_alloc_client;
+
+	ret = nvkm_gsp_client_device_ctor(gsp, client->gsp_client,
+					  client->gsp_device);
+	if (ret)
+		goto fail_client_device_ctor;
+
+	return 0;
+
+fail_client_device_ctor:
+	kfree(client->gsp_client);
+	client->gsp_client = NULL;
+
+fail_alloc_client:
+	kfree(client->gsp_device);
+	client->gsp_device = NULL;
+
+	return ret;
+}
+
+static void free_gsp_client(struct nvidia_vgpu_gsp_client *client)
+{
+	nvkm_gsp_device_dtor(client->gsp_device);
+	nvkm_gsp_client_dtor(client->gsp_client);
+
+	kfree(client->gsp_device);
+	client->gsp_device = NULL;
+
+	kfree(client->gsp_client);
+	client->gsp_client = NULL;
+}
+
+static u32 get_gsp_client_handle(struct nvidia_vgpu_gsp_client *client)
+{
+	struct nvkm_gsp_client *c = client->gsp_client;
+
+	return c->object.handle;
+}
+
+static void *rm_ctrl_get(struct nvidia_vgpu_gsp_client *client, u32 cmd,
+			 u32 size)
+{
+	struct nvkm_gsp_device *device = client->gsp_device;
+
+	return nvkm_gsp_rm_ctrl_get(&device->subdevice, cmd, size);
+}
+
+static int rm_ctrl_wr(struct nvidia_vgpu_gsp_client *client, void *ctrl)
+{
+	struct nvkm_gsp_device *device = client->gsp_device;
+
+	return nvkm_gsp_rm_ctrl_wr(&device->subdevice, ctrl);
+}
+
+static void *rm_ctrl_rd(struct nvidia_vgpu_gsp_client *client, u32 cmd,
+			u32 size)
+{
+	struct nvkm_gsp_device *device = client->gsp_device;
+
+	return nvkm_gsp_rm_ctrl_rd(&device->subdevice, cmd, size);
+}
+
+static void rm_ctrl_done(struct nvidia_vgpu_gsp_client *client, void *ctrl)
+{
+	struct nvkm_gsp_device *device = client->gsp_device;
+
+	nvkm_gsp_rm_ctrl_done(&device->subdevice, ctrl);
+}
+
+static void free_chids(void *handle, int offset, int count)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+
+	mutex_lock(&vgpu_mgr->chid_alloc_lock);
+	nvkm_chid_reserved_free(device->fifo->chid, offset, count);
+	mutex_unlock(&vgpu_mgr->chid_alloc_lock);
+}
+
+static int alloc_chids(void *handle, int count)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+	int ret;
+
+	mutex_lock(&vgpu_mgr->chid_alloc_lock);
+	ret = nvkm_chid_reserved_alloc(device->fifo->chid, count);
+	mutex_unlock(&vgpu_mgr->chid_alloc_lock);
+
+	return ret;
+}
+
+static void free_fbmem(struct nvidia_vgpu_mem *base)
+{
+	struct nvkm_vgpu_mem *mem =
+		container_of(base, struct nvkm_vgpu_mem, base);
+	struct nvkm_vgpu_mgr *vgpu_mgr = mem->vgpu_mgr;
+	struct nvkm_device *device = vgpu_mgr->nvkm_dev;
+
+	nvdev_debug(device, "free fb mem: addr %llx size %llx\n",
+		    base->addr, base->size);
+
+	nvkm_memory_unref(&mem->mem);
+	kfree(mem);
+}
+
+static struct nvidia_vgpu_mem *alloc_fbmem(void *handle, u64 size,
+					   bool vmmu_aligned)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+	struct nvidia_vgpu_mem *base;
+	struct nvkm_vgpu_mem *mem;
+	u32 shift = vmmu_aligned ? ilog2(vgpu_mgr->vmmu_segment_size) :
+		    NVKM_RAM_MM_SHIFT;
+	int ret;
+
+	mem = kzalloc(sizeof(*mem), GFP_KERNEL);
+	if (!mem)
+		return ERR_PTR(-ENOMEM);
+
+	base = &mem->base;
+
+	ret = nvkm_ram_get(device, NVKM_RAM_MM_NORMAL, 0x1, shift, size,
+			   true, true, &mem->mem);
+	if (ret) {
+		kfree(mem);
+		return ERR_PTR(ret);
+	}
+
+	mem->vgpu_mgr = vgpu_mgr;
+	base->addr = mem->mem->func->addr(mem->mem);
+	base->size = mem->mem->func->size(mem->mem);
+
+	nvdev_debug(device, "alloc fb mem: addr %llx size %llx\n",
+		    base->addr, base->size);
+
+	return base;
+}
+
+static void bar1_unmap_mem(struct nvidia_vgpu_mem *base)
+{
+	struct nvkm_vgpu_mem *mem =
+		container_of(base, struct nvkm_vgpu_mem, base);
+	struct nvkm_vgpu_mgr *vgpu_mgr = mem->vgpu_mgr;
+	struct nvkm_device *device = vgpu_mgr->nvkm_dev;
+	struct nvkm_vmm *vmm = nvkm_bar_bar1_vmm(device);
+
+	iounmap(base->bar1_vaddr);
+	base->bar1_vaddr = NULL;
+	nvkm_vmm_put(vmm, &mem->bar1_vma);
+	mem->bar1_vma = NULL;
+}
+
+static int bar1_map_mem(struct nvidia_vgpu_mem *base)
+{
+	struct nvkm_vgpu_mem *mem =
+		container_of(base, struct nvkm_vgpu_mem, base);
+	struct nvkm_vgpu_mgr *vgpu_mgr = mem->vgpu_mgr;
+	struct nvkm_device *device = vgpu_mgr->nvkm_dev;
+	struct nvkm_vmm *vmm = nvkm_bar_bar1_vmm(device);
+	unsigned long paddr;
+	int ret;
+
+	if (WARN_ON(base->bar1_vaddr || mem->bar1_vma))
+		return -EEXIST;
+
+	ret = nvkm_vmm_get(vmm, 12, base->size, &mem->bar1_vma);
+	if (ret)
+		return ret;
+
+	ret = nvkm_memory_map(mem->mem, 0, vmm, mem->bar1_vma, NULL, 0);
+	if (ret) {
+		nvkm_vmm_put(vmm, &mem->bar1_vma);
+		return ret;
+	}
+
+	paddr = device->func->resource_addr(device, 1) +
+		mem->bar1_vma->addr;
+
+	base->bar1_vaddr = ioremap(paddr, base->size);
+	return 0;
+}
+
+static void get_engine_bitmap(void *handle, unsigned long *bitmap)
+{
+	struct nvkm_device *nvkm_dev = handle;
+	struct nvkm_runl *runl;
+	struct nvkm_engn *engn;
+
+	nvkm_runl_foreach(runl, nvkm_dev->fifo) {
+		nvkm_runl_foreach_engn(engn, runl) {
+			__set_bit(engn->id, bitmap);
+		}
+	}
+}
+
+struct nvkm_vgpu_mgr_vfio_ops nvkm_vgpu_mgr_vfio_ops = {
+	.vgpu_mgr_is_enabled = vgpu_mgr_is_enabled,
+	.get_handle = get_handle,
+	.attach_handle = attach_handle,
+	.detach_handle = detach_handle,
+	.alloc_gsp_client = alloc_gsp_client,
+	.free_gsp_client = free_gsp_client,
+	.get_gsp_client_handle = get_gsp_client_handle,
+	.rm_ctrl_get = rm_ctrl_get,
+	.rm_ctrl_wr = rm_ctrl_wr,
+	.rm_ctrl_rd = rm_ctrl_rd,
+	.rm_ctrl_done = rm_ctrl_done,
+	.alloc_chids = alloc_chids,
+	.free_chids = free_chids,
+	.alloc_fbmem = alloc_fbmem,
+	.free_fbmem = free_fbmem,
+	.bar1_map_mem = bar1_map_mem,
+	.bar1_unmap_mem = bar1_unmap_mem,
+	.get_engine_bitmap = get_engine_bitmap,
+};
+
+/**
+ * nvkm_vgpu_mgr_init_vfio_ops - init the callbacks for VFIO
+ * @vgpu_mgr: the nvkm vGPU manager
+ */
+void nvkm_vgpu_mgr_init_vfio_ops(struct nvkm_vgpu_mgr *vgpu_mgr)
+{
+	vgpu_mgr->vfio_ops = &nvkm_vgpu_mgr_vfio_ops;
+}
+
+struct nvkm_vgpu_mgr_vfio_ops *nvkm_vgpu_mgr_get_vfio_ops(void *handle)
+{
+	struct nvkm_device *device = handle;
+	struct nvkm_vgpu_mgr *vgpu_mgr = &device->vgpu_mgr;
+
+	return vgpu_mgr->vfio_ops;
+}
+EXPORT_SYMBOL(nvkm_vgpu_mgr_get_vfio_ops);

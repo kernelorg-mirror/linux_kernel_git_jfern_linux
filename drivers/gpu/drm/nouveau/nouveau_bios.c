@@ -109,7 +109,7 @@ static int call_lvds_manufacturer_script(struct drm_device *dev, struct dcb_outp
 	uint8_t sub = bios->data[bios->fp.xlated_entry + script] + (bios->fp.link_c_increment && dcbent->or & DCB_OUTPUT_C ? 1 : 0);
 	uint16_t scriptofs = ROM16(bios->data[bios->init_script_tbls_ptr + sub * 2]);
 #ifdef __powerpc__
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	struct nvif_device *device = &drm->device;
 #endif
 
 	if (!bios->fp.xlated_entry || !sub || !scriptofs)
@@ -124,8 +124,8 @@ static int call_lvds_manufacturer_script(struct drm_device *dev, struct dcb_outp
 #ifdef __powerpc__
 	/* Powerbook specific quirks */
 	if (script == LVDS_RESET &&
-	    (pdev->device == 0x0179 || pdev->device == 0x0189 ||
-	     pdev->device == 0x0329))
+	    (device->impl->pci.device_id == 0x0179 || device->impl->pci.device_id == 0x0189 ||
+	     device->impl->pci.device_id == 0x0329))
 		nv_write_tmds(dev, dcbent->or, 0, 0x02, 0x72);
 #endif
 
@@ -214,7 +214,7 @@ int call_lvds_script(struct drm_device *dev, struct dcb_output *dcbent, int head
 	 */
 
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 	struct nvbios *bios = &drm->vbios;
 	uint8_t lvds_ver = bios->data[bios->fp.lvdsmanufacturerpointer];
 	uint32_t sel_clk_binding, sel_clk;
@@ -318,7 +318,7 @@ static int
 get_fp_strap(struct drm_device *dev, struct nvbios *bios)
 {
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 
 	/*
 	 * The fp strap is normally dictated by the "User Strap" in
@@ -332,10 +332,10 @@ get_fp_strap(struct drm_device *dev, struct nvbios *bios)
 	if (bios->major_version < 5 && bios->data[0x48] & 0x4)
 		return NVReadVgaCrtc5758(dev, 0, 0xf) & 0xf;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_MAXWELL)
+	if (device->impl->family >= NVIF_DEVICE_MAXWELL)
 		return nvif_rd32(device, 0x001800) & 0x0000000f;
 	else
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (device->impl->family >= NVIF_DEVICE_TESLA)
 		return (nvif_rd32(device, NV_PEXTDEV_BOOT_0) >> 24) & 0xf;
 	else
 		return (nvif_rd32(device, NV_PEXTDEV_BOOT_0) >> 16) & 0xf;
@@ -634,7 +634,7 @@ int run_tmds_table(struct drm_device *dev, struct dcb_output *dcbent, int head, 
 	 */
 
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 	struct nvbios *bios = &drm->vbios;
 	int cv = bios->chip_version;
 	uint16_t clktable = 0, scriptptr;
@@ -1251,7 +1251,7 @@ olddcb_table(struct drm_device *dev)
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	u8 *dcb = NULL;
 
-	if (drm->client.device.info.family > NV_DEVICE_INFO_V0_TNT)
+	if (drm->device.impl->family > NVIF_DEVICE_TNT)
 		dcb = ROMPTR(dev, drm->vbios.data[0x36]);
 	if (!dcb) {
 		NV_WARN(drm, "No DCB data found in VBIOS\n");
@@ -1921,7 +1921,7 @@ static int load_nv17_hwsq_ucode_entry(struct drm_device *dev, struct nvbios *bio
 	 */
 
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nvif_object *device = &drm->client.device.object;
+	struct nvif_device *device = &drm->device;
 	uint8_t bytes_to_write;
 	uint16_t hwsq_entry_offset;
 	int i;
@@ -2066,7 +2066,7 @@ nouveau_bios_posted(struct drm_device *dev)
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	unsigned htotal;
 
-	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA)
+	if (drm->device.impl->family >= NVIF_DEVICE_TESLA)
 		return true;
 
 	htotal  = NVReadVgaCrtc(dev, 0, 0x06);
@@ -2085,14 +2085,14 @@ nouveau_bios_init(struct drm_device *dev)
 	int ret;
 
 	/* only relevant for PCI devices */
-	if (!dev_is_pci(dev->dev) ||
+	if (drm->device.impl->platform == NVIF_DEVICE_SOC ||
 	    nvkm_gsp_rm(nvxx_device(drm)->gsp))
 		return 0;
 
 	if (!NVInitVBIOS(dev))
 		return -ENODEV;
 
-	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {
+	if (drm->device.impl->family < NVIF_DEVICE_TESLA) {
 		ret = parse_dcb_table(dev, bios);
 		if (ret)
 			return ret;

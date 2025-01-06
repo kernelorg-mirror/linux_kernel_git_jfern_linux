@@ -268,7 +268,7 @@ nv50_head_atomic_check_lut(struct nv50_head *head,
 			  size, crtc->base.id, crtc->name);
 		return -EINVAL;
 	}
-	asyh->olut.handle = disp->core->chan.vram.handle;
+	asyh->olut.handle = disp->core->vram.object.handle;
 	asyh->olut.buffer = !asyh->olut.buffer;
 
 	return 0;
@@ -549,7 +549,7 @@ nvd9_head_func = {
 	.late_register = nv50_head_late_register,
 };
 
-static int
+static enum nvif_event_stat
 nv50_head_vblank_handler(struct nvif_event *event, void *repv, u32 repc)
 {
 	struct nouveau_crtc *nv_crtc = container_of(event, struct nouveau_crtc, vblank);
@@ -612,7 +612,7 @@ nv50_head_create(struct drm_device *dev, int index)
 				   head->func->olut_size);
 
 	if (head->func->olut_set) {
-		ret = nv50_lut_init(disp, &drm->client.mmu, &head->olut);
+		ret = nv50_lut_init(disp, &drm->cli.mmu, &head->olut);
 		if (ret) {
 			nv50_head_destroy(crtc);
 			return ERR_PTR(ret);

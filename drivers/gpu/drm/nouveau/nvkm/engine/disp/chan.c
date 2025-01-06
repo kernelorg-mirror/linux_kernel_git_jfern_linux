@@ -19,18 +19,24 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#include "chan.h"
+#include "uchan.h"
 
 #include <core/oproxy.h>
 #include <core/ramht.h>
+#include <subdev/mmu.h>
 
-#include <nvif/if0014.h>
+struct nvif_disp_chan_priv {
+	struct nvkm_object object;
+	struct nvkm_disp_chan chan;
+
+	struct nvif_disp_chan_impl impl;
+};
 
 static int
 nvkm_disp_chan_ntfy(struct nvkm_object *object, u32 type, struct nvkm_event **pevent)
 {
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
-	struct nvkm_disp *disp = chan->disp;
+	struct nvif_disp_chan_priv *uchan = container_of(object, typeof(*uchan), object);
+	struct nvkm_disp *disp = uchan->chan.disp;
 
 	switch (type) {
 	case 0:
@@ -43,94 +49,104 @@ nvkm_disp_chan_ntfy(struct nvkm_object *object, u32 type, struct nvkm_event **pe
 	return -EINVAL;
 }
 
-static int
-nvkm_disp_chan_map(struct nvkm_object *object, void *argv, u32 argc,
-		   enum nvkm_object_map *type, u64 *addr, u64 *size)
-{
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
-	struct nvkm_device *device = chan->disp->engine.subdev.device;
-	const u64 base = device->func->resource_addr(device, 0);
-
-	*type = NVKM_OBJECT_MAP_IO;
-	*addr = base + chan->func->user(chan, size);
-	return 0;
-}
-
-struct nvkm_disp_chan_object {
+struct nvif_ctxdma_priv {
 	struct nvkm_oproxy oproxy;
 	struct nvkm_disp *disp;
 	int hash;
 };
 
 static void
-nvkm_disp_chan_child_del_(struct nvkm_oproxy *base)
+nvkm_disp_chan_ctxdma_del(struct nvif_ctxdma_priv *ctxdma)
 {
-	struct nvkm_disp_chan_object *object = container_of(base, typeof(*object), oproxy);
+	struct nvkm_object *object = &ctxdma->oproxy.base;
+
+	nvkm_object_del(&object);
+}
+
+static const struct nvif_ctxdma_impl
+nvkm_disp_chan_ctxdma_impl = {
+	.del = nvkm_disp_chan_ctxdma_del,
+};
+
+static void
+nvkm_disp_chan_ctxdma_dtor(struct nvkm_oproxy *base)
+{
+	struct nvif_ctxdma_priv *object = container_of(base, typeof(*object), oproxy);
 
 	nvkm_ramht_remove(object->disp->ramht, object->hash);
 }
 
 static const struct nvkm_oproxy_func
-nvkm_disp_chan_child_func_ = {
-	.dtor[0] = nvkm_disp_chan_child_del_,
+nvkm_disp_chan_ctxdma = {
+	.dtor[0] = nvkm_disp_chan_ctxdma_dtor,
 };
 
+#include <engine/dma/priv.h>
+
 static int
-nvkm_disp_chan_child_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-			 struct nvkm_object **pobject)
+nvkm_disp_chan_ctxdma_new(struct nvif_disp_chan_priv *uchan, u32 handle, s32 oclass,
+			  struct nv_dma_v0 *args, u32 argc,
+			  const struct nvif_ctxdma_impl **pimpl, struct nvif_ctxdma_priv **ppriv)
 {
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(oclass->parent);
+	struct nvkm_disp_chan *chan = &uchan->chan;
 	struct nvkm_disp *disp = chan->disp;
 	struct nvkm_device *device = disp->engine.subdev.device;
-	const struct nvkm_device_oclass *sclass = oclass->priv;
-	struct nvkm_disp_chan_object *object;
+	struct nvkm_dma *dma = device->dma;
+	struct nvkm_dmaobj *dmaobj;
+	struct nvif_ctxdma_priv *object;
 	int ret;
 
 	if (!(object = kzalloc(sizeof(*object), GFP_KERNEL)))
 		return -ENOMEM;
-	nvkm_oproxy_ctor(&nvkm_disp_chan_child_func_, oclass, &object->oproxy);
+
+	nvkm_oproxy_ctor(&nvkm_disp_chan_ctxdma, &(struct nvkm_oclass) {}, &object->oproxy);
 	object->disp = disp;
-	*pobject = &object->oproxy.base;
 
-	ret = sclass->ctor(device, oclass, argv, argc, &object->oproxy.object);
+	ret = dma->func->class_new(dma, &(struct nvkm_oclass) {
+					.client = uchan->object.client,
+					.base.oclass = oclass
+				   }, args, argc, &dmaobj);
+	object->oproxy.object = &dmaobj->object;
 	if (ret)
-		return ret;
+		goto done;
 
-	object->hash = chan->func->bind(chan, object->oproxy.object, oclass->handle);
-	if (object->hash < 0)
-		return object->hash;
-
-	return 0;
-}
-
-static int
-nvkm_disp_chan_child_get(struct nvkm_object *object, int index, struct nvkm_oclass *sclass)
-{
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
-	struct nvkm_device *device = chan->disp->engine.subdev.device;
-	const struct nvkm_device_oclass *oclass = NULL;
-
-	if (chan->func->bind)
-		sclass->engine = nvkm_device_engine(device, NVKM_ENGINE_DMAOBJ, 0);
-	else
-		sclass->engine = NULL;
-
-	if (sclass->engine && sclass->engine->func->base.sclass) {
-		sclass->engine->func->base.sclass(sclass, index, &oclass);
-		if (oclass) {
-			sclass->ctor = nvkm_disp_chan_child_new;
-			sclass->priv = oclass;
-			return 0;
-		}
+	object->hash = chan->func->bind(chan, object->oproxy.object, handle);
+	if (object->hash < 0) {
+		ret = object->hash;
+		goto done;
 	}
 
-	return -EINVAL;
+	*pimpl = &nvkm_disp_chan_ctxdma_impl;
+	*ppriv = object;
+
+	nvkm_object_link(&uchan->object, &object->oproxy.base);
+
+done:
+	if (ret)
+		nvkm_disp_chan_ctxdma_del(object);
+
+	return ret;
 }
+
+static void
+nvkm_disp_chan_del(struct nvif_disp_chan_priv *uchan)
+{
+	struct nvkm_object *object = &uchan->object;
+
+	nvkm_object_fini(object, false);
+	nvkm_object_del(&object);
+}
+
+static const struct nvif_disp_chan_impl
+nvkm_disp_chan_impl = {
+	.del = nvkm_disp_chan_del,
+};
 
 static int
 nvkm_disp_chan_fini(struct nvkm_object *object, bool suspend)
 {
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
+	struct nvif_disp_chan_priv *uchan = container_of(object, typeof(*uchan), object);
+	struct nvkm_disp_chan *chan = &uchan->chan;
 
 	chan->func->fini(chan);
 	chan->func->intr(chan, false);
@@ -140,7 +156,8 @@ nvkm_disp_chan_fini(struct nvkm_object *object, bool suspend)
 static int
 nvkm_disp_chan_init(struct nvkm_object *object)
 {
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
+	struct nvif_disp_chan_priv *uchan = container_of(object, typeof(*uchan), object);
+	struct nvkm_disp_chan *chan = &uchan->chan;
 
 	chan->func->intr(chan, true);
 	return chan->func->init(chan);
@@ -149,16 +166,17 @@ nvkm_disp_chan_init(struct nvkm_object *object)
 static void *
 nvkm_disp_chan_dtor(struct nvkm_object *object)
 {
-	struct nvkm_disp_chan *chan = nvkm_disp_chan(object);
+
+	struct nvif_disp_chan_priv *uchan = container_of(object, typeof(*uchan), object);
+	struct nvkm_disp_chan *chan = &uchan->chan;
 	struct nvkm_disp *disp = chan->disp;
 
-	spin_lock(&disp->client.lock);
-	if (disp->chan[chan->chid.user] == chan)
-		disp->chan[chan->chid.user] = NULL;
-	spin_unlock(&disp->client.lock);
+	spin_lock(&disp->user.lock);
+	disp->chan[chan->chid.user] = NULL;
+	spin_unlock(&disp->user.lock);
 
 	nvkm_memory_unref(&chan->memory);
-	return chan;
+	return uchan;
 }
 
 static const struct nvkm_object_func
@@ -167,85 +185,73 @@ nvkm_disp_chan = {
 	.init = nvkm_disp_chan_init,
 	.fini = nvkm_disp_chan_fini,
 	.ntfy = nvkm_disp_chan_ntfy,
-	.map = nvkm_disp_chan_map,
-	.sclass = nvkm_disp_chan_child_get,
 };
 
-static int
-nvkm_disp_chan_new_(struct nvkm_disp *disp, int nr, const struct nvkm_oclass *oclass,
-		    void *argv, u32 argc, struct nvkm_object **pobject)
+int
+nvkm_disp_chan_new(struct nvkm_disp *disp, const struct nvkm_disp_func_chan *func, u8 id,
+		   struct nvkm_memory *memory, const struct nvif_disp_chan_impl **pimpl,
+		   struct nvif_disp_chan_priv **ppriv, struct nvkm_object **pobject)
 {
-	const struct nvkm_disp_chan_user *user = NULL;
+	struct nvkm_device *device = disp->engine.subdev.device;
+	struct nvif_disp_chan_priv *uchan;
 	struct nvkm_disp_chan *chan;
-	union nvif_disp_chan_args *args = argv;
-	int ret, i;
+	int ret;
 
-	for (i = 0; disp->func->user[i].ctor; i++) {
-		if (disp->func->user[i].base.oclass == oclass->base.oclass) {
-			user = disp->func->user[i].chan;
-			break;
-		}
-	}
-
-	if (WARN_ON(!user))
+	if (!memory != !func->chan->func->push)
 		return -EINVAL;
 
-	if (argc != sizeof(args->v0) || args->v0.version != 0)
-		return -ENOSYS;
-	if (args->v0.id >= nr || !args->v0.pushbuf != !user->func->push)
-		return -EINVAL;
-
-	if (!(chan = kzalloc(sizeof(*chan), GFP_KERNEL)))
+	uchan = kzalloc(sizeof(*uchan), GFP_KERNEL);
+	if (!uchan)
 		return -ENOMEM;
-	*pobject = &chan->object;
+	chan = &uchan->chan;
 
-	nvkm_object_ctor(&nvkm_disp_chan, oclass, &chan->object);
-	chan->func = user->func;
-	chan->mthd = user->mthd;
+	nvkm_object_ctor(&nvkm_disp_chan, &(struct nvkm_oclass) {}, &uchan->object);
+	chan->func = func->chan->func;
+	chan->mthd = func->chan->mthd;
 	chan->disp = disp;
-	chan->chid.ctrl = user->ctrl + args->v0.id;
-	chan->chid.user = user->user + args->v0.id;
-	chan->head = args->v0.id;
+	chan->chid.ctrl = func->chan->ctrl + id;
+	chan->chid.user = func->chan->user + id;
+	chan->head = id;
 
-	if (chan->func->push) {
-		ret = chan->func->push(chan, args->v0.pushbuf);
-		if (ret)
-			return ret;
-	}
-
-	spin_lock(&disp->client.lock);
+	spin_lock(&disp->user.lock);
 	if (disp->chan[chan->chid.user]) {
-		spin_unlock(&disp->client.lock);
+		spin_unlock(&disp->user.lock);
+		kfree(uchan);
 		return -EBUSY;
 	}
 	disp->chan[chan->chid.user] = chan;
-	spin_unlock(&disp->client.lock);
-	return 0;
-}
+	chan->user.oclass = func->oclass;
+	spin_unlock(&disp->user.lock);
 
-int
-nvkm_disp_wndw_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		   struct nvkm_object **pobject)
-{
-	struct nvkm_disp *disp = nvkm_udisp(oclass->parent);
+	*pobject = &uchan->object;
 
-	return nvkm_disp_chan_new_(disp, disp->wndw.nr, oclass, argv, argc, pobject);
-}
+	uchan->impl = nvkm_disp_chan_impl;
+	uchan->impl.map.type = NVIF_MAP_IO;
+	uchan->impl.map.handle = device->func->resource_addr(device, 0);
+	uchan->impl.map.handle += chan->func->user(chan, &uchan->impl.map.length);
+	if (chan->func->bind)
+		uchan->impl.ctxdma.new = nvkm_disp_chan_ctxdma_new;
 
-int
-nvkm_disp_chan_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		   struct nvkm_object **pobject)
-{
-	struct nvkm_disp *disp = nvkm_udisp(oclass->parent);
+	if (chan->func->push) {
+		chan->memory = nvkm_memory_ref(memory);
 
-	return nvkm_disp_chan_new_(disp, disp->head.nr, oclass, argv, argc, pobject);
-}
+		ret = chan->func->push(chan);
+		if (ret) {
+			nvkm_object_del(pobject);
+			return ret;
+		}
+	}
 
-int
-nvkm_disp_core_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
-		   struct nvkm_object **pobject)
-{
-	struct nvkm_disp *disp = nvkm_udisp(oclass->parent);
+	ret = nvkm_disp_chan_init(&uchan->object);
+	if (ret)
+		goto done;
 
-	return nvkm_disp_chan_new_(disp, 1, oclass, argv, argc, pobject);
+	*pimpl = &uchan->impl;
+	*ppriv = uchan;
+
+done:
+	if (ret)
+		nvkm_disp_chan_del(uchan);
+
+	return ret;
 }

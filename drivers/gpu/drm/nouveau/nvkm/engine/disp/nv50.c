@@ -37,7 +37,6 @@
 #include <subdev/bios/pll.h>
 #include <subdev/devinit.h>
 #include <subdev/i2c.h>
-#include <subdev/mmu.h>
 #include <subdev/timer.h>
 
 #include <nvif/class.h>
@@ -681,12 +680,8 @@ nv50_disp_dmac_init(struct nvkm_disp_chan *chan)
 }
 
 int
-nv50_disp_dmac_push(struct nvkm_disp_chan *chan, u64 object)
+nv50_disp_dmac_push(struct nvkm_disp_chan *chan)
 {
-	chan->memory = nvkm_umem_search(chan->object.client, object);
-	if (IS_ERR(chan->memory))
-		return PTR_ERR(chan->memory);
-
 	if (nvkm_memory_size(chan->memory) < 0x1000)
 		return -EINVAL;
 
@@ -1776,14 +1771,13 @@ nv50_disp = {
 	.dac = { .cnt = nv50_dac_cnt, .new = nv50_dac_new },
 	.sor = { .cnt = nv50_sor_cnt, .new = nv50_sor_new },
 	.pior = { .cnt = nv50_pior_cnt, .new = nv50_pior_new },
-	.root = { 0, 0, NV50_DISP },
 	.user = {
-		{{0,0,NV50_DISP_CURSOR             }, nvkm_disp_chan_new, &nv50_disp_curs },
-		{{0,0,NV50_DISP_OVERLAY            }, nvkm_disp_chan_new, &nv50_disp_oimm },
-		{{0,0,NV50_DISP_BASE_CHANNEL_DMA   }, nvkm_disp_chan_new, &nv50_disp_base },
-		{{0,0,NV50_DISP_CORE_CHANNEL_DMA   }, nvkm_disp_core_new, &nv50_disp_core },
-		{{0,0,NV50_DISP_OVERLAY_CHANNEL_DMA}, nvkm_disp_chan_new, &nv50_disp_ovly },
-		{}
+		.root = { NV50_DISP },
+		.curs = { NV50_DISP_CURSOR             , &nv50_disp_curs },
+		.oimm = { NV50_DISP_OVERLAY            , &nv50_disp_oimm },
+		.base = { NV50_DISP_BASE_CHANNEL_DMA   , &nv50_disp_base },
+		.core = { NV50_DISP_CORE_CHANNEL_DMA   , &nv50_disp_core },
+		.ovly = { NV50_DISP_OVERLAY_CHANNEL_DMA, &nv50_disp_ovly },
 	}
 };
 

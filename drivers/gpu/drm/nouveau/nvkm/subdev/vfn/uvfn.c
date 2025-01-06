@@ -19,49 +19,55 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#define nvkm_uvfn(p) container_of((p), struct nvkm_uvfn, object)
+#include "uvfn.h"
 #include "priv.h"
 
 #include <core/object.h>
 
-struct nvkm_uvfn {
+struct nvif_usermode_priv {
 	struct nvkm_object object;
 	struct nvkm_vfn *vfn;
+
+	struct nvif_usermode_impl impl;
 };
 
-static int
-nvkm_uvfn_map(struct nvkm_object *object, void *argv, u32 argc,
-	      enum nvkm_object_map *type, u64 *addr, u64 *size)
+static void
+nvkm_uvfn_del(struct nvif_usermode_priv *uvfn)
 {
-	struct nvkm_vfn *vfn = nvkm_uvfn(object)->vfn;
-	struct nvkm_device *device = vfn->subdev.device;
+	struct nvkm_object *object = &uvfn->object;
 
-	*addr = device->func->resource_addr(device, 0) + vfn->addr.user;
-	*size = vfn->func->user.size;
-	*type = NVKM_OBJECT_MAP_IO;
-	return 0;
+	nvkm_object_del(&object);
 }
+
+static const struct nvif_usermode_impl
+nvkm_uvfn_impl = {
+	.del = nvkm_uvfn_del,
+};
 
 static const struct nvkm_object_func
 nvkm_uvfn = {
-	.map = nvkm_uvfn_map,
 };
 
 int
-nvkm_uvfn_new(struct nvkm_device *device, const struct nvkm_oclass *oclass,
-	      void *argv, u32 argc, struct nvkm_object **pobject)
+nvkm_uvfn_new(struct nvkm_device *device, const struct nvif_usermode_impl **pimpl,
+	      struct nvif_usermode_priv **ppriv, struct nvkm_object **pobject)
 {
-	struct nvkm_uvfn *uvfn;
-
-	if (argc != 0)
-		return -ENOSYS;
+	struct nvkm_vfn *vfn = device->vfn;
+	struct nvif_usermode_priv *uvfn;
 
 	if (!(uvfn = kzalloc(sizeof(*uvfn), GFP_KERNEL)))
 		return -ENOMEM;
 
-	nvkm_object_ctor(&nvkm_uvfn, oclass, &uvfn->object);
+	nvkm_object_ctor(&nvkm_uvfn, &(struct nvkm_oclass) {}, &uvfn->object);
 	uvfn->vfn = device->vfn;
 
+	uvfn->impl = nvkm_uvfn_impl;
+	uvfn->impl.map.type = NVIF_MAP_IO;
+	uvfn->impl.map.handle = device->func->resource_addr(device, 0) + vfn->addr.user;
+	uvfn->impl.map.length = vfn->func->user.size;
+
+	*pimpl = &uvfn->impl;
+	*ppriv = uvfn;
 	*pobject = &uvfn->object;
 	return 0;
 }

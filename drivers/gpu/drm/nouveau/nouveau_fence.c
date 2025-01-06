@@ -29,8 +29,6 @@
 #include <linux/sched/signal.h>
 #include <trace/events/dma_fence.h>
 
-#include <nvif/if0020.h>
-
 #include "nouveau_drv.h"
 #include "nouveau_dma.h"
 #include "nouveau_fence.h"
@@ -170,7 +168,7 @@ nouveau_fence_uevent_work(struct work_struct *work)
 	spin_unlock_irqrestore(&fctx->lock, flags);
 }
 
-static int
+static enum nvif_event_stat
 nouveau_fence_wait_uevent_handler(struct nvif_event *event, void *repv, u32 repc)
 {
 	struct nouveau_fence_chan *fctx = container_of(event, typeof(*fctx), event);
@@ -184,10 +182,6 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	struct nouveau_cli *cli = chan->cli;
 	struct nouveau_drm *drm = cli->drm;
 	struct nouveau_fence_priv *priv = (void*)drm->fence;
-	struct {
-		struct nvif_event_v0 base;
-		struct nvif_chan_event_v0 host;
-	} args;
 	int ret;
 
 	INIT_WORK(&fctx->uevent_work, nouveau_fence_uevent_work);
@@ -207,13 +201,9 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	if (!priv->uevent)
 		return;
 
-	args.host.version = 0;
-	args.host.type = NVIF_CHAN_EVENT_V0_NON_STALL_INTR;
-
-	ret = nvif_event_ctor(&chan->user, "fenceNonStallIntr", (chan->runlist << 16) | chan->chid,
-			      nouveau_fence_wait_uevent_handler, false,
-			      &args.base, sizeof(args), &fctx->event);
-
+	ret = nvif_chan_event_ctor(&chan->chan, "fenceNonStallIntr",
+				   chan->chan.impl->event.nonstall,
+				   nouveau_fence_wait_uevent_handler, &fctx->event);
 	WARN_ON(ret);
 }
 

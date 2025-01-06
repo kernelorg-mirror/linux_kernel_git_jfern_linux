@@ -25,157 +25,103 @@
 
 #include <core/client.h>
 
-#include <nvif/if0008.h>
-#include <nvif/unpack.h>
-
 static int
-nvkm_ummu_sclass(struct nvkm_object *object, int index,
-		 struct nvkm_oclass *oclass)
+nvkm_ummu_vmm_new(struct nvif_mmu_priv *ummu, enum nvif_vmm_type type, u64 addr, u64 size,
+		  void *argv, u32 argc, const struct nvif_vmm_impl **pimpl,
+		  struct nvif_vmm_priv **ppriv)
 {
-	struct nvkm_mmu *mmu = nvkm_ummu(object)->mmu;
+	struct nvkm_object *object;
+	int ret;
 
-	if (mmu->func->mem.user.oclass) {
-		if (index-- == 0) {
-			oclass->base = mmu->func->mem.user;
-			oclass->ctor = nvkm_umem_new;
-			return 0;
-		}
-	}
-
-	if (mmu->func->vmm.user.oclass) {
-		if (index-- == 0) {
-			oclass->base = mmu->func->vmm.user;
-			oclass->ctor = nvkm_uvmm_new;
-			return 0;
-		}
-	}
-
-	return -EINVAL;
-}
-
-static int
-nvkm_ummu_heap(struct nvkm_ummu *ummu, void *argv, u32 argc)
-{
-	struct nvkm_mmu *mmu = ummu->mmu;
-	union {
-		struct nvif_mmu_heap_v0 v0;
-	} *args = argv;
-	int ret = -ENOSYS;
-	u8 index;
-
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, false))) {
-		if ((index = args->v0.index) >= mmu->heap_nr)
-			return -EINVAL;
-		args->v0.size = mmu->heap[index].size;
-	} else
+	ret = nvkm_uvmm_new(ummu->mmu, type, addr, size, argv, argc, pimpl, ppriv, &object);
+	if (ret)
 		return ret;
 
+	nvkm_object_link(&ummu->object, object);
 	return 0;
 }
 
 static int
-nvkm_ummu_type(struct nvkm_ummu *ummu, void *argv, u32 argc)
+nvkm_ummu_mem_new(struct nvif_mmu_priv *ummu, u8 type, u8 page, u64 size, void *argv, u32 argc,
+		  const struct nvif_mem_impl **pimpl, struct nvif_mem_priv **ppriv)
 {
-	struct nvkm_mmu *mmu = ummu->mmu;
-	union {
-		struct nvif_mmu_type_v0 v0;
-	} *args = argv;
-	int ret = -ENOSYS;
-	u8 type, index;
+	struct nvkm_object *object;
+	int ret;
 
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, false))) {
-		if ((index = args->v0.index) >= mmu->type_nr)
-			return -EINVAL;
-		type = mmu->type[index].type;
-		args->v0.heap = mmu->type[index].heap;
-		args->v0.vram = !!(type & NVKM_MEM_VRAM);
-		args->v0.host = !!(type & NVKM_MEM_HOST);
-		args->v0.comp = !!(type & NVKM_MEM_COMP);
-		args->v0.disp = !!(type & NVKM_MEM_DISP);
-		args->v0.kind = !!(type & NVKM_MEM_KIND);
-		args->v0.mappable = !!(type & NVKM_MEM_MAPPABLE);
-		args->v0.coherent = !!(type & NVKM_MEM_COHERENT);
-		args->v0.uncached = !!(type & NVKM_MEM_UNCACHED);
-	} else
+	ret = nvkm_umem_new(ummu->mmu, type, page, size, argv, argc, pimpl, ppriv, &object);
+	if (ret)
 		return ret;
 
+	nvkm_object_link(&ummu->object, object);
 	return 0;
 }
 
-static int
-nvkm_ummu_kind(struct nvkm_ummu *ummu, void *argv, u32 argc)
+static void
+nvkm_ummu_del(struct nvif_mmu_priv *ummu)
 {
-	struct nvkm_mmu *mmu = ummu->mmu;
-	union {
-		struct nvif_mmu_kind_v0 v0;
-	} *args = argv;
-	const u8 *kind = NULL;
-	int ret = -ENOSYS, count = 0;
-	u8 kind_inv = 0;
+	struct nvkm_object *object = &ummu->object;
 
-	if (mmu->func->kind)
-		kind = mmu->func->kind(mmu, &count, &kind_inv);
-
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, true))) {
-		if (argc != args->v0.count * sizeof(*args->v0.data))
-			return -EINVAL;
-		if (args->v0.count > count)
-			return -EINVAL;
-		args->v0.kind_inv = kind_inv;
-		memcpy(args->v0.data, kind, args->v0.count);
-	} else
-		return ret;
-
-	return 0;
+	nvkm_object_del(&object);
 }
 
-static int
-nvkm_ummu_mthd(struct nvkm_object *object, u32 mthd, void *argv, u32 argc)
-{
-	struct nvkm_ummu *ummu = nvkm_ummu(object);
-	switch (mthd) {
-	case NVIF_MMU_V0_HEAP: return nvkm_ummu_heap(ummu, argv, argc);
-	case NVIF_MMU_V0_TYPE: return nvkm_ummu_type(ummu, argv, argc);
-	case NVIF_MMU_V0_KIND: return nvkm_ummu_kind(ummu, argv, argc);
-	default:
-		break;
-	}
-	return -EINVAL;
-}
+static const struct nvif_mmu_impl
+nvkm_ummu_impl = {
+	.del = nvkm_ummu_del,
+};
 
 static const struct nvkm_object_func
 nvkm_ummu = {
-	.mthd = nvkm_ummu_mthd,
-	.sclass = nvkm_ummu_sclass,
 };
 
 int
-nvkm_ummu_new(struct nvkm_device *device, const struct nvkm_oclass *oclass,
-	      void *argv, u32 argc, struct nvkm_object **pobject)
+nvkm_ummu_new(struct nvkm_device *device, const struct nvif_mmu_impl **pimpl,
+	      struct nvif_mmu_priv **ppriv, struct nvkm_object **pobject)
 {
-	union {
-		struct nvif_mmu_v0 v0;
-	} *args = argv;
 	struct nvkm_mmu *mmu = device->mmu;
-	struct nvkm_ummu *ummu;
-	int ret = -ENOSYS, kinds = 0;
-	u8 unused = 0;
-
-	if (mmu->func->kind)
-		mmu->func->kind(mmu, &kinds, &unused);
-
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, false))) {
-		args->v0.dmabits = mmu->dma_bits;
-		args->v0.heap_nr = mmu->heap_nr;
-		args->v0.type_nr = mmu->type_nr;
-		args->v0.kind_nr = kinds;
-	} else
-		return ret;
+	struct nvif_mmu_priv *ummu;
+	int kinds = 0;
 
 	if (!(ummu = kzalloc(sizeof(*ummu), GFP_KERNEL)))
 		return -ENOMEM;
-	nvkm_object_ctor(&nvkm_ummu, oclass, &ummu->object);
+
+	nvkm_object_ctor(&nvkm_ummu, &(struct nvkm_oclass) {}, &ummu->object);
 	ummu->mmu = mmu;
+	ummu->impl = nvkm_ummu_impl;
+
+	ummu->impl.dmabits = mmu->dma_bits;
+	ummu->impl.heap_nr = mmu->heap_nr;
+	ummu->impl.type_nr = mmu->type_nr;
+
+	for (int i = 0; i < mmu->heap_nr; i++)
+		ummu->impl.heap[i].size = mmu->heap[i].size;
+
+	for (int i = 0; i < mmu->type_nr; i++) {
+		u8 type = mmu->type[i].type;
+
+		ummu->impl.type[i].type |= (type & NVKM_MEM_VRAM) ? NVIF_MEM_VRAM : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_HOST) ? NVIF_MEM_HOST : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_COMP) ? NVIF_MEM_COMP : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_DISP) ? NVIF_MEM_DISP : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_KIND) ? NVIF_MEM_KIND : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_MAPPABLE) ? NVIF_MEM_MAPPABLE : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_COHERENT) ? NVIF_MEM_COHERENT : 0;
+		ummu->impl.type[i].type |= (type & NVKM_MEM_UNCACHED) ? NVIF_MEM_UNCACHED : 0;
+		ummu->impl.type[i].heap = mmu->type[i].heap;
+	}
+
+	if (mmu->func->kind) {
+		ummu->impl.kind = mmu->func->kind(mmu, &kinds, &ummu->impl.kind_inv);
+		ummu->impl.kind_nr = kinds;
+	}
+
+	ummu->impl.mem.oclass = mmu->func->mem.user.oclass;
+	ummu->impl.mem.new = nvkm_ummu_mem_new;
+
+	ummu->impl.vmm.oclass = mmu->func->vmm.user.oclass;
+	ummu->impl.vmm.new = nvkm_ummu_vmm_new;
+
+	*pimpl = &ummu->impl;
+	*ppriv = ummu;
 	*pobject = &ummu->object;
 	return 0;
 }

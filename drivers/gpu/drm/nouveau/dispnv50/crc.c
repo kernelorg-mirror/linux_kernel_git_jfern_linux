@@ -122,7 +122,7 @@ static void nv50_crc_ctx_flip_work(struct kthread_work *base)
 
 static inline void nv50_crc_reset_ctx(struct nv50_crc_notifier_ctx *ctx)
 {
-	memset_io(ctx->mem.object.map.ptr, 0, ctx->mem.object.map.size);
+	memset_io(ctx->map.ptr, 0, ctx->map.impl->length);
 }
 
 static void
@@ -225,7 +225,7 @@ static void nv50_crc_wait_ctx_finished(struct nv50_head *head,
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	s64 ret;
 
-	ret = nvif_msec(&drm->client.device, 50,
+	ret = nvif_msec(&drm->device, 50,
 			if (func->ctx_finished(head, ctx)) break;);
 	if (ret == -ETIMEDOUT)
 		NV_ERROR(drm,
@@ -505,36 +505,34 @@ nv50_crc_ctx_init(struct nv50_head *head, struct nvif_mmu *mmu,
 	struct nv50_core *core = nv50_disp(head->base.base.dev)->core;
 	int ret;
 
-	ret = nvif_mem_ctor_map(mmu, "kmsCrcNtfy", NVIF_MEM_VRAM, len, &ctx->mem);
+	ret = nvif_mem_ctor_map(mmu, "kmsCrcNtfy", NVIF_MEM_VRAM, len, &ctx->mem, &ctx->map);
 	if (ret)
 		return ret;
 
-	ret = nvif_object_ctor(&core->chan.base.user, "kmsCrcNtfyCtxDma",
-			       NV50_DISP_HANDLE_CRC_CTX(head, idx),
-			       NV_DMA_IN_MEMORY,
-			       &(struct nv_dma_v0) {
-					.target = NV_DMA_V0_TARGET_VRAM,
-					.access = NV_DMA_V0_ACCESS_RDWR,
-					.start = ctx->mem.addr,
-					.limit =  ctx->mem.addr
-						+ ctx->mem.size - 1,
-			       }, sizeof(struct nv_dma_v0),
-			       &ctx->ntfy);
+	ret = nvif_dispchan_ctxdma_ctor(&core->chan, "kmsCrcNtfyCtxDma",
+					NV50_DISP_HANDLE_CRC_CTX(head, idx),
+					NV_DMA_IN_MEMORY, &(struct nv_dma_v0) {
+						.target = NV_DMA_V0_TARGET_VRAM,
+						.access = NV_DMA_V0_ACCESS_RDWR,
+						.start = ctx->mem.impl->addr,
+						.limit = ctx->mem.impl->addr +
+							 ctx->mem.impl->size - 1,
+					}, sizeof(struct nv_dma_v0), &ctx->ntfy);
 	if (ret)
 		goto fail_fini;
 
 	return 0;
 
 fail_fini:
-	nvif_mem_dtor(&ctx->mem);
+	nvif_mem_unmap_dtor(&ctx->mem, &ctx->map);
 	return ret;
 }
 
 static inline void
 nv50_crc_ctx_fini(struct nv50_crc_notifier_ctx *ctx)
 {
-	nvif_object_dtor(&ctx->ntfy);
-	nvif_mem_dtor(&ctx->mem);
+	nvif_ctxdma_dtor(&ctx->ntfy);
+	nvif_mem_unmap_dtor(&ctx->mem, &ctx->map);
 }
 
 int nv50_crc_set_source(struct drm_crtc *crtc, const char *source_str)
@@ -545,7 +543,7 @@ int nv50_crc_set_source(struct drm_crtc *crtc, const char *source_str)
 	struct nv50_head *head = nv50_head(crtc);
 	struct nv50_crc *crc = &head->crc;
 	const struct nv50_crc_func *func = nv50_disp(dev)->core->func->crc;
-	struct nvif_mmu *mmu = &nouveau_drm(dev)->client.mmu;
+	struct nvif_mmu *mmu = &nouveau_drm(dev)->cli.mmu;
 	struct nv50_head_atom *asyh;
 	struct drm_crtc_state *crtc_state;
 	enum nv50_crc_source source;

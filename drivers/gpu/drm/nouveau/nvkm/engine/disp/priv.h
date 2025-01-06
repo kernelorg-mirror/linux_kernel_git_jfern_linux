@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #ifndef __NVKM_DISP_PRIV_H__
 #define __NVKM_DISP_PRIV_H__
-#define nvkm_udisp(p) container_of((p), struct nvkm_disp, client.object)
 #include <engine/disp.h>
 #include <core/enum.h>
 struct nvkm_head;
@@ -36,14 +35,21 @@ struct nvkm_disp_func {
 
 	u16 ramht_size;
 
-	struct nvkm_sclass root;
+	struct {
+		struct {
+			s32 oclass;
+		} root;
 
-	struct nvkm_disp_user {
-		struct nvkm_sclass base;
-		int (*ctor)(const struct nvkm_oclass *, void *argv, u32 argc,
-			    struct nvkm_object **);
-		const struct nvkm_disp_chan_user *chan;
-	} user[];
+		struct {
+			s32 oclass;
+			void (*addr)(struct nvkm_disp *, u64 *addr, u64 *size);
+		} caps;
+
+		struct nvkm_disp_func_chan {
+			s32 oclass;
+			const struct nvkm_disp_chan_user *chan;
+		} core, base, ovly, wndw, wimm, curs, oimm;
+	} user;
 };
 
 int nv50_disp_oneinit(struct nvkm_disp *);
@@ -69,7 +75,7 @@ void gv100_disp_fini(struct nvkm_disp *, bool suspend);
 void gv100_disp_intr(struct nvkm_disp *);
 void gv100_disp_super(struct work_struct *);
 int gv100_disp_wndw_cnt(struct nvkm_disp *, unsigned long *);
-int gv100_disp_caps_new(const struct nvkm_oclass *, void *, u32, struct nvkm_object **);
+void gv100_disp_caps(struct nvkm_disp *, u64 *addr, u64 *size);
 
 int tu102_disp_init(struct nvkm_disp *);
 
@@ -82,9 +88,4 @@ void nv50_disp_chan_uevent_send(struct nvkm_disp *, int);
 
 extern const struct nvkm_event_func gf119_disp_chan_uevent;
 extern const struct nvkm_event_func gv100_disp_chan_uevent;
-
-int nvkm_udisp_new(const struct nvkm_oclass *, void *, u32, struct nvkm_object **);
-int nvkm_uconn_new(const struct nvkm_oclass *, void *, u32, struct nvkm_object **);
-int nvkm_uoutp_new(const struct nvkm_oclass *, void *, u32, struct nvkm_object **);
-int nvkm_uhead_new(const struct nvkm_oclass *, void *, u32, struct nvkm_object **);
 #endif

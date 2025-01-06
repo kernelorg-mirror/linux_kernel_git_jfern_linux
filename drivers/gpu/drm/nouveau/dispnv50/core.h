@@ -5,9 +5,16 @@
 #include "crc.h"
 #include <nouveau_encoder.h>
 
+#include <nvif/ctxdma.h>
+#include <nvif/dispchan.h>
+
 struct nv50_core {
 	const struct nv50_core_func *func;
-	struct nv50_dmac chan;
+	struct nvif_dispchan chan;
+
+	struct nvif_ctxdma sync;
+	struct nvif_ctxdma vram;
+
 	bool assign_windows;
 };
 

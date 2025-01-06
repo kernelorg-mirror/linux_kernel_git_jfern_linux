@@ -30,40 +30,36 @@
 #include <nvif/if000a.h>
 #include <nvif/unpack.h>
 
-static const struct nvkm_object_func nvkm_umem;
+struct nvif_mem_priv {
+	struct nvkm_object object;
+	struct nvkm_mmu *mmu;
+	u8 type:8;
+	bool mappable:1;
+	bool io:1;
+
+	struct nvkm_memory *memory;
+	struct list_head head;
+
+	union {
+		struct nvkm_vma *bar;
+		void *map;
+	};
+
+	struct nvif_mem_impl impl;
+};
+
 struct nvkm_memory *
-nvkm_umem_search(struct nvkm_client *client, u64 handle)
+nvkm_umem_ref(struct nvif_mem_priv *umem)
 {
-	struct nvkm_client *master = client->object.client;
-	struct nvkm_memory *memory = NULL;
-	struct nvkm_object *object;
-	struct nvkm_umem *umem;
+	if (umem)
+		return nvkm_memory_ref(umem->memory);
 
-	object = nvkm_object_search(client, handle, &nvkm_umem);
-	if (IS_ERR(object)) {
-		if (client != master) {
-			spin_lock(&master->lock);
-			list_for_each_entry(umem, &master->umem, head) {
-				if (umem->object.object == handle) {
-					memory = nvkm_memory_ref(umem->memory);
-					break;
-				}
-			}
-			spin_unlock(&master->lock);
-		}
-	} else {
-		umem = nvkm_umem(object);
-		memory = nvkm_memory_ref(umem->memory);
-	}
-
-	return memory ? memory : ERR_PTR(-ENOENT);
+	return NULL;
 }
 
 static int
-nvkm_umem_unmap(struct nvkm_object *object)
+nvkm_umem_unmap(struct nvif_mem_priv *umem)
 {
-	struct nvkm_umem *umem = nvkm_umem(object);
-
 	if (!umem->map)
 		return -EEXIST;
 
@@ -83,10 +79,8 @@ nvkm_umem_unmap(struct nvkm_object *object)
 }
 
 static int
-nvkm_umem_map(struct nvkm_object *object, void *argv, u32 argc,
-	      enum nvkm_object_map *type, u64 *handle, u64 *length)
+nvkm_umem_map(struct nvif_mem_priv *umem, void *argv, u32 argc, struct nvif_mapinfo *map)
 {
-	struct nvkm_umem *umem = nvkm_umem(object);
 	struct nvkm_mmu *mmu = umem->mmu;
 
 	if (!umem->mappable)
@@ -99,34 +93,47 @@ nvkm_umem_map(struct nvkm_object *object, void *argv, u32 argc,
 		if (ret)
 			return ret;
 
-		*handle = (unsigned long)(void *)umem->map;
-		*length = nvkm_memory_size(umem->memory);
-		*type = NVKM_OBJECT_MAP_VA;
+		map->handle = (unsigned long)(void *)umem->map;
+		map->length = nvkm_memory_size(umem->memory);
+		map->type = NVIF_MAP_VA;
 		return 0;
 	} else
 	if ((umem->type & NVKM_MEM_VRAM) ||
 	    (umem->type & NVKM_MEM_KIND)) {
 		int ret = mmu->func->mem.umap(mmu, umem->memory, argv, argc,
-					      handle, length, &umem->bar);
+					      &map->handle, &map->length, &umem->bar);
 		if (ret)
 			return ret;
 
-		*type = NVKM_OBJECT_MAP_IO;
+		map->type = NVIF_MAP_IO;
 	} else {
 		return -EINVAL;
 	}
 
-	umem->io = (*type == NVKM_OBJECT_MAP_IO);
+	umem->io = (map->type == NVIF_MAP_IO);
 	return 0;
 }
+
+static void
+nvkm_umem_del(struct nvif_mem_priv *umem)
+{
+	struct nvkm_object *object = &umem->object;
+
+	nvkm_object_del(&object);
+}
+
+static const struct nvif_mem_impl
+nvkm_umem_impl = {
+	.del = nvkm_umem_del,
+	.map = nvkm_umem_map,
+	.unmap = nvkm_umem_unmap,
+};
 
 static void *
 nvkm_umem_dtor(struct nvkm_object *object)
 {
-	struct nvkm_umem *umem = nvkm_umem(object);
-	spin_lock(&umem->object.client->lock);
-	list_del_init(&umem->head);
-	spin_unlock(&umem->object.client->lock);
+	struct nvif_mem_priv *umem = container_of(object, typeof(*umem), object);
+
 	nvkm_memory_unref(&umem->memory);
 	return umem;
 }
@@ -134,40 +141,25 @@ nvkm_umem_dtor(struct nvkm_object *object)
 static const struct nvkm_object_func
 nvkm_umem = {
 	.dtor = nvkm_umem_dtor,
-	.map = nvkm_umem_map,
-	.unmap = nvkm_umem_unmap,
 };
 
 int
-nvkm_umem_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
+nvkm_umem_new(struct nvkm_mmu *mmu, u8 type, u8 page, u64 size, void *argv, u32 argc,
+	      const struct nvif_mem_impl **pimpl, struct nvif_mem_priv **ppriv,
 	      struct nvkm_object **pobject)
 {
-	struct nvkm_mmu *mmu = nvkm_ummu(oclass->parent)->mmu;
-	union {
-		struct nvif_mem_v0 v0;
-	} *args = argv;
-	struct nvkm_umem *umem;
-	int type, ret = -ENOSYS;
-	u8  page;
-	u64 size;
-
-	if (!(ret = nvif_unpack(ret, &argv, &argc, args->v0, 0, 0, true))) {
-		type = args->v0.type;
-		page = args->v0.page;
-		size = args->v0.size;
-	} else
-		return ret;
+	struct nvif_mem_priv *umem;
+	int ret;
 
 	if (type >= mmu->type_nr)
 		return -EINVAL;
 
 	if (!(umem = kzalloc(sizeof(*umem), GFP_KERNEL)))
 		return -ENOMEM;
-	nvkm_object_ctor(&nvkm_umem, oclass, &umem->object);
+	nvkm_object_ctor(&nvkm_umem, &(struct nvkm_oclass) {}, &umem->object);
 	umem->mmu = mmu;
 	umem->type = mmu->type[type].type;
 	INIT_LIST_HEAD(&umem->head);
-	*pobject = &umem->object;
 
 	if (mmu->type[type].type & NVKM_MEM_MAPPABLE) {
 		page = max_t(u8, page, PAGE_SHIFT);
@@ -179,12 +171,13 @@ nvkm_umem_new(const struct nvkm_oclass *oclass, void *argv, u32 argc,
 	if (ret)
 		return ret;
 
-	spin_lock(&umem->object.client->lock);
-	list_add(&umem->head, &umem->object.client->umem);
-	spin_unlock(&umem->object.client->lock);
+	umem->impl = nvkm_umem_impl;
+	umem->impl.page = nvkm_memory_page(umem->memory);
+	umem->impl.addr = nvkm_memory_addr(umem->memory);
+	umem->impl.size = nvkm_memory_size(umem->memory);
 
-	args->v0.page = nvkm_memory_page(umem->memory);
-	args->v0.addr = nvkm_memory_addr(umem->memory);
-	args->v0.size = nvkm_memory_size(umem->memory);
+	*pimpl = &umem->impl;
+	*ppriv = umem;
+	*pobject = &umem->object;
 	return 0;
 }
