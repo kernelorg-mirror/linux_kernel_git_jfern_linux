@@ -19,6 +19,8 @@ mod sec2;
 mod timer;
 mod vfn;
 
+pub mod core_api;
+
 /// VGPU MGR interface
 #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
 pub mod vgpu_mgr;

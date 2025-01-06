@@ -574,9 +574,9 @@ const VMM_DESC_GP100_12: [VmmDescType; 6] = [
 ];
 
 pub(crate) struct VmmPage {
-    shift: u8,
+    pub shift: u8,
     desc_array_ptr: *const VmmDescType,
-    vmm_page_type: u8,
+    pub vmm_page_type: u8,
 }
 
 impl VmmPage {
@@ -594,7 +594,7 @@ impl VmmPage {
     }
 }
 
-const VMM_TU102: [VmmPage; 7] = [
+pub(crate) const VMM_TU102: [VmmPage; 7] = [
     VmmPage { shift: 47, desc_array_ptr: &VMM_DESC_GP100_16[4], vmm_page_type: NVKM_VMM_PAGE_Sxxx },
     VmmPage { shift: 38, desc_array_ptr: &VMM_DESC_GP100_16[3], vmm_page_type: NVKM_VMM_PAGE_Sxxx },
     VmmPage { shift: 29, desc_array_ptr: &VMM_DESC_GP100_16[2], vmm_page_type: NVKM_VMM_PAGE_Sxxx },

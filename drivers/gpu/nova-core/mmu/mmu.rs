@@ -110,8 +110,8 @@ const NVKM_MEM_COHERENT: u8 = 0x40;
 const NVKM_MEM_UNCACHED: u8 = 0x80;
 
 pub(crate) struct MmuType {
-    mmu_type: u8,
-    heap: u8,
+    pub mmu_type: u8,
+    pub heap: u8,
 }
 
 
