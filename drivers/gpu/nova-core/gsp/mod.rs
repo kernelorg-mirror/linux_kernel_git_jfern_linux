@@ -2,6 +2,7 @@
 
 pub(crate) use kernel::macros::versions;
 
+use crate::order_base_2;
 use kernel::bindings;
 use core::sync::atomic::{AtomicU16, Ordering};
 use kernel::prelude::*;
@@ -9,11 +10,14 @@ use kernel::sync::{Arc, Mutex, new_mutex};
 use kernel::sync::lock::Guard;
 use kernel::sync::lock::mutex::MutexBackend;
 
+use crate::nvfw::*;
 use crate::{align, div_round_up};
 use crate::chipsets_before;
 use crate::devinit;
 use crate::dma::DmaObject;
 use crate::falcon::Falcon;
+use crate::accel::fifo::{FifoRunList, EngineType, GpuPromoteBufferEntry};
+use crate::accel::gr::{CtxBufSize, CtxBufInfo};
 use crate::gsp::fwsec::Fwsec;
 use crate::gsp::fwsec::{NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
                         NVFW_FALCON_APPIF_DMEMMAPPER_CMD_SB};
@@ -23,7 +27,6 @@ use crate::gsp::sharedq::*;
 use crate::gpu::NOVA_ENABLE_VGPU;
 use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
-use crate::gpu::FifoDeviceInfoTable;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 
@@ -33,6 +36,7 @@ use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
 use crate::vfn::{Vfn, VfnHandler};
 use crate::mmu::mm::MemRange;
+use crate::mmu::memory::{InstObj, VramObj};
 use crate::mmu::vmm::Vmm;
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
@@ -52,6 +56,8 @@ mod sharedq;
 const GSP_PAGE_SHIFT: u32 = 12;
 pub(crate) const GSP_PAGE_SIZE: u32 = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
+
+const MAX_GPC_COUNT: u32 = 32;
 
 #[versions(GSP)]
 #[allow(unused)]
@@ -197,6 +203,11 @@ pub(crate) struct GspVa {
     object: Arc<GspObject>
 }
 
+pub(crate) struct GspChannel {
+    object: Arc<GspObject>,
+    chid: u32,
+}
+
 impl GspClient {
     pub(crate) fn get_client_handle(&self) -> Result<u32> {
         Ok(self.object.handle)
@@ -223,9 +234,15 @@ pub(crate) struct GspManager {
     gsp_objs: Arc<GSPSharedMemObjectsOuter::ver>,
     bar1_pdb: u64,
     bar2_pdb: u64,
+    gpcs: u8,
+    tpcs: u8,
     vmmu_segment_size: u64,
     alloc_id: AtomicU16,
-    fifo_info: FifoDeviceInfoTable,
+    runl: FifoRunList,
+    mthdbuf_size: u32,
+    internal_client: Arc<GspClient>,
+    internal_device: Arc<GspDevice>,
+    gr_ctx_info: KVec<CtxBufInfo>,
 }
 
 pub(crate) trait GspManager: Send + Sync {
@@ -237,11 +254,54 @@ pub(crate) trait GspManager: Send + Sync {
     fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa>;
     fn free_vaspace(&self, va: &GspVa) -> Result<()>;
 
+    fn alloc_chid(&self) -> Result<usize>;
+    fn free_chid(&self, chid: usize);
+    fn alloc_fifo_chan(&self,
+                       device: Arc<GspDevice>,
+                       engine_type: EngineType,
+                       engine_inst: u32,
+                       va: &GspVa,
+                       inst: &InstObj,
+                       userd: &VramObj,
+                       mthdbuf: &DmaObject,
+                       fifo_class: u32,
+                       chid: u32,
+                       offset: u64,
+                       length: u64,
+                       chan_priv: bool) -> Result<Arc<GspChannel>>;
+    fn free_fifo_chan(&self, channel: &GspChannel) -> Result<()>;
+
+    fn bind_fifo(&self,
+                 channel: &GspChannel,
+                 engine_type: EngineType,
+                 engine_inst: u32) -> Result<()>;
+    fn schedule_fifo(&self,
+                     channel: &GspChannel,
+                     enable: bool) -> Result<()>;
+
+
+    fn alloc_golden_chan(&self,
+                         device: Arc<GspDevice>,
+                         va: &GspVa,
+                         inst: &InstObj,
+                         fifo_class: u32) -> Result<Arc<GspChannel>>;
+
+    fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>>;
+    fn free_chan_obj(&self, object: &GspObject) -> Result<()>;
+
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
+    fn get_mthdbuf_size(&self) -> u32;
     fn get_bar_pdb(&self, bar: u8) -> u64;
+    fn get_gr_info(&self) -> (u8, u8);
+    fn get_internals(&self) -> Result<(Arc<GspClient>,
+                                       Arc<GspDevice>)>;
 
     fn get_vmmu_segment_size(&self) -> u64;
+    fn get_runlist(&self) -> &FifoRunList;
     fn get_engine_bitmap(&self) -> u64;
+    fn get_gr_ctx_info(&self) -> &KVec<CtxBufInfo>;
+    fn promote_gr_ctx(&self, device: Arc<GspDevice>, channel: Arc<GspChannel>,
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
 
     fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
     fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
@@ -283,6 +343,123 @@ impl GspManager for GspManager::ver {
         Ok(())
     }
 
+    fn alloc_chid(&self) -> Result<usize> {
+        Ok(self.runl.chids.get()? * 8)
+    }
+
+    fn free_chid(&self, chid: usize) {
+        self.runl.chids.put(chid / 8)
+    }
+
+    fn alloc_fifo_chan(&self,
+                       device: Arc<GspDevice>,
+                       engine_type: EngineType,
+                       engine_inst: u32,
+                       va: &GspVa,
+                       inst: &InstObj,
+                       userd: &VramObj,
+                       mthdbuf: &DmaObject,
+                       fifo_class: u32,
+                       chid: u32,
+                       offset: u64,
+                       length: u64,
+                       chan_priv: bool) -> Result<Arc<GspChannel>> {
+        pr_info!("alloc fifo et:{:?} ei:{} fc:{:#x} chid:{} offset:{:#x} length:{:#x} \n", engine_type, engine_inst, fifo_class, chid, offset, length);
+
+        let mut msg = FifoAlloc::ver::new(&device, engine_type, engine_inst, va,
+                                          inst, userd, mthdbuf,
+                                          chid, fifo_class, offset, length, chan_priv)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(Arc::new(GspChannel {
+            object: Arc::new(GspObject {
+                client: device.object.client.clone(),
+                parent: Some(device.object.clone()),
+                handle: msg.handle,
+            }, GFP_KERNEL)?,
+            chid
+        }, GFP_KERNEL)?)
+    }
+
+    fn bind_fifo(&self,
+                 channel: &GspChannel,
+                 engine_type: EngineType,
+                 engine_inst: u32) -> Result<()> {
+        let mut msg = BindParams::ver::new(channel, engine_type, engine_inst)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
+    fn schedule_fifo(&self,
+                     channel: &GspChannel,
+                     enable: bool) -> Result<()> {
+        let mut msg = GpFifoSchedule::ver::new(channel, enable)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
+    fn free_fifo_chan(&self, channel: &GspChannel) -> Result<()> {
+        let mut msg = FreeMsg::ver::get(&channel.object)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
+    fn alloc_golden_chan(&self,
+                         device: Arc<GspDevice>,
+                         va: &GspVa,
+                         inst: &InstObj,
+                         fifo_class: u32) -> Result<Arc<GspChannel>> {
+        let mut msg = FifoAlloc::ver::golden(&device, va,
+                                          inst, fifo_class)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(Arc::new(GspChannel {
+            object: Arc::new(GspObject {
+                client: device.object.client.clone(),
+                parent: Some(device.object.clone()),
+                handle: msg.handle,
+            }, GFP_KERNEL)?,
+            chid: 0
+        }, GFP_KERNEL)?)
+
+    }
+
+    fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>> {
+        let mut msg = AllocMsg::ver::get(Some(&channel.object.client.as_ref().unwrap()),
+                                         Some(&channel.object),
+                                         handle,
+                                         oclass, 0)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        Ok(Arc::new(GspObject {
+            client: channel.object.client.clone(),
+            parent: Some(channel.object.clone()),
+            handle: handle,
+        }, GFP_KERNEL)?)
+    }
+
+
+    fn free_chan_obj(&self, object: &GspObject) -> Result<()> {
+        let mut msg = FreeMsg::ver::get(object)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
     fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa> {
         let mut msg = AllocVMM::ver::new(&device)?;
 
@@ -319,6 +496,20 @@ impl GspManager for GspManager::ver {
         Ok(())
     }
 
+    fn get_mthdbuf_size(&self) -> u32 {
+        self.mthdbuf_size
+    }
+
+    fn get_gr_info(&self) -> (u8, u8) {
+        (self.gpcs, self.tpcs)
+    }
+
+    fn get_internals(&self) -> Result<(Arc<GspClient>,
+                                       Arc<GspDevice>)> {
+        Ok((self.internal_client.clone(), self.internal_device.clone()))
+    }
+
+
     fn get_bar_pdb(&self, bar: u8) -> u64 {
         if bar == 1 {
             self.bar1_pdb
@@ -331,12 +522,34 @@ impl GspManager for GspManager::ver {
         self.vmmu_segment_size
     }
 
+    fn get_runlist(&self) -> &FifoRunList {
+        &self.runl
+    }
+
     fn get_engine_bitmap(&self) -> u64 {
         let mut mask: u64 = 0;
-        for entry in &self.fifo_info.table {
-            mask |= 1_u64 << entry.id;
+        for runl in &self.runl.entries {
+            for eng in &runl.engns {
+                let nv2080 = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(eng.eng_type, eng.inst);
+
+                mask |= 1_u64 << nv2080;
+            }
         }
         mask
+    }
+
+    fn get_gr_ctx_info(&self) -> &KVec<CtxBufInfo> {
+        &self.gr_ctx_info
+    }
+
+    fn promote_gr_ctx(&self, device: Arc<GspDevice>, channel: Arc<GspChannel>,
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
+        let mut msg = GpuPromoteCtx::ver::new_promote_gr(&device, &channel,
+                                                         bufferEntries)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)
     }
 
     fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32 {
@@ -381,6 +594,60 @@ impl GspManager for GspManager::ver {
         }
     }
 }
+
+struct CtxBufTable {
+    id0: u32,
+    id1: u32,
+    global: bool,
+    init: bool,
+    ro: bool
+}
+
+const NumCtxBufs: usize = 8;
+
+#[versions(GSP)]
+const CtxBufMap: [CtxBufTable; NumCtxBufs] = [
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN,
+                  global: false,
+                  init: true,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_PATCH,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PATCH,
+                  global: false,
+                  init: true,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_BUNDLE_CB,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_BUFFER_BUNDLE_CB,
+                  global: true,
+                  init: false,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_PAGEPOOL,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PAGEPOOL,
+                  global: true,
+                  init: false,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_ATTRIBUTE_CB,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_ATTRIBUTE_CB,
+                  global: true,
+                  init: false,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_RTV_CB_GLOBAL,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_RTV_CB_GLOBAL,
+                  global: true,
+                  init: false,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_FECS_EVENT,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_FECS_EVENT,
+                  global: true,
+                  init: true,
+                  ro: false },
+    CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_PRIV_ACCESS_MAP,
+                  id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
+                  global: true,
+                  init: true,
+                  ro: true },
+];
 
 #[versions(GSP)]
 impl GspManager::ver {
@@ -498,6 +765,72 @@ impl GspManager::ver {
         Ok(())
     }
 
+    pub(crate) fn setup_ctx_buf_info(gr_ctx_bufs: KVec<CtxBufSize>) -> Result<KVec<CtxBufInfo>> {
+
+        let mut buf_info = KVec::new();
+        for i in 0..gr_ctx_bufs.len() {
+            let mut map_idx: usize = 0xffffffff;
+            for map in 0..CtxBufMap::ver.len() {
+                if CtxBufMap::ver[map].id0 == i as u32 {
+                    map_idx = map;
+                    break;
+                }
+            }
+
+            if map_idx == 0xffffffff {
+                continue;
+            }
+
+            let mut size: u32 = gr_ctx_bufs[i].size;
+
+            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN {
+                size = (align(size as usize, 0x1000) + 64 * 0x1000) as u32; // per subtx headers
+            }
+
+            let page;
+            if size >= 1 << 21 {
+                page = 21;
+            } else if size >= 1 << 16 {
+                page = 16;
+            } else {
+                page = 12;
+            }
+
+            let align;
+            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_ATTRIBUTE_CB {
+                align = order_base_2(size as usize) as u8; //TODO;
+            } else {
+                align = page;
+            }
+
+            buf_info.push(CtxBufInfo {
+                buffer_id: CtxBufMap::ver[map_idx].id1 as u16,
+                size,
+                page,
+                align,
+                global: CtxBufMap::ver[map_idx].global,
+                init: CtxBufMap::ver[map_idx].init,
+                ro: CtxBufMap::ver[map_idx].ro,
+                nonmapped: CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
+            }, GFP_KERNEL)?;
+
+            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
+                let last_ent = buf_info.len() - 1;
+                buf_info.push(CtxBufInfo {
+                    buffer_id: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_UNRESTRICTED_PRIV_ACCESS_MAP as u16,
+                    size: buf_info[last_ent].size,
+                    page: buf_info[last_ent].page,
+                    align: buf_info[last_ent].align,
+                    global: buf_info[last_ent].global,
+                    init: buf_info[last_ent].init,
+                    ro:  buf_info[last_ent].ro,
+                    nonmapped: false,
+                }, GFP_KERNEL)?;
+            }
+        }
+        Ok(buf_info)
+    }
+
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
                       vfn: &Arc<Vfn>,
                       mm: &mut MemRange,
@@ -596,13 +929,24 @@ impl GspManager::ver {
         let _ = constructed_table.push(&mut gsp_objs.queues)?;
 
         let mut fifo_table = FifoGetDeviceInfoTable::ver::new(&internal_device)?;
-        let table = fifo_table.push(&mut gsp_objs.queues)?;
+        let mut table = fifo_table.push(&mut gsp_objs.queues)?;
+
+        constructed_table.fill_sizes(&mut table);
+
+        let mut kgr_buffers = InternalStaticKGRGetContextBuffersInfo::ver::new(&internal_device)?;
+        let gr_ctx_bufs = kgr_buffers.push(&mut gsp_objs.queues)?;
+
+        let gr_ctx_info = Self::setup_ctx_buf_info(gr_ctx_bufs)?;
+
+        let runl = FifoRunList::create_runlist_from_table(&table)?;
 
         let mut fault_buffer_size = CEGetFaultMethodBufferSize::ver::new(&internal_device)?;
-        let _ = fault_buffer_size.push(&mut gsp_objs.queues)?;
+        let mthdbuf_size = fault_buffer_size.push(&mut gsp_objs.queues)?;
 
         let mut vmmu_segment_size_msg = GetVmmuSegmentSize::ver::new(&internal_device)?;
         let _ = vmmu_segment_size_msg.push(&mut gsp_objs.queues)?;
+
+        let (gpcs, tpcs) = gsp_static_config.get_gr_info();
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 
@@ -621,9 +965,15 @@ impl GspManager::ver {
             gsp_objs: gsp_outer,
             bar1_pdb: gsp_static_config.bar1_pdb(),
             bar2_pdb: gsp_static_config.bar2_pdb(),
+            gpcs,
+            tpcs,
             vmmu_segment_size: vmmu_segment_size_msg.get_segment_size(),
             alloc_id: AtomicU16::new(0xab00),
-            fifo_info: table,
+            runl,
+            mthdbuf_size,
+            internal_client,
+            internal_device,
+            gr_ctx_info,
         };
 
         let mgr = Arc::new(mgr, GFP_KERNEL)?;

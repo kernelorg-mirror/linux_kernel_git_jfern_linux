@@ -6,7 +6,8 @@ use crate::nvfw::*;
 use crate::gsp::rpc_msgs::*;
 use crate::gsp::GspClient;
 use crate::gsp::*;
-
+use crate::accel::fifo::EngineType;
+use crate::mmu::memory::Memory;
 #[versions(GSP)]
 pub(crate) struct AllocClient {
     pub msg: AllocMsg::ver,
@@ -168,6 +169,220 @@ pub(crate) struct CEAlloc {
 
 #[versions(GSP)]
 impl CEAlloc::ver {
+    pub(crate) fn new(channel: &GspClient, oclass: &GspObject, oclass_h: u32, inst: u32) -> Result<Self> {
+        let mut msg = AllocMsg::ver::get(Some(channel),
+                                         Some(oclass),
+                                         oclass_h,
+                                         oclass_h,
+                                         fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::str_size())?;
+        let mut _msg = fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::new(msg.get_data_ptr())
+            .version(1)
+            .engineType(fw::ver::gen::NV2080_ENGINE_TYPE_COPY0 + inst);
 
+        Ok(Self {
+            msg,
+        })
+    }
 
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.msg.push(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct FifoAlloc {
+    pub msg: AllocMsg::ver,
+    pub handle: u32,
+}
+
+#[versions(GSP)]
+impl FifoAlloc::ver {
+    pub(crate) fn new(device: &GspDevice,
+                      engineType: EngineType, engineInst: u32,
+                      va: &GspVa,
+                      instobj: &InstObj,
+                      userd: &VramObj,
+                      mthdbuf: &DmaObject,
+                      chan_id: u32, oclass: u32,
+                      offset: u64,
+                      length: u64,
+                      chan_priv: bool) -> Result<Self> {
+        let client = device.object.client.as_ref().unwrap();
+        let handle = 0xf1f00000 | chan_id;
+        let mut msg = AllocMsg::ver::get(Some(&client),
+                                         Some(&device.object),
+                                         handle,
+                                         oclass,
+                                         fw::ver::gen::s_NV_CHANNEL_ALLOC_PARAMS::str_size())?;
+
+        let mut flags = 0;
+
+        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engineType, engineInst);
+        //PHYSICAL 0
+        //VPR false
+        //CHANNEL_SKIP_MAP_REFCOUNTING FALSE
+
+        // runq 1 bit?
+        flags |= if chan_priv { 1 << 5 } else { 0 };
+        // delay channel scheduling FLASE
+        // deny physical mode CE FALSE
+        // userd index value 3 - bits
+        let userd_i = chan_id % 8;
+        let userd_p = chan_id / 8;
+        flags |= userd_i << 8;
+        // userd index fixed
+        // userd page value
+        flags |= userd_p << 12;
+        // used page fixed
+        flags |= 1 << 21;
+        // deny auth level priv FALSE
+        // skip scrubber FALSE
+        // client map fifo FALSE
+        // set evict last CE prefetch FALSE
+        // vgpu plugin context FALSE
+        // pbdma acquire timeout FALSE
+        // channel thread DEFAULT
+        // map channel FALSE
+        // skip ctxbuffer alloc FALSE
+
+        let mut internal_flags = 0;
+
+        // PRIV
+        internal_flags |= if chan_priv { 0x1 } else { 0x0 };
+        // ERROR NOTIFIER NONE
+        internal_flags |= 1 << 2;
+        // ECC ERROR NOTIFIER TYPE NONE
+        internal_flags |= 1 << 4;
+
+        let mut msg_params = fw::ver::gen::s_NV_CHANNEL_ALLOC_PARAMS::new(msg.get_data_ptr())
+            .gpFifoOffset(offset)
+            .gpFifoEntries(length as u32 / 8)
+            .flags(flags)
+            .hVASpace(va.object.handle)
+            .engineType(nv2080_et)
+            .internalFlags(internal_flags);
+
+        let _ = msg_params.new_S_instanceMem()
+            .base(instobj.addr()?)
+            .size(instobj.size()?)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let _ = msg_params.new_S_userdMem()
+            .base(userd.addr()?)
+            .size(userd.size()?)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let ramfc_size = 0x200;
+        let _ = msg_params.new_S_ramfcMem()
+            .base(instobj.addr()?)
+            .size(ramfc_size)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let _ = msg_params.new_S_mthdbufMem()
+            .base(mthdbuf.dma.dma_handle())
+            .size(mthdbuf.len as u64)
+            .addressSpace(1)
+            .cacheAttrib(0);
+
+        Ok(Self {
+            msg,
+            handle,
+        })
+
+    }
+
+    // Create the message used in gr golden context creation
+    pub(crate) fn golden(device: &GspDevice,
+                         va: &GspVa,
+                         instobj: &InstObj,
+                         oclass: u32) -> Result<Self> {
+        let client = device.object.client.as_ref().unwrap();
+        let handle = 0xf1f00000;
+        let mut msg = AllocMsg::ver::get(Some(&client),
+                                         Some(&device.object),
+                                         handle,
+                                         oclass,
+                                         fw::ver::gen::s_NV_CHANNEL_ALLOC_PARAMS::str_size())?;
+
+        let mut flags = 0;
+        let nv2080_et = 1;
+        //PHYSICAL 0
+        //VPR false
+        //CHANNEL_SKIP_MAP_REFCOUNTING FALSE
+        flags |= 1 << 5;
+        // runq 0
+        // delay channel scheduling FLASE
+        // deny physical mode CE FALSE
+        // userd index value 3 - bits 0
+        // userd index fixed
+        // userd page value - 0
+        // used page fixed
+        flags |= 1 << 21;
+        // deny auth level priv FALSE
+        // skip scrubber FALSE
+        // client map fifo FALSE
+        // set evict last CE prefetch FALSE
+        // vgpu plugin context FALSE
+        // pbdma acquire timeout FALSE
+        // channel thread DEFAULT
+        // map channel FALSE
+        // skip ctxbuffer alloc FALSE
+
+        let mut internal_flags = 0;
+
+        // PRIV
+        internal_flags |= 1;
+        // ERROR NOTIFIER NONE
+        internal_flags |= 1 << 2;
+        // ECC ERROR NOTIFIER TYPE NONE
+        internal_flags |= 1 << 4;
+
+        pr_info!("alloc flags {:#x} {:#x}\n", flags, internal_flags);
+        let mut msg_params = fw::ver::gen::s_NV_CHANNEL_ALLOC_PARAMS::new(msg.get_data_ptr())
+            .gpFifoOffset(0)
+            .gpFifoEntries(0x1000 / 8)
+            .flags(flags)
+            .hVASpace(va.object.handle)
+            .engineType(nv2080_et)
+            .internalFlags(internal_flags);
+
+        pr_info!("instobj {:#x} {:#x}\n", instobj.addr()?, instobj.size()?);
+        let _ = msg_params.new_S_instanceMem()
+            .base(instobj.addr()?)
+            .size(0x1000)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let _ = msg_params.new_S_userdMem()
+            .base(instobj.addr()? + 0x1000)
+            .size(0x200)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let ramfc_size = 0x200;
+        let _ = msg_params.new_S_ramfcMem()
+            .base(instobj.addr()?)
+            .size(ramfc_size)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        let _ = msg_params.new_S_mthdbufMem()
+            .base(instobj.addr()? + 0x2000)
+            .size(0x5000)
+            .addressSpace(2)
+            .cacheAttrib(1);
+
+        Ok(Self {
+            msg,
+            handle,
+        })
+
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.msg.push(queues)
+    }
 }

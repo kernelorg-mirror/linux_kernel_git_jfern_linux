@@ -175,6 +175,22 @@ impl GSPStaticConfigRpc::ver {
         self.msg().get_bar2PdeBase()
     }
 
+    pub(crate) fn get_gr_info(&mut self) -> (u8, u8) {
+	let gpc_info = self.msg().new_S_gpcInfo();
+	let gpc_mask = gpc_info.get_gpcMask();
+
+	let mut tpcs: u8 = 0;
+	let mut gpcs: u8 = 0;
+	for gpc in 0..MAX_GPC_COUNT {
+	    if (gpc_mask & (1 << gpc)) != 0 {
+		let tpc = self.msg().new_S_tpcInfo(gpc as isize);
+		tpcs += tpc.get_tpcMask().count_ones() as u8;
+		gpcs += 1;
+	    }
+	}
+	(gpcs, tpcs)
+    }
+
     pub(crate) fn fill_fb_regions(&mut self, fb_addr_info: &mut FBInfo) -> Result<()> {
         let mut fb_msg = self.msg().new_S_fbRegionInfoParams();
 
@@ -188,12 +204,10 @@ impl GSPStaticConfigRpc::ver {
             let iso = reg.get_supportISO() != 0;
 
             pr_info!("region {}: {:#x} {:#x} {} {} {} {}\n", i, base, limit, reserved, protected, compressed, iso);
-            if !reserved && !protected {
-                if compressed && iso {
-                    let size: u64 = (limit + 1) - base;
+            if !reserved && !protected && compressed && iso {
+                let size: u64 = (limit + 1) - base;
 
-                    fb_addr_info.region.push(SizeAddr { addr: base, size }, GFP_KERNEL)?;
-                }
+                fb_addr_info.region.push(SizeAddr { addr: base, size }, GFP_KERNEL)?;
             }
         }
         Ok(())
@@ -245,7 +259,8 @@ pub(crate) struct AllocMsg {
 #[versions(GSP)]
 impl AllocMsg::ver {
     pub(crate) fn get(client: Option<&GspClient>, parent: Option<&GspObject>, new_handle: u32,
-               class: u32, size: usize) -> Result<Self> {
+		      class: u32, size: usize) -> Result<Self> {
+
         let rpc_size = fw::ver::gen::s_rpc_gsp_rm_alloc_v03_00::str_size() + size;
 
         let mut rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC, false, rpc_size)?;
@@ -296,7 +311,7 @@ impl FreeMsg::ver {
         let mut rpc = RpcMsg::ver::new(fw::ver::gen::NV_VGPU_MSG_FUNCTION_FREE, false, rpc_size)?;
 
         let cli_handle = match &object.client {
-            Some(x) => { (*((*x).object)).handle }
+            Some(x) => { ((*x).object).handle }
             None => object.handle
         };
         let _msg = fw::ver::gen::s_NVOS00_PARAMETERS_v03_00::new(rpc.get_data_ptr())

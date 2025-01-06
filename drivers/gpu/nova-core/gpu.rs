@@ -22,13 +22,16 @@ use crate::bios::Bios;
 use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
+use crate::accel::fifo::{Channel};
+use crate::accel::gr::Gr;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
-use crate::mmu::memory::InstMem;
-use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
+use crate::nvfw::fwr535_113_01::gen::*;
+use crate::mmu::memory::{InstMem, InstObj, VramObj};
 use crate::mmu::mm::MemRange;
 use crate::mmu::mmu::Mmu;
+use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::vmm::Vmm;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
@@ -48,6 +51,9 @@ pub(crate) struct GpuConsts {
     sig_section: &'static str,
     pub sec2_addr: u32,
     need_bl_fw: bool,
+    pub fifo_class: u32,
+    pub gr_classes: [u32; 4],
+    pub ce_class: u32,
 }
 
 /// Enum representing the GPU chipset.
@@ -116,7 +122,7 @@ pub(crate) enum CardType {
 #[allow(dead_code)]
 pub(crate) struct GpuSpec {
     /// Contents of the boot0 register.
-    boot0: u64,
+    pub boot0: u64,
     card_type: CardType,
     pub(crate) chipset: Chipset,
     /// The revision of the chipset.
@@ -167,18 +173,6 @@ pub(crate) struct IntrInfo {
     pub nonstall: u32,
 }
 
-#[allow(unused)]
-pub(crate) struct FifoDeviceEntry {
-    pub addr: u32,
-    pub rmid: u32,
-    pub id: u32,
-    pub eng_desc: u32,
-}
-
-pub(crate) struct FifoDeviceInfoTable {
-    pub table: KVec<FifoDeviceEntry>
-}
-
 /// Structure holding the base pre-GSP boot GPU pieces
 #[allow(dead_code)]
 pub(crate) struct GpuBase {
@@ -194,7 +188,7 @@ pub(crate) struct GpuBase {
 #[allow(dead_code)]
 #[pin_data]
 pub(crate) struct Gpu {
-    base: Arc<GpuBase>,
+    pub base: Arc<GpuBase>,
     pub vfn: Arc<Vfn>,
     pub gsp: Arc<dyn GspManager>,
     pub bar: Arc<Bar>,
@@ -204,6 +198,7 @@ pub(crate) struct Gpu {
     #[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
     pub vgpu: bool,
     pub instmem: Arc<InstMem>,
+    pub gr_ctx_bufs: KVec<Arc<InstObj>>,
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -250,6 +245,9 @@ impl GpuConsts {
                     sig_section: ".fwsignature_tu10x",
                     sec2_addr: 0x840000,
                     need_bl_fw: true,
+                    fifo_class: TURING_CHANNEL_GPFIFO_A,
+                    gr_classes: [FERMI_TWOD_A, KEPLER_INLINE_TO_MEMORY_B, TURING_A, TURING_COMPUTE_A],
+                    ce_class: TURING_DMA_COPY_A,
                 })
             }
             Chipset::TU106 => {
@@ -257,6 +255,9 @@ impl GpuConsts {
                     sig_section: ".fwsignature_tu10x",
                     sec2_addr: 0x840000,
                     need_bl_fw: true,
+                    fifo_class: TURING_CHANNEL_GPFIFO_A,
+                    gr_classes: [FERMI_TWOD_A, KEPLER_INLINE_TO_MEMORY_B, TURING_A, TURING_COMPUTE_A],
+                    ce_class: TURING_DMA_COPY_A,
                 })
             }
             Chipset::TU117 => {
@@ -264,6 +265,9 @@ impl GpuConsts {
                     sig_section: ".fwsignature_tu11x",
                     sec2_addr: 0x840000,
                     need_bl_fw: true,
+                    fifo_class: TURING_CHANNEL_GPFIFO_A,
+                    gr_classes: [FERMI_TWOD_A, KEPLER_INLINE_TO_MEMORY_B, TURING_A, TURING_COMPUTE_A],
+                    ce_class: TURING_DMA_COPY_A,
                 })
             }
             Chipset::AD102 => {
@@ -271,6 +275,9 @@ impl GpuConsts {
                     sig_section: ".fwsignature_ad10x",
                     sec2_addr: 0x840000,
                     need_bl_fw: false,
+                    fifo_class: AMPERE_CHANNEL_GPFIFO_A,
+                    gr_classes: [FERMI_TWOD_A, KEPLER_INLINE_TO_MEMORY_B, ADA_A, ADA_COMPUTE_A],
+                    ce_class: AMPERE_DMA_COPY_B,
                 })
             }
             Chipset::GA102 => {
@@ -278,6 +285,9 @@ impl GpuConsts {
                     sig_section: ".fwsignature_ga10x",
                     sec2_addr: 0x840000,
                     need_bl_fw: false,
+                    fifo_class: AMPERE_CHANNEL_GPFIFO_A,
+                    gr_classes: [FERMI_TWOD_A, KEPLER_INLINE_TO_MEMORY_B, AMPERE_B, AMPERE_COMPUTE_B],
+                    ce_class: AMPERE_DMA_COPY_A,
                 })
             }
             _ => None,
@@ -413,6 +423,18 @@ impl Drop for GpuClient {
 }
 
 #[repr(C)]
+pub(crate) struct GpuChanObject {
+    pub gsp: Arc<GspObject>,
+    pub mgr: Arc<dyn GspManager>,
+}
+
+impl Drop for GpuChanObject {
+    fn drop(&mut self) {
+        let _ = self.mgr.free_chan_obj(&self.gsp);
+    }
+}
+
+#[repr(C)]
 pub(crate) struct GpuDeviceVmm {
     pub vmm: Vmm,
     pub va: GspVa,
@@ -444,6 +466,26 @@ impl Gpu {
 
         Ok((Arc::new(GpuClient { gsp: gsp_client, mgr: self.gsp.clone() }, GFP_KERNEL)?,
             Arc::new(GpuDevice { gsp: gsp_device, mgr: self.gsp.clone() }, GFP_KERNEL)?))
+    }
+
+    pub(crate) fn create_channel(&self,
+                                 client: Arc<GpuClient>,
+                                 device: Arc<GpuDevice>,
+                                 runl: u32,
+                                 chan_priv: bool,
+                                 offset: u64,
+                                 length: u64,
+                                 vmm: Arc<GpuDeviceVmm>,
+                                 userd: &VramObj) -> Result<Arc<Channel>> {
+
+        Ok(Arc::new(Channel::new(self, client, device, &vmm, userd, runl, offset, length, chan_priv)?, GFP_KERNEL)?)
+    }
+
+    pub(crate) fn create_channel_obj(&self,
+                                     channel: &Channel,
+                                     handle: u32,
+                                     oclass: u32) -> Result<Arc<GpuChanObject>> {
+        channel.alloc_obj(handle, oclass)
     }
 
     pub(crate) fn get_engine_bitmap(&self) -> u64 {
@@ -511,7 +553,8 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu }))
+        let gr_ctx_bufs = Gr::golden_init(instmem.clone(), gsp.clone())?;
+        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs }))
     }
 
     pub(crate) fn release(&self) {

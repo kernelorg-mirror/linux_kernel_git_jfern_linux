@@ -2,6 +2,7 @@
 
 //! Nova GPU Driver
 
+mod accel;
 mod bar;
 mod bios;
 mod devinit;

@@ -3,10 +3,12 @@ pub(crate) use kernel::macros::versions;
 use kernel::prelude::*;
 use kernel::bindings;
 use crate::gsp::*;
+use crate::accel::fifo::EngineType;
 use crate::gsp::rpc_msgs::*;
-
+use crate::accel::fifo::GpuPromoteBufferEntry;
 use crate::gpu::IntrInfo;
-use crate::gpu::{FifoDeviceEntry, FifoDeviceInfoTable};
+use crate::accel::gr::CtxBufSize;
+use crate::accel::fifo::{FifoDeviceEntry, FifoDeviceInfoTable};
 use crate::nvfw::*;
 use crate::gsp::EventSetNotificationAction;
 
@@ -92,6 +94,28 @@ pub(crate) struct FifoGetDeviceInfoTable {
 
 #[versions(GSP)]
 impl FifoGetDeviceInfoTable::ver {
+
+    pub(crate) fn convert_eng_to_nv2080(et: EngineType, inst: u32) -> u32 {
+        match et {
+            EngineType::GR => { fw::ver::gen::NV2080_ENGINE_TYPE_GR0 },
+            EngineType::CE => { fw::ver::gen::NV2080_ENGINE_TYPE_COPY0 + inst },
+            EngineType::NVDEC => { fw::ver::gen::NV2080_ENGINE_TYPE_NVDEC0 + inst },
+            EngineType::NVENC => { fw::ver::gen::NV2080_ENGINE_TYPE_NVENC0 + inst },
+            _ => { 0 }
+        }
+    }
+
+    fn convert_rmid_to_engine_inst(rmid: u32) -> Result<(EngineType, u32)> {
+        // TODO autogenerate
+        match rmid {
+            fw::ver::gen::RM_ENGINE_TYPE_GR0 => { Ok((EngineType::GR, 0)) },
+            r @ fw::ver::gen::RM_ENGINE_TYPE_COPY0..=fw::ver::gen::RM_ENGINE_TYPE_COPY9 => Ok((EngineType::CE, r - fw::ver::gen::RM_ENGINE_TYPE_COPY0)),
+            r @ fw::ver::gen::RM_ENGINE_TYPE_NVDEC0..=fw::ver::gen::RM_ENGINE_TYPE_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::RM_ENGINE_TYPE_NVDEC0)),
+            r @ fw::ver::gen::RM_ENGINE_TYPE_NVENC0..=fw::ver::gen::RM_ENGINE_TYPE_NVENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::RM_ENGINE_TYPE_NVENC0)),
+            other => Err(EINVAL)
+        }
+    }
+
     pub(crate) fn new(device: &GspDevice) -> Result<Self> {
         let msg_size = fw::ver::gen::s_NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS::str_size();
         let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE, msg_size, true)?;
@@ -109,11 +133,20 @@ impl FifoGetDeviceInfoTable::ver {
         for i in 0..msg.get_numEntries() {
             let mut ent = msg.new_S_entries(i as isize);
             let eng_data: [u32; 16] = ent.get_engineData();
+            let (eng_type, inst) = match Self::convert_rmid_to_engine_inst(eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RM_ENGINE_TYPE as usize]) {
+                Err(x) => { continue; }
+                Ok((e, i)) => (e, i)
+            };
+
+            pr_info!("fifo device {} {:?} {}\n", eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RM_ENGINE_TYPE as usize], eng_type, inst);
+
             tbl.push(FifoDeviceEntry {
                 addr: eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RUNLIST_PRI_BASE as usize],
-                rmid: eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RM_ENGINE_TYPE as usize],
-                id: eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RUNLIST as usize],
+                eng_type,
+                inst,
+                id: eng_data[fw::ver::gen::ENGINE_INFO_TYPE_RUNLIST as usize] as i32,
                 eng_desc: eng_data[fw::ver::gen::ENGINE_INFO_TYPE_ENG_DESC as usize],
+                desc_size: 0,
             }, GFP_KERNEL)?;
         }
         Ok(FifoDeviceInfoTable { table: tbl })
@@ -167,16 +200,18 @@ impl GetConstructedFalconInfo::ver {
         self.ctrl.push(queues)
     }
 
-    pub(crate) fn find_desc_size(&mut self, desc: u32) -> u32 {
+    pub(crate) fn fill_sizes(&mut self, table: &mut FifoDeviceInfoTable) {
         let mut msg = fw::ver::gen::s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS::new(self.ctrl.get_data_ptr());
 
         for i in 0..msg.get_numConstructedFalcons() {
             let tbl = msg.new_S_constructedFalconsTable(i as isize);
-            if tbl.get_engDesc() == desc {
-                return tbl.get_ctxBufferSize();
+            let desc = tbl.get_engDesc();
+            for ent in &mut table.table {
+                if ent.eng_desc == desc {
+                    ent.desc_size = tbl.get_ctxBufferSize();
+                }
             }
         }
-        0
     }
 }
 
@@ -374,5 +409,162 @@ impl VASpaceCopyServerReservedPdes::ver {
     }
     pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
         self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct GpuPromoteCtx {
+    pub ctrl: ControlMsg::ver
+}
+
+#[versions(GSP)]
+impl GpuPromoteCtx::ver {
+    pub(crate) fn new_promote_gr(device: &GspDevice, channel: &GspChannel,
+                                 entries: &KVec<GpuPromoteBufferEntry>) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::str_size();
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_PROMOTE_CTX, msg_size, false)?;
+
+        let num_ents = entries.len();
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::new(ctrl.get_data_ptr())
+            .engineType(1)
+            .hChanClient(device.object.client.as_ref().unwrap().object.handle)
+            .hObject(channel.object.handle)
+            .entryCount(num_ents as u32);
+
+        pr_info!("promote_gr: dev:{:#x} chan:{:#x} ents:{}\n",
+                 device.object.client.as_ref().unwrap().object.handle,
+                 channel.object.handle,
+                 entries.len());
+
+        for i in 0..num_ents {
+            pr_info!("promote {}: pa:{:#x}/{:#x} sz {:#x} va {:#x} init:{} nm:{}\n",
+                     entries[i].buffer_id,
+                     entries[i].gpu_phys_addr,
+                     entries[i].physattr,
+                     entries[i].size,
+                     entries[i].gpu_virt_addr,
+                     entries[i].initialize,
+                     entries[i].nonmapped);
+            let _ent = msg.new_S_promoteEntry(i as isize)
+                .gpuPhysAddr(entries[i].gpu_phys_addr)
+                .gpuVirtAddr(entries[i].gpu_virt_addr)
+                .physAttr(entries[i].physattr)
+                .size(entries[i].size)
+                .bufferId(entries[i].buffer_id)
+                .bInitialize(entries[i].initialize as u8)
+                .bNonmapped(entries[i].nonmapped as u8);
+        }
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn new_falcon(device: &GspDevice, channel: &GspChannel,
+                             addr: u64, size: u64, engine_id: u32) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::str_size();
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_PROMOTE_CTX, msg_size, false)?;
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::new(ctrl.get_data_ptr())
+            .hClient(device.object.client.as_ref().unwrap().object.handle)
+            .hObject(channel.object.handle)
+            .hChanClient(device.object.client.as_ref().unwrap().object.handle)
+            .virtAddress(addr)
+            .size(size)
+            .engineType(engine_id)
+            .ChID(channel.chid);
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct GpFifoSchedule {
+    pub ctrl:  ControlMsg::ver
+}
+
+#[versions(GSP)]
+impl GpFifoSchedule::ver {
+    pub(crate) fn new(channel: &GspChannel, enable: bool) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS::str_size();
+        let mut ctrl = ControlMsg::ver::get(&channel.object, fw::ver::gen::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, msg_size, false)?;
+
+        let mut msg = fw::ver::gen::s_NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS::new(ctrl.get_data_ptr())
+            .bEnable(enable as u8);
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+
+#[versions(GSP)]
+pub(crate) struct BindParams {
+    pub ctrl: ControlMsg::ver
+}
+
+#[versions(GSP)]
+impl BindParams::ver {
+    pub(crate) fn new(channel: &GspChannel, engineType: EngineType, engineInst: u32) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NVA06F_CTRL_BIND_PARAMS::str_size();
+        let mut ctrl = ControlMsg::ver::get(&channel.object, fw::ver::gen::NVA06F_CTRL_CMD_BIND, msg_size, false)?;
+
+        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engineType, engineInst);
+        let mut msg = fw::ver::gen::s_NVA06F_CTRL_BIND_PARAMS::new(ctrl.get_data_ptr())
+            .engineType(nv2080_et);
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct InternalStaticKGRGetContextBuffersInfo {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl InternalStaticKGRGetContextBuffersInfo::ver {
+    pub(crate) fn new(device: &GspDevice) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS::str_size();
+
+        let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO, msg_size, true)?;
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<KVec<CtxBufSize>> {
+        self.ctrl.push(queues)?;
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS::new(self.ctrl.get_data_ptr());
+
+        // only entry 0 ever seems to be filled out
+        //for i in 0..fw::ver::gen::NV2080_CTRL_INTERNAL_GR_MAX_ENGINES {
+        let mut eng = msg.new_S_engineContextBuffersInfo(0);
+
+        let mut ctxvec = KVec::new();
+        for e in 0..fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_COUNT {
+            let props = eng.new_S_engine(e as isize);
+
+            ctxvec.push(CtxBufSize { size: props.get_size(), align: props.get_alignment() as u8 }, GFP_KERNEL)?;
+            pr_info!("engine {}: {}/{}\n", e, props.get_size(), props.get_alignment());
+        }
+        Ok(ctxvec)
     }
 }
