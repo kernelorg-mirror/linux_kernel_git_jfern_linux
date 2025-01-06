@@ -654,7 +654,15 @@ kernel::list::impl_list_item! {
 
 impl Debug for Vma {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x} {:#x}", self.addr(), self.size())
+        write!(f, "{:016x} {:016x} {}{}{}{}{}{}{}{}",
+               self.addr(), self.size(),
+               match self.used() { true => '-', false => 'F' },
+               match self.mapref() { true => 'R', false => '-' },
+               match self.sparse { true => 'S', false => '-' },
+               match self.page() { NVKM_VMA_PAGE_NONE => '-', x => ('0' as u8 + x) as char },
+               match self.refd() { NVKM_VMA_PAGE_NONE => '-', x => ('0' as u8 + x) as char },
+               '-', '-',
+               match self.mapped() { true => 'M', false => '-'})
     }
 }
 
@@ -905,7 +913,7 @@ impl<'a> VmmIter<'a> {
     }
 
     fn iter<'b>(vmm: &'b mut VmmInner, page: &'b VmmPage, addr: u64, size: u64,
-                pgref: bool, pfn: bool,
+                name: &'static str, pgref: bool, pfn: bool,
                 reffn: Option<RefFn>, mapfn: Option<MapFn>, map: Option<&'b VmmMap<'_>>,
                 mut map_internal: Option<&'b mut VmmMapInternal<'_>>,
                 clrfn: Option<ClrFn>) -> Result<u64>
@@ -1020,9 +1028,18 @@ pub(crate) struct VmmInner {
     #[pin]
     list: List<Vma>,
     pd: VmmPt,
+    name: &'static str,
 }
 
 impl VmmInner {
+
+    pub(crate) fn dump(&self) {
+        pr_info!("VMM {}: {:#x} {:#x} bar: {}\n", self.name, self.start, self.limit, self.is_bar);
+
+        for vma in &self.list {
+            pr_info!("{:?}\n", *vma);
+        }
+    }
 
     pub(crate) fn page(base: &GpuBase, page_idx: u8) -> &VmmPage {
         // eventually match on gpu family if this changes.
@@ -1653,17 +1670,17 @@ impl VmmInner {
     }
 
     pub(crate) fn ptes_get(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, true, false, Some(Self::ref_ptes), None, None, None, None)?;
+        let iter = VmmIter::iter(self, page, addr, size, "ref", true, false, Some(Self::ref_ptes), None, None, None, None)?;
         Ok(())
     }
 
     pub(crate) fn ptes_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, false, false, None, mapfn, Some(map), Some(map_internal), None)?;
+        let iter = VmmIter::iter(self, page, addr, size, "map", false, false, None, mapfn, Some(map), Some(map_internal), None)?;
         Ok(())
     }
 
     pub(crate) fn ptes_get_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, true, false, Some(Self::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
+        let iter = VmmIter::iter(self, page, addr, size, "ref + map", true, false, Some(Self::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
         Ok(())
     }
 
@@ -1675,7 +1692,7 @@ impl VmmInner {
             clrfn = desc.unmapfn();
         }
 
-        let iter = VmmIter::iter(self, page, addr, size, false, false, None, None, None, None, clrfn)?;
+        let iter = VmmIter::iter(self, page, addr, size, "unmap", false, false, None, None, None, None, clrfn)?;
         Ok(())
     }
 
@@ -1687,12 +1704,12 @@ impl VmmInner {
             clrfn = desc.unmapfn();
         }
 
-        let iter = VmmIter::iter(self, page, addr, size, false, false, Some(Self::unref_ptes), None, None, None, clrfn)?;
+        let iter = VmmIter::iter(self, page, addr, size, "unmap + unref", false, false, Some(Self::unref_ptes), None, None, None, clrfn)?;
         Ok(())
     }
 
     fn ptes_put(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, false, false, Some(Self::unref_ptes), None, None, None, None)?;
+        let iter = VmmIter::iter(self, page, addr, size, "unref", false, false, Some(Self::unref_ptes), None, None, None, None)?;
         Ok(())
     }
 
@@ -1714,7 +1731,7 @@ impl VmmInner {
 
         self.ptes_get(pg, self.start, limit)?;
 
-        let iter = VmmIter::iter(self, pg, self.start, limit, false, false,
+        let iter = VmmIter::iter(self, pg, self.start, limit, "boot", false, false,
                                  Some(Self::boot_ptes), None, None, None, None);
         self.bootstrapped = true;
         Ok(())
@@ -2054,6 +2071,7 @@ impl Vmm {
             root: RBTree::new(),
             list: List::new(),
             pd,
+            name,
         };
 
         let vma = Vma::new(inner.start, inner.limit - inner.start)?;
@@ -2114,6 +2132,11 @@ impl Vmm {
     fn flush(&mut self) -> Result<()> {
         let mut locked_inner = self.inner.lock();
         locked_inner.flush()
+    }
+
+    pub(crate) fn dump(&self) {
+        let mut locked_inner = self.inner.lock();
+        locked_inner.dump()
     }
 
     pub(crate) fn limit(&self) -> Result<u64> {
