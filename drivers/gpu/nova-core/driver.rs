@@ -6,6 +6,7 @@ use kernel::{
     pci,
     prelude::*,
     sync::Arc,
+    auxiliary_bus,
 };
 
 use crate::{gpu::Gpu};
@@ -21,6 +22,8 @@ unsafe impl Send for NovaCoreDriver {}
 pub(crate) struct NovaCoreData {
     #[pin]
     pub(crate) gpu: Gpu,
+    #[pin]
+    pub(crate) auxdev: auxiliary_bus::RawDevice,
     pub(crate) pdev: pci::Device,
 }
 
@@ -31,6 +34,10 @@ impl NovaCoreDriver {
     pub(crate) fn data(&self) -> Arc<NovaCoreData> {
         self.0.clone()
     }
+}
+
+unsafe extern "C" fn nova_core_aux_release(_dev: *mut bindings::device) {
+    pr_info!("nova core aux release called\n");
 }
 
 impl pci::Driver for NovaCoreDriver {
@@ -63,6 +70,11 @@ impl pci::Driver for NovaCoreDriver {
 
         let data = Arc::pin_init(try_pin_init!(NovaCoreData {
             gpu <- gpu,
+            auxdev <- auxiliary_bus::RawDevice::new(pdev.as_dev(),
+                                                    Some(nova_core_aux_release),
+                                                    c_str!("device"),
+                                                    0,
+                                                    c_str!("NovaCore")),
             pdev: p,
         }), GFP_KERNEL)?;
 
