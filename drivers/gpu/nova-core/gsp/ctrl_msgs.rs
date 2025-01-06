@@ -10,6 +10,7 @@ use crate::gpu::{FifoDeviceEntry, FifoDeviceInfoTable};
 use crate::nvfw::*;
 use crate::gsp::EventSetNotificationAction;
 
+use crate::mmu::vmm::{Vmm, Vma};
 #[versions(GSP)]
 pub(crate) struct InternalIntrGetKernelTableParams {
     pub ctrl: ControlMsg::ver,
@@ -328,6 +329,49 @@ impl PgpuAddVgpuType::ver {
         })
     }
 
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
+        self.ctrl.wr(queues)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct VASpaceCopyServerReservedPdes {
+    pub ctrl: ControlMsg::ver
+}
+
+#[versions(GSP)]
+impl VASpaceCopyServerReservedPdes::ver {
+    pub(crate) fn new(gsp_va: &GspVa, vmm: &Vmm) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&gsp_va.object, fw::ver::gen::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES, msg_size, false)?;
+
+        let promote_info = vmm.get_promote_info()?;
+        let lvl2_size = 0x1000;
+        let lvl2_aperture = 1;
+        let lvl2_page_shift = 0x1d;
+        let mut msg = fw::ver::gen::s_NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS::new(ctrl.get_data_ptr())
+            .virtAddrLo(promote_info.rsvd_lo)
+            .virtAddrHi(promote_info.rsvd_hi)
+            .pageSize(0x20000000)
+            .numLevelsToCopy(promote_info.num_levels)
+            .levels_0_physAddress(promote_info.level0_phys_addr)
+            .levels_0_size(0x20)
+            .levels_0_aperture(1)
+            .levels_0_pageShift(0x2f)
+            .levels_1_physAddress(promote_info.level1_phys_addr)
+            .levels_1_size(0x1000)
+            .levels_1_aperture(1)
+            .levels_1_pageShift(0x26)
+            .levels_2_physAddress(promote_info.level2_phys_addr)
+            .levels_2_size(lvl2_size)
+            .levels_2_aperture(1)
+            .levels_2_pageShift(0x1d);
+
+        Ok(Self {
+            ctrl
+        })
+    }
     pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<()> {
         self.ctrl.wr(queues)
     }

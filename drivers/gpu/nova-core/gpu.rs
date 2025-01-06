@@ -26,7 +26,10 @@ use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
 use crate::mmu::memory::InstMem;
+use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mm::MemRange;
+use crate::mmu::mmu::Mmu;
+use crate::mmu::vmm::Vmm;
 use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
@@ -194,12 +197,13 @@ pub(crate) struct Gpu {
     base: Arc<GpuBase>,
     pub vfn: Arc<Vfn>,
     pub gsp: Arc<dyn GspManager>,
-    pub vram_mm: Arc<MemRange>,
     pub bar: Arc<Bar>,
+    pub mmu: Arc<Mmu>,
     #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
     pub vgpu: Arc<VGPUMgr>,
     #[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
-    pub vgpu: bool
+    pub vgpu: bool,
+    pub instmem: Arc<InstMem>,
 }
 
 // TODO replace with something like derive(FromPrimitive)
@@ -408,7 +412,32 @@ impl Drop for GpuClient {
     }
 }
 
+#[repr(C)]
+pub(crate) struct GpuDeviceVmm {
+    pub vmm: Vmm,
+    pub va: GspVa,
+}
+
 impl Gpu {
+
+    pub(crate) fn alloc_mmu(&self) -> Result<Arc<Mmu>> {
+        let size = (self.instmem.vram_mm.size(0)? << NVKM_MM_PAGE_SHIFT) as u64;
+        let mmu = Mmu::new(self.base.clone(), size)?;
+        Ok(Arc::new(mmu, GFP_KERNEL)?)
+    }
+
+    pub(crate) fn alloc_vmm(&self, device: Arc<GpuDevice>,
+                            addr: u64, size: u64, vmm_type: u8) -> Result<Arc<GpuDeviceVmm>> {
+        let vmm = Vmm::new(self.instmem.clone(), addr, size, vmm_type, false, false, None,
+                           None, true, "uvmm")?;
+
+        let va = self.gsp.alloc_vaspace(device.gsp.clone(), &vmm)?;
+
+        Ok(Arc::new(GpuDeviceVmm {
+            vmm,
+            va
+        }, GFP_KERNEL)?)
+    }
 
     pub(crate) fn alloc_client_device(&self) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
         let (gsp_client, gsp_device) = self.gsp.alloc_client_device()?;
@@ -461,6 +490,7 @@ impl Gpu {
 
         let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
 
+        let mmu = Arc::new(Mmu::new(base.clone(), (vram_mm.size(0)? << NVKM_MM_PAGE_SHIFT) as u64)?, GFP_KERNEL)?;
         let instmem = InstMem::new(base.clone(), vram_mm.clone(),
                                    pdev.resource_start(3)?)?;
 
@@ -481,7 +511,7 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        Ok(pin_init!(Self { base, vfn, gsp, bar: bars, vram_mm, vgpu }))
+        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu }))
     }
 
     pub(crate) fn release(&self) {

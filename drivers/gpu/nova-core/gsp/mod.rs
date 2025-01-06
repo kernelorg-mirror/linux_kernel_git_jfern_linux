@@ -33,6 +33,7 @@ use crate::gsp::msgs::*;
 use crate::gsp::rpc_msgs::*;
 use crate::vfn::{Vfn, VfnHandler};
 use crate::mmu::mm::MemRange;
+use crate::mmu::vmm::Vmm;
 use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
@@ -192,6 +193,10 @@ pub(crate) struct GspClient {
     object: Arc<GspObject>
 }
 
+pub(crate) struct GspVa {
+    object: Arc<GspObject>
+}
+
 impl GspClient {
     pub(crate) fn get_client_handle(&self) -> Result<u32> {
         Ok(self.object.handle)
@@ -228,6 +233,9 @@ pub(crate) trait GspManager: Send + Sync {
                                              Arc<GspDevice>)>;
     fn free_client(&self, client: Arc<GspClient>) -> Result<()>;
     fn free_device(&self, device: Arc<GspDevice>) -> Result<()>;
+
+    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa>;
+    fn free_vaspace(&self, va: &GspVa) -> Result<()>;
 
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
     fn get_bar_pdb(&self, bar: u8) -> u64;
@@ -275,6 +283,33 @@ impl GspManager for GspManager::ver {
         Ok(())
     }
 
+    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa> {
+        let mut msg = AllocVMM::ver::new(&device)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        let gsp_va = GspVa {
+            object: Arc::new(GspObject {
+                client: device.object.client.clone(),
+                parent: Some(device.object.clone()),
+                handle: msg.handle,
+            }, GFP_KERNEL)?
+        };
+
+        let mut msg = VASpaceCopyServerReservedPdes::ver::new(&gsp_va, vmm)?;
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(gsp_va)
+    }
+
+    fn free_vaspace(&self, va: &GspVa) -> Result<()> {
+        let mut msg = FreeMsg::ver::get(&va.object)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()> {
         let mut msg = UpdateBarPdeMsg::ver::get(bar, addr, shift)?;
 

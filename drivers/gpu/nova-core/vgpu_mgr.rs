@@ -148,7 +148,7 @@ unsafe extern "C" fn alloc_fbmem(handle: *mut core::ffi::c_void, size: u64, vmmu
 
     let shift: u32 = if vmmu_aligned { nova.gpu.vgpu.vmmu_segment_size.ilog2() } else { NVKM_MM_PAGE_SHIFT as u32};
 
-    let vramobj = VramObj::new(nova.gpu.vram_mm.clone(), 0, 0, shift as u8, size as usize, true, true).unwrap();
+    let vramobj = VramObj::new(nova.gpu.instmem.vram_mm.clone(), 0, 0, shift as u8, size as usize, true, true).unwrap();
 
     let fbmem: Pin<KBox<VGPUMem>> = KBox::new(
         VGPUMem {

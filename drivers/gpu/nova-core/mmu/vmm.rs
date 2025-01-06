@@ -1927,6 +1927,15 @@ pub(crate) struct VmmMap<'a> {
     pub kind: u8,
 }
 
+pub(crate) struct VmmPromoteInfo {
+    pub rsvd_lo: u64,
+    pub rsvd_hi: u64,
+    pub num_levels: u32,
+    pub level0_phys_addr: u64,
+    pub level1_phys_addr: u64,
+    pub level2_phys_addr: u64
+}
+
 pub(crate) struct Vmm {
     inner: Pin<KBox<Mutex<VmmInner>>>,
     rsvd: Option<Arc<Vma>>,
@@ -2115,6 +2124,41 @@ impl Vmm {
         let mut locked_inner = self.inner.lock();
         let vma = locked_inner.node_search(addr)?;
         locked_inner.unmap_locked(vma)
+    }
+
+    pub(crate) fn get_promote_info(&self) -> Result<VmmPromoteInfo> {
+
+        let rsvd = match &self.rsvd {
+            None => { return Err(EINVAL); }
+            Some(rsvd) => rsvd
+        };
+
+        let mut locked_inner = self.inner.lock();
+
+        let mut num_levels = 3;
+        pr_info!("pde 0 is none {:?}\n", locked_inner.pd.pde[0].is_none());
+
+        if locked_inner.pd.pde[0].is_none() {
+            pr_info!("got pde 0 is none FAIL\n");
+            return Err(EINVAL);
+        }
+        if locked_inner.pd.pde[0].as_ref().unwrap().pde[0].is_none() {
+            num_levels = 2;
+        }
+
+        let addr0: u64 = locked_inner.pd.pt[0].as_ref().unwrap().addr;
+        let addr1: u64 = locked_inner.pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+
+        let addr2: u64 = locked_inner.pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+
+        Ok(VmmPromoteInfo {
+            rsvd_lo: rsvd.addr(),
+            rsvd_hi: rsvd.addr() + rsvd.size() - 1,
+            num_levels,
+            level0_phys_addr: addr0,
+            level1_phys_addr: addr1,
+            level2_phys_addr: addr2,
+        })
     }
 }
 
