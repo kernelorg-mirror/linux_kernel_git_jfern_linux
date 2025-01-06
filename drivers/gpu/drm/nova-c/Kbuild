@@ -1,0 +1,5 @@
+ccflags-y += -I $(src)/include
+
+novac-y += novac_drm.o nouveau_ttm.o nouveau_mem.o nouveau_bo.o nouveau_sgdma.o nouveau_uvmm.o nouveau_sched.o nouveau_chan.o nouveau_fence.o nouveau_vmm.o nouveau_gem.o nouveau_abi16.o nouveau_prime.o nouveau_dma.o nouveau_exec.o nvc0_fence.o nv84_fence.o nouveau_bo90b5.o nouveau_boa0b5.o nouveau_bo9039.o novac_helpers.o
+
+obj-$(CONFIG_DRM_NOVA_C) += novac.o
