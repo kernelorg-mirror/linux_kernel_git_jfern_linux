@@ -4,7 +4,7 @@ use kernel::prelude::*;
 use crate::falcon::Falcon;
 use kernel::sync::Arc;
 use kernel::delay::sleep;
-use core::time::Duration; 
+use core::time::Duration;
 use crate::timer_msec;
 use crate::timer_usec;
 use crate::timer_nsec;
@@ -35,12 +35,10 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
     let mut ptr: usize = 0;
 
     while ptr < cmd_index {
-        let opcode: u32;
-
         let base_ptr = unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize + fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as isize + (ptr * 4) as isize) };
         let mut cmd = fw::ver::gen::s_GSP_SEQUENCER_BUFFER_CMD::new(base_ptr);
 
-        opcode = cmd.get_opCode();
+        let opcode = cmd.get_opCode();
 
         ptr += 1;
 
@@ -175,4 +173,26 @@ pub(crate) fn os_error_log(msg: &mut KVec<u8>) {
              os_error_log.get_runlistId(), os_error_log.get_chid());
     pr_info!("STR: {:?}", core::str::from_utf8(&os_error_log.get_errString()));
 }
+
+pub(crate) fn user_shared_data(msg: &mut KVec<u8>) {
+    let mut user_shared_data = fw::ver::gen::s_rpc_gsp_send_user_shared_data_v17_00::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
+
+    pr_info!("USER SHARED DATA {}", user_shared_data.get_data());
+}
+
+pub(crate) fn rc_triggered(msg: &mut KVec<u8>) {
+    let mut rc_triggered = fw::ver::gen::s_rpc_rc_triggered_v17_02::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
+
+    pr_info!("RC TRIGGERED engn:{:#x} chid:{} type:{}, scope:{} part:{}\n",
+             rc_triggered.get_nv2080EngineType(),
+             rc_triggered.get_chid(),
+             rc_triggered.get_exceptType(),
+             rc_triggered.get_scope(),
+             rc_triggered.get_partitionAttributionId());
+}
+
+pub(crate) fn mmu_fault_queued(_msg: &mut KVec<u8>) {
+    pr_info!("mmu fault queued\n");
+}
+
 }
