@@ -288,6 +288,13 @@ impl VmmDescType {
     }
 }
 
+#[macro_export]
+macro_rules! bit_u64 {
+    ($bit: expr) => {
+        1_u64 << $bit
+    }
+}
+
 pub(crate) struct VmmDesc {
     bits: u8,
     size: u8,
@@ -303,7 +310,7 @@ impl VmmDesc {
         match pt.memory.target() {
             MemTarget::Vram => { out_data |= 1_u64 << 1; }
             MemTarget::Host => { out_data |= 2_u64 << 1;
-                                 out_data |= 3_u64 << 1; // VOL
+                                 out_data |= bit_u64!(3); // VOL
             }
             MemTarget::Ncoh => { out_data |= 3_u64 << 1; }
             (x) => { pr_err!("Unknown mem target {:?}\n", x); return 0; }
@@ -324,7 +331,7 @@ impl VmmDesc {
 
     fn pgt_sparse(pt: &mut MmuPt, ptei: u32, ptes: u32) -> Result<()> {
         /* VALID_FALSE + VOL tells the MMU to treat the PTE as sparse. */
-        pt.fill64(ptei as u64 * 8, 1_u64 << 3 /* VOL */, ptes as usize)
+        pt.fill64(ptei as u64 * 8, bit_u64!(3) /* VOL */, ptes as usize)
     }
 }
 
@@ -439,7 +446,7 @@ impl VmmDescLPT {
 impl VmmDescFunc for VmmDescLPT {
     fn invalid(pt: &mut MmuPt, ptei: u32, ptes: u32) -> Result<()> {
         /* VALID_FALSE + PRIV tells the MMU to ignore corresponding SPTEs. */
-        pt.fill64(ptei as u64 * 8, 1_u64 << 5, ptes as usize)
+        pt.fill64(ptei as u64 * 8, bit_u64!(5), ptes as usize)
     }
 
     fn unmap(pt: &mut MmuPt, ptei: u32, ptes: u32) -> Result<()> {
@@ -484,7 +491,7 @@ impl VmmDescFunc for VmmDescPd0 {
 
     fn sparse(pt: &mut MmuPt, pdei: u32, pdes: u32) -> Result<()> {
         /* VALID_FALSE + VOL_BIG tells the MMU to treat the PDE as sparse. */
-        pt.fill128(pdei as u64 * 16, 1_u64 << 3, 0_u64, pdes as usize)
+        pt.fill128(pdei as u64 * 16, bit_u64!(3), 0_u64, pdes as usize)
     }
 
     fn pde(pgd: &mut VmmPt, pdei: u32) -> Result<()> {
@@ -1385,10 +1392,18 @@ impl VmmInner {
     }
 
     fn join(&mut self, instobj: &mut InstObj) -> Result<()> {
-        let mut base: u64 = (1_u64 << 10) | (1_u64 << 11); // VER2 | 64KiB
+        let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
 
         let pd = self.pd.pt[0].as_ref().unwrap();
         // replay TODO
+        match pd.memory.target() {
+            MemTarget::Vram => { base |= 0_u64 << 0; }
+            MemTarget::Host => { base |= 2_u64 << 0;
+                                 base |= bit_u64!(2); // VOL
+            }
+            MemTarget::Ncoh => { base |= 3_u64 << 0; }
+            (x) => { pr_err!("Unknown mem target {:?}\n", x); return Err(EINVAL); }
+        }
 
         base |= pd.addr;
 
@@ -1396,7 +1411,7 @@ impl VmmInner {
         instobj.wr64(0x200_u64, base)?;
         instobj.wr64(0x208_u64, self.limit - 1)?;
 
-        let mask: u64 = 1;
+        let mask: u64 = bit_u64!(0);
 
         instobj.wr32(0x21c_u64, 0)?;
 
