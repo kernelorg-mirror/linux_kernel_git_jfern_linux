@@ -8,7 +8,7 @@ use core::cell::UnsafeCell;
 use crate::{align64, is_aligned};
 use kernel::prelude::*;
 use kernel::bindings;
-use kernel::page::PAGE_SIZE;
+use kernel::page::{PAGE_SIZE, PAGE_SHIFT, PAGE_MASK};
 use kernel::new_mutex;
 use kernel::rbtree::RBTree;
 use kernel::sync::{Arc, Mutex, UniqueArc};
@@ -1733,7 +1733,7 @@ impl VmmInner {
         let pgt = unsafe { &mut (*iter.pt[0]) };
 
         pgt.pt[reftype].as_mut().unwrap().memory.boot(iter.vmm)?;
-        Ok(true)
+        Ok(false)
     }
 
     pub(crate) fn boot(&mut self) -> Result<()> {
@@ -1874,25 +1874,28 @@ impl VmmInner {
 
         map_internal.off = map.offset;
 
-        while map_internal.off != 0 {
-            let size: u64 = map.memory.size()?;
-            if size > map_internal.off {
-                break;
-            }
-            map_internal.off -= size;
-        }
-
-
         let mapfn;
         match map.memory.obj_type() {
             MemObjType::VRAM => {
                 let vram : *const VramObj = map.memory as *const dyn Memory as *const VramObj;
                 map_internal.mem = unsafe { Some(&(*vram).nodes) };
+
+                while map_internal.off != 0 {
+                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
+                    if size > map_internal.off {
+                        break;
+                    }
+                    map_internal.off -= size;
+                    map_internal.midx += 1;
+                }
                 mapfn = desc.memfn();
             },
             MemObjType::DMA => {
                 let dmamemobj : *const DmaMemObj = map.memory as *const dyn Memory as *const DmaMemObj;
                 map_internal.dma_base = unsafe { (*dmamemobj).iova };
+
+                map_internal.dma_base += map_internal.off >> PAGE_SHIFT;
+                map_internal.off = map.offset & (PAGE_MASK as u64);
                 mapfn = desc.dmafn();
             },
             MemObjType::SGL => {
@@ -1902,6 +1905,14 @@ impl VmmInner {
             MemObjType::INST => {
                 let instobj: *const InstObj = map.memory as *const dyn Memory as *const InstObj;
                 map_internal.mem = unsafe { Some(&(*instobj).vram.nodes) };
+                while map_internal.off != 0 {
+                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
+                    if size > map_internal.off {
+                        break;
+                    }
+                    map_internal.off -= size;
+                    map_internal.midx += 1;
+                }
                 mapfn = desc.memfn();
             }
         };
