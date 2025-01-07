@@ -355,7 +355,6 @@ impl Memory for InstObj {
             Some(x) => {
                 match x {
                     true => {
-                        pr_info!("wr32_fast: {:#x} {:#x}\n", self.vram.addr()? + offset, data);
                         unsafe { *((self.bar2_map.unwrap() as *mut u32).byte_offset(offset as isize)) = data };
                         Ok(())
                     }
