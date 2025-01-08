@@ -550,7 +550,6 @@ impl InstMem {
         let bar = self.base.bar.try_access().ok_or(ENXIO)?;
         let mut guard = self.addr_base.lock();
 
-        pr_info!("wr32_slow: {:#x} {:#x}\n", in_addr + offset, data);
         if guard.addr_base != base {
             bar.try_writel((base >> 16) as u32, 0x1700)?;
             guard.addr_base = base;
