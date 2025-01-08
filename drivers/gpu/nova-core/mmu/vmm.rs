@@ -1450,7 +1450,7 @@ impl VmmInner {
             let pten = core::cmp::min(sptn - spti, ptes);
             pgt.pte[lpti as usize] += pten as u8;
             ptes -= pten;
-            lpti = lpti + 1;
+            lpti += 1;
             spti = 0;
         }
 
@@ -1537,7 +1537,7 @@ impl VmmInner {
             let pten = core::cmp::min(sptn - spti, ptes);
             pgt.pte[lpti as usize] -= pten as u8;
             ptes -= pten;
-            lpti = lpti + 1;
+            lpti += 1;
             spti = 0;
         }
 
@@ -1792,7 +1792,7 @@ impl VmmInner {
         map_internal.next = (1_u64 << page.shift) >> 4;
         map_internal.map_type = 0;
 
-        map_internal.map_type |= 1;
+        map_internal.map_type |= bit_u64!(0);
         map_internal.map_type |= (Self::aper(map.memory.target())? as u64) << 1;
         map_internal.map_type |= (map.vol as u64) << 3;
         map_internal.map_type |= (map.private as u64) << 5;
