@@ -940,7 +940,7 @@ retry:
 						     &mem->mem, mem->kind);
 			if (ret)
 				goto out;
-			reg->bus.offset = mem->mem.bar1_vma_addr;
+			reg->bus.offset = drm->info.resource_addr[1] + mem->mem.bar1_vma_addr;
 		}
 		ret = 0;
 		break;
