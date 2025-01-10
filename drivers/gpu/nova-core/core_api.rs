@@ -295,6 +295,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
         };
 
         let nodes = vram.nodes.len();
+        ncobj.mem_type = mmu_type;
         ncobj.addr = vram.addr().unwrap();
         ncobj.size = vram.size().unwrap();
         ncobj.page = vram.page();
@@ -309,7 +310,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
             Err(x) => { return x.to_errno(); }
             Ok(x) => x
         };
-
+        ncobj.mem_type = mmu_type;
         ncobj.page = memobj.page();
         ncobj.size = memobj.size().unwrap();
         ncobj.obj_type = bindings::NVIF_MEM_OBJ_DMA;
