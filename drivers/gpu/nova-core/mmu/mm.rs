@@ -255,6 +255,7 @@ impl MemRangeInner {
             }
         }
         if a.size() == size {
+            let _ = unsafe { self.free.remove(&a) };
             return Ok(Arc::<MemRangeNode>::from(a));
         }
 
@@ -327,6 +328,7 @@ impl MemRangeInner {
 
         if a.size() == size {
             unsafe { *a.mm_type.get() = mm_type };
+            let _ = unsafe { self.free.remove(&a) };
             return Ok(a.clone());
         }
 
