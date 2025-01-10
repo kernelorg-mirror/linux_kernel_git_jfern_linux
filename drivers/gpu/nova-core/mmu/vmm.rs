@@ -1385,9 +1385,12 @@ impl VmmInner {
         self.node_remove(&vma);
 
         // Merge VMA back into the free list.
-        let freed = Vma::new_freed(vma.as_ref())?;
 
-        self.free_insert(freed.clone_arc())?;
+        vma.set_page(NVKM_VMA_PAGE_NONE);
+        vma.set_refd(NVKM_VMA_PAGE_NONE);
+        vma.set_used(false);
+
+        self.put_region(vma)?;
         Ok(())
     }
 
