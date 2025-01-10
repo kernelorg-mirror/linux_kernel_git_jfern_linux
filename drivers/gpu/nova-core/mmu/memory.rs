@@ -573,7 +573,7 @@ impl InstMem {
 pub(crate) struct DmaMemObj {
     target: MemTarget,
     pages: u64,
-    pub iova: u64,
+    pub addr_array: *mut bindings::dma_addr_t,
 }
 
 impl Memory for DmaMemObj {
@@ -631,12 +631,12 @@ impl Memory for DmaMemObj {
 }
 
 impl DmaMemObj {
-    pub(crate) fn new(addr: bindings::dma_addr_t, heap: u8, mm_type: u8, rpage: u8, size: u64, contig: bool, back: bool) -> Result<Self> {
+    pub(crate) fn new(addr: *mut bindings::dma_addr_t, heap: u8, mm_type: u8, rpage: u8, size: u64, contig: bool, back: bool) -> Result<Self> {
 
         Ok(Self {
             target: MemTarget::Host,
             pages: size >> PAGE_SHIFT,
-            iova: addr
+            addr_array: addr,
         })
     }
 

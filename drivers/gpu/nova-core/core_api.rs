@@ -305,7 +305,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
         pr_info!("allocated uvram {:?} {:?} {} {} {}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
                  ncobj.addr, ncobj.size, nodes);
     } else {
-        let memobj = match DmaMemObj::new(unsafe { *dma } , 0, mmu_type, page, size, contig, true) {
+        let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size, contig, true) {
             Err(x) => { return x.to_errno(); }
             Ok(x) => x
         };

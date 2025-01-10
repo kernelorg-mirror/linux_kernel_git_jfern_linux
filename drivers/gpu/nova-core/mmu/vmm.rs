@@ -423,9 +423,9 @@ impl VmmDescFunc for VmmDescSPT {
         let vmmpage = VmmInner::page(&vmm.instmem.base, map_internal.page_idx);
         vmm_map_iter!(pt, ptes, ptei, map_internal, vmmpage.shift,
                       PAGE_SIZE as u64,
-                      map_internal.dma_base + (map_internal.midx * PAGE_SIZE) as u64,
+                      unsafe { *map_internal.dma_base },
                       VmmDescSPT::pte,
-                      map_internal.midx += 1);
+                      map_internal.dma_base = map_internal.dma_base.wrapping_add(1));
 
         Ok(())
     }
@@ -1855,7 +1855,7 @@ impl VmmInner {
             ctag: 0,
             mem: None,
             midx: 0,
-            dma_base: 0,
+            dma_base: core::ptr::null_mut(),
         };
 
         if vma.page() == NVKM_VMA_PAGE_NONE && vma.refd() == NVKM_VMA_PAGE_NONE {
@@ -1892,9 +1892,7 @@ impl VmmInner {
             },
             MemObjType::DMA => {
                 let dmamemobj : *const DmaMemObj = map.memory as *const dyn Memory as *const DmaMemObj;
-                map_internal.dma_base = unsafe { (*dmamemobj).iova };
-
-                map_internal.dma_base += map_internal.off >> PAGE_SHIFT;
+                map_internal.dma_base = unsafe { (*dmamemobj).addr_array.offset((map.offset >> PAGE_SHIFT) as isize) };
                 map_internal.off = map.offset & (PAGE_MASK as u64);
                 mapfn = desc.dmafn();
             },
@@ -1955,7 +1953,7 @@ pub(crate) struct VmmMapInternal<'a> {
     pub mem: Option<&'a KVec<VramNode>>,
     pub midx: usize,
 
-    pub dma_base: u64,
+    pub dma_base: *mut bindings::dma_addr_t,
 
     //sgl
 }
