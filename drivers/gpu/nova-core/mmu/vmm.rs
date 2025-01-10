@@ -1216,14 +1216,14 @@ impl VmmInner {
 
         match prev {
             Some(p) => {
-                if vma.size() == size {
+                if vma.size() != size {
                     self.node_remove(&vma);
                     p.add_size(size);
                     vma.set_addr(vma.addr() + size);
                     vma.sub_size(size);
                     self.node_insert(vma);
                 } else {
-                    p.sub_size(size);
+                    p.add_size(size);
                     self.node_delete(vma);
                 }
                 return Ok(p);
