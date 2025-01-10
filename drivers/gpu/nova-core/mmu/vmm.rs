@@ -632,6 +632,7 @@ pub(crate) struct VmaMutable {
     used: bool,
     mapped: bool,
     mapref: bool,
+    part: bool,
     memory: Option<InstObj>,
 }
 #[pin_data]
@@ -639,7 +640,6 @@ pub(crate) struct VmaMutable {
 pub(crate) struct Vma {
     vma_mut: UnsafeCell<VmaMutable>,
     sparse: bool,
-    part: bool,
     busy: bool,
     no_comp: bool,
     #[pin]
@@ -668,7 +668,8 @@ impl Debug for Vma {
                match self.sparse { true => 'S', false => '-' },
                match self.page() { NVKM_VMA_PAGE_NONE => '-', x => ('0' as u8 + x) as char },
                match self.refd() { NVKM_VMA_PAGE_NONE => '-', x => ('0' as u8 + x) as char },
-               '-', '-',
+               match self.part() { true => 'P', false => '-' },
+               '-',
                match self.mapped() { true => 'M', false => '-'})
     }
 }
@@ -696,6 +697,14 @@ impl Vma {
 
     fn set_mapref(&self, mapref: bool) {
         unsafe { (*self.vma_mut.get()).mapref = mapref };
+    }
+
+    fn part(&self) -> bool {
+        unsafe { (*self.vma_mut.get()).part }
+    }
+
+    fn set_part(&self, part: bool) {
+        unsafe { (*self.vma_mut.get()).part = part };
     }
 
     fn page(&self) -> u8 {
@@ -754,10 +763,10 @@ impl Vma {
                     used,
                     mapped,
                     mapref,
+                    part,
                     memory: None
                 }.into(),
                 sparse,
-                part,
                 busy,
                 no_comp,
             }), GFP_KERNEL)?;
@@ -778,7 +787,7 @@ impl Vma {
     fn new_freed(vma: &Vma) -> Result<ListArc<Self>> {
         Self::new_internal(vma.addr(), vma.size(),
                            vma.mapref(), vma.sparse, NVKM_VMA_PAGE_NONE, NVKM_VMA_PAGE_NONE, false,
-                           vma.part, vma.busy, vma.mapped(), vma.no_comp)
+                           vma.part(), vma.busy, vma.mapped(), vma.no_comp)
     }
 }
 
@@ -1138,11 +1147,13 @@ impl VmmInner {
 
             let vma = self.tail(vma.as_ref(), vma.size() + vma.addr() - size, true)?;
 
+            vma.set_part(true);
             self.node_insert(vma)?;
         }
 
         if vma.size() != size {
             let tmp = self.tail(vma.clone().as_ref(), vma.size() - size, true)?;
+            tmp.set_part(true);
             self.node_insert(tmp)?;
         }
         Ok(vma)
@@ -1234,8 +1245,33 @@ impl VmmInner {
     }
 
     fn unmap_region(&mut self, vma: Arc<Vma>) -> Result<()> {
+
+        let mut use_prev = None;
+        let mut use_next = None;
         vma.set_mapped(false);
-        self.node_merge(None, vma.clone(), None, vma.size())?;
+
+        if (vma.part()) {
+            let prev = Self::node_prev(&mut self.list, vma.clone());
+            match prev {
+                None => {},
+                Some(x) => {
+                    if !x.mapped() {
+                        use_prev = Some(x);
+                    }
+                }
+            }
+        }
+
+        let next = Self::node_next(&mut self.list, vma.clone());
+        match next {
+            None => {},
+            Some (x) => {
+                if x.part() && !x.mapped() {
+                    use_next = Some(x);
+                }
+            }
+        }
+        self.node_merge(use_prev, vma.clone(), use_next, vma.size())?;
         Ok(())
     }
 
