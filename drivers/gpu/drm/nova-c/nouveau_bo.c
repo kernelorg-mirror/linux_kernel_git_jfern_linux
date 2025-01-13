@@ -737,7 +737,7 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 	const struct _method_table *mthd = _methods;
 	const char *name = "CPU";
 	int ret;
-
+	u8 eng_inst;
 	do {
 		struct nouveau_channel *chan;
 
@@ -751,8 +751,15 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 		if (mthd->oclass != drm->info.ce_class)
 			continue;
 
+		int engi = novac_get_engine_inst(&drm->info, chan->runlist, NOVA_CORE_ENGINE_CE, &eng_inst);
+		if (engi < 0) {
+			printk(KERN_ERR "failed to find ce class on runlist %d %08x\n", chan->runlist, drm->info.ce_class);
+			continue;
+		}
 		drm->ttm.copy.class = drm->info.ce_class;
 		drm->ttm.copy.handle = drm->info.ce_class | (mthd->engine << 16);
+		drm->ttm.copy.engine_type = NOVA_CORE_ENGINE_CE;
+		drm->ttm.copy.engine_inst = eng_inst;
 		ret = nova_core_chan_alloc_object(drm->auxdev, &chan->chan.nova,
 						  &drm->ttm.copy);
 		if (ret == 0) {

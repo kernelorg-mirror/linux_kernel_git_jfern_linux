@@ -19,6 +19,7 @@ struct novac_chan {
 };
 
 u64 novac_fifo_runlist(struct nova_core_info *info, u8 eng_type);
+int novac_get_engine_inst(struct nova_core_info *info, u8 runl_index, u8 eng_type, u8 *eng_inst);
 
 /* CE-supporting runlists (excluding GRCE, if others exist). */
 static inline u64

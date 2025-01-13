@@ -260,8 +260,9 @@ nouveau_channel_ctor(struct nouveau_cli *cli, bool priv, u64 runm,
 	printk(KERN_ERR "nova userd priv %p\n", chan->userd.mem.obj);
 
 	u32 runl_id = cli->drm->info.runl[chan->runlist].id;
-	ret = nova_core_alloc_chan(cli->drm->auxdev, &cli->gsp, runl_id, priv,
-				   offset, length, vmm, &chan->userd.mem,
+	ret = nova_core_alloc_chan(cli->drm->auxdev, &cli->gsp,
+				   runl_id, priv,
+				   offset, length, vmm, userd,
 				   chan->name,
 				   &chan->chan.nova);
 	if (ret) {

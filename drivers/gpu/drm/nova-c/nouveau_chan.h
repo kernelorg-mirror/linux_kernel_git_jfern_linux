@@ -47,8 +47,6 @@ struct nouveau_channel {
 	u32 user_get;
 	u32 user_put;
 
-  //	struct nvif_engobj blit;
-
   //	struct nvif_event kill;
 	atomic_t killed;
 };
