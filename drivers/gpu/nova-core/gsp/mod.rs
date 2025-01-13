@@ -206,6 +206,8 @@ pub(crate) struct GspVa {
 pub(crate) struct GspChannel {
     object: Arc<GspObject>,
     chid: u32,
+    engine_type: EngineType,
+    engine_inst: u32,
 }
 
 impl GspClient {
@@ -237,7 +239,6 @@ pub(crate) struct GspManager {
     gpcs: u8,
     tpcs: u8,
     vmmu_segment_size: u64,
-    alloc_id: AtomicU16,
     runl: FifoRunList,
     mthdbuf_size: u32,
     internal_client: Arc<GspClient>,
@@ -246,8 +247,8 @@ pub(crate) struct GspManager {
 }
 
 pub(crate) trait GspManager: Send + Sync {
-    fn alloc_client_device(&self) -> Result<(Arc<GspClient>,
-                                             Arc<GspDevice>)>;
+    fn alloc_client_device(&self, client_id: u32) -> Result<(Arc<GspClient>,
+                                                             Arc<GspDevice>)>;
     fn free_client(&self, client: Arc<GspClient>) -> Result<()>;
     fn free_device(&self, device: Arc<GspDevice>) -> Result<()>;
 
@@ -258,8 +259,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn free_chid(&self, chid: usize);
     fn alloc_fifo_chan(&self,
                        device: Arc<GspDevice>,
-                       engine_type: EngineType,
-                       engine_inst: u32,
+                       runl_id: u32,
                        va: &GspVa,
                        inst: &InstObj,
                        userd: &VramObj,
@@ -272,9 +272,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn free_fifo_chan(&self, channel: &GspChannel) -> Result<()>;
 
     fn bind_fifo(&self,
-                 channel: &GspChannel,
-                 engine_type: EngineType,
-                 engine_inst: u32) -> Result<()>;
+                 channel: &GspChannel) -> Result<()>;
     fn schedule_fifo(&self,
                      channel: &GspChannel,
                      enable: bool) -> Result<()>;
@@ -286,6 +284,7 @@ pub(crate) trait GspManager: Send + Sync {
                          inst: &InstObj,
                          fifo_class: u32) -> Result<Arc<GspChannel>>;
 
+    fn alloc_ce_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>>;
     fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>>;
     fn free_chan_obj(&self, object: &GspObject) -> Result<()>;
 
@@ -312,9 +311,9 @@ pub(crate) trait GspManager: Send + Sync {
 #[versions(GSP)]
 impl GspManager for GspManager::ver {
 
-    fn alloc_client_device(&self) -> Result<(Arc<GspClient>,
+    fn alloc_client_device(&self, client_id: u32) -> Result<(Arc<GspClient>,
                                              Arc<GspDevice>)> {
-        let client = Arc::new(self.alloc_client()?, GFP_KERNEL)?;
+        let client = Arc::new(self.alloc_client(client_id)?, GFP_KERNEL)?;
         let device = Arc::new(self.alloc_device(client.clone())?, GFP_KERNEL)?;
         Ok((client, device))
     }
@@ -326,7 +325,6 @@ impl GspManager for GspManager::ver {
         let mut gsp_objs = gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
-        self.free_client_id(client.object.handle & 0xffff);
         Ok(())
     }
 
@@ -353,8 +351,7 @@ impl GspManager for GspManager::ver {
 
     fn alloc_fifo_chan(&self,
                        device: Arc<GspDevice>,
-                       engine_type: EngineType,
-                       engine_inst: u32,
+                       runl_id: u32,
                        va: &GspVa,
                        inst: &InstObj,
                        userd: &VramObj,
@@ -364,6 +361,15 @@ impl GspManager for GspManager::ver {
                        offset: u64,
                        length: u64,
                        chan_priv: bool) -> Result<Arc<GspChannel>> {
+
+        let mut engine_type = EngineType::GR;
+        let mut engine_inst = 0;
+        for ent in &self.runl.entries {
+            if ent.id == runl_id as i32 {
+                engine_type = ent.engns[0].eng_type;
+                engine_inst = ent.engns[0].inst;
+            }
+        }
         pr_info!("alloc fifo et:{:?} ei:{} fc:{:#x} chid:{} offset:{:#x} length:{:#x} \n", engine_type, engine_inst, fifo_class, chid, offset, length);
 
         let mut msg = FifoAlloc::ver::new(&device, engine_type, engine_inst, va,
@@ -379,15 +385,15 @@ impl GspManager for GspManager::ver {
                 parent: Some(device.object.clone()),
                 handle: msg.handle,
             }, GFP_KERNEL)?,
-            chid
+            chid,
+            engine_type,
+            engine_inst,
         }, GFP_KERNEL)?)
     }
 
     fn bind_fifo(&self,
-                 channel: &GspChannel,
-                 engine_type: EngineType,
-                 engine_inst: u32) -> Result<()> {
-        let mut msg = BindParams::ver::new(channel, engine_type, engine_inst)?;
+                 channel: &GspChannel) -> Result<()> {
+        let mut msg = BindParams::ver::new(channel, channel.engine_type, channel.engine_inst)?;
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
@@ -430,9 +436,31 @@ impl GspManager for GspManager::ver {
                 parent: Some(device.object.clone()),
                 handle: msg.handle,
             }, GFP_KERNEL)?,
-            chid: 0
+            chid: 0,
+            engine_type: EngineType::GR,
+            engine_inst: 0
         }, GFP_KERNEL)?)
 
+    }
+
+    fn alloc_ce_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>> {
+        let mut msg = AllocMsg::ver::get(Some(&channel.object.client.as_ref().unwrap()),
+                                         Some(&channel.object),
+                                         handle,
+                                         oclass, fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::str_size())?;
+        let mut _msg = fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::new(msg.get_data_ptr())
+            .version(1)
+            .engineType(fw::ver::gen::NV2080_ENGINE_TYPE_COPY0 + inst as u32);
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        Ok(Arc::new(GspObject {
+            client: channel.object.client.clone(),
+            parent: Some(channel.object.clone()),
+            handle: handle,
+        }, GFP_KERNEL)?)
     }
 
     fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>> {
@@ -651,18 +679,8 @@ const CtxBufMap: [CtxBufTable; NumCtxBufs] = [
 
 #[versions(GSP)]
 impl GspManager::ver {
-
-    fn get_new_client_id(&self) -> u16 {
-        self.alloc_id.fetch_add(1, Ordering::SeqCst)
-    }
-
-    fn free_client_id(&self, _handle: u32) {
-//        self.ids.lock().unwrap().free(handle);
-    }
-
-    fn alloc_client(&self) -> Result<GspClient> {
-        let id = self.get_new_client_id();
-        let mut msg = AllocClient::ver::new(id, 0xffffffff)?;
+    fn alloc_client(&self, client_id: u32) -> Result<GspClient> {
+        let mut msg = AllocClient::ver::new(client_id as u16, 0xffffffff)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -968,7 +986,6 @@ impl GspManager::ver {
             gpcs,
             tpcs,
             vmmu_segment_size: vmmu_segment_size_msg.get_segment_size(),
-            alloc_id: AtomicU16::new(0xab00),
             runl,
             mthdbuf_size,
             internal_client,

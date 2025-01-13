@@ -7,6 +7,7 @@ use kernel::{
 };
 
 use kernel::types::ForeignOwnable;
+use crate::accel::fifo::EngineType;
 use crate::gpu::{Gpu, GpuDevice, GpuClient, Chipset, GpuDeviceVmm, GpuChanObject};
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mmu::Mmu;
@@ -516,8 +517,12 @@ pub unsafe extern "C" fn nova_core_chan_alloc_object(auxdev: *mut bindings::auxi
     let chan: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan).arc) };
     let obj_info = unsafe { &mut (*obj_ptr) };
 
-    let obj = match gpu.create_channel_obj(&chan.clone(), obj_info.handle, obj_info.class) {
-        Err(x) => { return x.to_errno() }
+    let eng_type = match EngineType::from_core(obj_info.engine_type) {
+        Err(x) => { return x.to_errno(); },
+        Ok(x) => x
+    };
+    let obj = match gpu.create_channel_obj(&chan.clone(), obj_info.handle, obj_info.class, eng_type, obj_info.engine_inst) {
+        Err(x) => { pr_info!("failed to allocate chan obj\n"); return x.to_errno() }
         Ok(x) => { x }
     };
 

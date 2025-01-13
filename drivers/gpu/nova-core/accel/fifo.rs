@@ -32,6 +32,17 @@ impl EngineType {
             _ => 0,
         }
     }
+
+    pub(crate) fn from_core(core_type: u8) -> Result<Self> {
+        Ok(match core_type {
+            bindings::NOVA_CORE_ENGINE_GR => EngineType::GR,
+            bindings::NOVA_CORE_ENGINE_CE => EngineType::CE,
+            bindings::NOVA_CORE_ENGINE_SW => EngineType::SW,
+            bindings::NOVA_CORE_ENGINE_NVDEC => EngineType::NVDEC,
+            bindings::NOVA_CORE_ENGINE_NVENC => EngineType::NVENC,
+            _ => return { Err(EINVAL) },
+        })
+    }
 }
 
 // make this generic
@@ -268,28 +279,18 @@ impl Channel {
         let mthdbuf_size = gpu.gsp.get_mthdbuf_size();
         /* need a vctx engine rm.size */
         /* with a vmm and mapped into it */
-        let mut instbuf = InstObj::new(gpu.instmem.clone(), 0x1000, 0, true, true)?;
+        let mut instbuf = InstObj::new(gpu.instmem.clone(), 0x1000, 0x1000, true, true)?;
 
         vmm.vmm.join(&mut instbuf);
-
-        let mut engine_type = EngineType::GR;
-        let mut engine_inst = 0;
-        let runl = gpu.gsp.get_runlist();
-        for ent in &runl.entries {
-            if ent.id == runl_id as i32 {
-                engine_type = ent.engns[0].eng_type;
-                engine_inst = ent.engns[0].inst;
-            }
-        }
 
         let doorbell = (runl_id << 16) | chid;
         let mthdbuf = DmaObject::new_cleared(&gpu.base.dev, mthdbuf_size as usize, "mthdbuf")?;
 
-        let gsp_chan = gpu.gsp.alloc_fifo_chan(device.gsp.clone(), engine_type, engine_inst, &vmm.va, &instbuf,
+        let gsp_chan = gpu.gsp.alloc_fifo_chan(device.gsp.clone(), runl_id, &vmm.va, &instbuf,
                                                userd, &mthdbuf, gpu.base.spec.gpu_consts.fifo_class, chid, offset, length, chan_priv)?;
 
 
-        gpu.gsp.bind_fifo(&gsp_chan, engine_type, engine_inst);
+        gpu.gsp.bind_fifo(&gsp_chan);
         gpu.gsp.schedule_fifo(&gsp_chan, true);
         Ok(Self {
             name: c_str!("chan"),
@@ -302,9 +303,15 @@ impl Channel {
         })
     }
 
-    pub(crate) fn alloc_obj(&self, handle: u32, oclass: u32) -> Result<Arc<GpuChanObject>> {
-        let gsp = self.mgr.alloc_chan_obj(self.gsp_chan.clone(), handle, oclass)?;
-
+    pub(crate) fn alloc_obj(&self, handle: u32, oclass: u32, engine_type: EngineType, engine_inst: u8) -> Result<Arc<GpuChanObject>> {
+        let gsp = match engine_type {
+            EngineType::CE => {
+                self.mgr.alloc_ce_obj(self.gsp_chan.clone(), handle, oclass, engine_inst)?
+            }
+            _ => {
+                self.mgr.alloc_chan_obj(self.gsp_chan.clone(), handle, oclass)?
+            }
+        };
         Ok(Arc::new(GpuChanObject {
             gsp,
             mgr: self.mgr.clone()

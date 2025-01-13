@@ -95,8 +95,6 @@ struct nova_core_info {
 
 	struct engine {
 		u8 eng_type;
-		u8 oclass_nr;
-		s32 oclass[64];
 	} engine[8];
 
 	struct runl {
@@ -233,6 +231,8 @@ struct nova_core_chan_obj {
 	void *arc;
 	u32 handle;
 	u32 class;
+	u8 engine_type;
+	u8 engine_inst;
 };
 
 int nova_core_chan_alloc_object(struct auxiliary_device *auxdev,

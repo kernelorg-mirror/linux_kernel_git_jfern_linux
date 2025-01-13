@@ -484,8 +484,10 @@ impl Gpu {
     pub(crate) fn create_channel_obj(&self,
                                      channel: &Channel,
                                      handle: u32,
-                                     oclass: u32) -> Result<Arc<GpuChanObject>> {
-        channel.alloc_obj(handle, oclass)
+                                     oclass: u32,
+                                     engine_type: EngineType,
+                                     engine_inst: u8) -> Result<Arc<GpuChanObject>> {
+        channel.alloc_obj(handle, oclass, engine_type, engine_inst)
     }
 
     pub(crate) fn get_engine_bitmap(&self) -> u64 {
