@@ -9,14 +9,17 @@ use kernel::{
     elf::Elf,
     error::code::*,
     firmware,
+    new_mutex,
     fmt,
     pci,
     prelude::*,
     str::CString,
-    sync::Arc,
+    sync::{Arc, Mutex},
     types::ARef,
 };
 
+use crate::accel::fifo::BitVec;
+use crate::accel::fifo::EngineType;
 use crate::bar::Bar;
 use crate::bios::Bios;
 use crate::devinit;
@@ -198,6 +201,7 @@ pub(crate) struct Gpu {
     #[cfg(not(CONFIG_NOVA_CORE_VGPU_SUPPORT))]
     pub vgpu: bool,
     pub instmem: Arc<InstMem>,
+    pub alloc_id: Arc<AllocId>,
     pub gr_ctx_bufs: KVec<Arc<InstObj>>,
 }
 
@@ -398,6 +402,41 @@ impl Firmware {
     }
 }
 
+struct AllocInner {
+    bits: BitVec
+}
+
+#[pin_data]
+#[repr(C)]
+pub(crate) struct AllocId {
+    #[pin]
+    inner: Mutex<AllocInner>
+}
+
+impl AllocId {
+    pub(crate) fn new() -> Result<Arc<AllocId>> {
+        let bits = BitVec::new(64)?;
+        Ok(Arc::pin_init(pin_init!(AllocId {
+            inner <- new_mutex!(AllocInner {
+                bits
+            })
+        }), GFP_KERNEL)?)
+    }
+
+    pub(crate) fn alloc(&self) -> u32 {
+        let mut locked = self.inner.lock();
+        let res = locked.bits.ffz();
+        locked.bits.set_bit(res, true);
+        res as u32
+//        (res.wrapping_sub(0)) as u32
+    }
+
+    pub(crate) fn free(&self, handle: u32) {
+        let mut locked = self.inner.lock();
+        locked.bits.set_bit((handle & 0xffff) as usize, false);
+    }
+}
+
 #[repr(C)]
 pub(crate) struct GpuDevice {
     pub gsp: Arc<GspDevice>,
@@ -413,12 +452,16 @@ impl Drop for GpuDevice {
 #[repr(C)]
 pub(crate) struct GpuClient {
     pub gsp: Arc<GspClient>,
+    pub allocator: Arc<AllocId>,
     mgr: Arc<dyn GspManager>,
 }
 
 impl Drop for GpuClient {
     fn drop(&mut self) {
+
+        self.allocator.free(self.gsp.get_client_handle().unwrap() & 0xffff);
         let _ = self.mgr.free_client(self.gsp.clone());
+
     }
 }
 
@@ -461,11 +504,17 @@ impl Gpu {
         }, GFP_KERNEL)?)
     }
 
-    pub(crate) fn alloc_client_device(&self) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
-        let (gsp_client, gsp_device) = self.gsp.alloc_client_device()?;
+    pub(crate) fn int_alloc_client_device(alloc_id: Arc<AllocId>, gsp: Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
 
-        Ok((Arc::new(GpuClient { gsp: gsp_client, mgr: self.gsp.clone() }, GFP_KERNEL)?,
-            Arc::new(GpuDevice { gsp: gsp_device, mgr: self.gsp.clone() }, GFP_KERNEL)?))
+        let client_id = alloc_id.alloc();
+        let (gsp_client, gsp_device) = gsp.alloc_client_device(client_id)?;
+
+        Ok((Arc::new(GpuClient { gsp: gsp_client, allocator: alloc_id.clone(), mgr: gsp.clone() }, GFP_KERNEL)?,
+            Arc::new(GpuDevice { gsp: gsp_device, mgr: gsp.clone() }, GFP_KERNEL)?))
+    }
+
+    pub(crate) fn alloc_client_device(&self) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
+        Self::int_alloc_client_device(self.alloc_id.clone(), self.gsp.clone())
     }
 
     pub(crate) fn create_channel(&self,
