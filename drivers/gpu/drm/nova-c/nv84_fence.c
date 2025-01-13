@@ -33,8 +33,7 @@
 static inline u32
 nv84_fence_chid(struct nouveau_channel *chan)
 {
-  return 0;
-  //	return chan->cli->drm->runl[chan->runlist].chan_id_base + chan->chid;
+	return chan->cli->drm->runl[chan->runlist].chan_id_base + chan->chid;
 }
 
 static int
@@ -61,8 +60,7 @@ static u32
 nv84_fence_read(struct nouveau_channel *chan)
 {
 	struct nv84_fence_priv *priv = chan->cli->drm->fence;
-	return 0;
-	//	return nouveau_bo_rd32(priv->bo, nv84_fence_chid(chan) * 16/4);
+	return nouveau_bo_rd32(priv->bo, nv84_fence_chid(chan) * 16/4);
 }
 
 static void
@@ -71,7 +69,7 @@ nv84_fence_context_del(struct nouveau_channel *chan)
 	struct nv84_fence_priv *priv = chan->cli->drm->fence;
 	struct nv84_fence_chan *fctx = chan->fence;
 
-	//	nouveau_bo_wr32(priv->bo, nv84_fence_chid(chan) * 16 / 4, fctx->base.sequence);
+	nouveau_bo_wr32(priv->bo, nv84_fence_chid(chan) * 16 / 4, fctx->base.sequence);
 	mutex_lock(&priv->mutex);
 	nouveau_vma_del(&fctx->vma);
 	mutex_unlock(&priv->mutex);

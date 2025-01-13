@@ -190,14 +190,12 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	INIT_LIST_HEAD(&fctx->flip);
 	INIT_LIST_HEAD(&fctx->pending);
 	spin_lock_init(&fctx->lock);
-	//	fctx->context = drm->runl[chan->runlist].context_base + chan->chid;
-#if 0
+	fctx->context = drm->runl[chan->runlist].context_base + chan->chid;
 	if (chan == drm->cechan)
 		strcpy(fctx->name, "copy engine channel");
 	else if (chan == drm->channel)
 		strcpy(fctx->name, "generic kernel channel");
 	else
-#endif
 		strcpy(fctx->name, cli->name);
 
 	kref_init(&fctx->fence_ref);
@@ -240,7 +238,8 @@ nouveau_fence_emit(struct nouveau_fence *fence)
 			return -ENODEV;
 		}
 
-		//		if (nouveau_fence_update(chan, fctx))
+		if (nouveau_fence_update(chan, fctx))
+		  ;
 		//			nvif_event_block(&fctx->event);
 
 		list_add_tail(&fence->head, &fctx->pending);
@@ -264,7 +263,8 @@ nouveau_fence_done(struct nouveau_fence *fence)
 
 		spin_lock_irqsave(&fctx->lock, flags);
 		chan = rcu_dereference_protected(fence->channel, lockdep_is_held(&fctx->lock));
-		//		if (chan && nouveau_fence_update(chan, fctx))
+		if (chan && nouveau_fence_update(chan, fctx))
+		  ;
 		//			nvif_event_block(&fctx->event);
 		spin_unlock_irqrestore(&fctx->lock, flags);
 	}
@@ -531,10 +531,10 @@ static bool nouveau_fence_enable_signaling(struct dma_fence *f)
 
 	//	if (!fctx->notify_ref++)
 	//		nvif_event_allow(&fctx->event);
-#if 0
 	ret = nouveau_fence_no_signaling(f);
 	if (ret)
 		set_bit(DMA_FENCE_FLAG_USER_BITS, &fence->base.flags);
+#if 0
 	else if (!--fctx->notify_ref)
 		nvif_event_block(&fctx->event);
 #endif

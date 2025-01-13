@@ -65,13 +65,13 @@ extern int nouveau_vram_pushbuf;
 static inline u32
 nvif_userd_rd32(struct nouveau_channel *chan, u32 offset)
 {
-	return ioread32(chan->userd.ptr + offset);
+	return ioread32((u8 __iomem *)chan->userd.ptr + offset);
 }
 
 static inline void
 nvif_userd_wr32(struct nouveau_channel *chan, u32 offset, u32 val)
 {
-	iowrite32(val, chan->userd.ptr + offset);
+	iowrite32(val, (u8 __iomem *)chan->userd.ptr + offset);
 }
 
 #endif
