@@ -169,11 +169,11 @@ pub(crate) struct CEAlloc {
 
 #[versions(GSP)]
 impl CEAlloc::ver {
-    pub(crate) fn new(channel: &GspClient, oclass: &GspObject, oclass_h: u32, inst: u32) -> Result<Self> {
-        let mut msg = AllocMsg::ver::get(Some(channel),
-                                         Some(oclass),
-                                         oclass_h,
-                                         oclass_h,
+    pub(crate) fn new(channel: &GspChannel, handle: u32, oclass: u32, inst: u32) -> Result<Self> {
+        let mut msg = AllocMsg::ver::get(Some(&channel.object.client.as_ref().unwrap()),
+                                         Some(&channel.object),
+                                         handle,
+                                         oclass,
                                          fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::str_size())?;
         let mut _msg = fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::new(msg.get_data_ptr())
             .version(1)

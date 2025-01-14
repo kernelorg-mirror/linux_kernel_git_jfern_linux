@@ -444,13 +444,7 @@ impl GspManager for GspManager::ver {
     }
 
     fn alloc_ce_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>> {
-        let mut msg = AllocMsg::ver::get(Some(&channel.object.client.as_ref().unwrap()),
-                                         Some(&channel.object),
-                                         handle,
-                                         oclass, fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::str_size())?;
-        let mut _msg = fw::ver::gen::s_NVC0B5_ALLOCATION_PARAMETERS::new(msg.get_data_ptr())
-            .version(1)
-            .engineType(fw::ver::gen::NV2080_ENGINE_TYPE_COPY0 + inst as u32);
+        let mut msg = CEAlloc::ver::new(&channel, handle, oclass, inst as u32)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
