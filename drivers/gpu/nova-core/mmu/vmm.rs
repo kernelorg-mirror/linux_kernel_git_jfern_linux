@@ -1449,7 +1449,9 @@ impl VmmInner {
         instobj.acquire()?;
         instobj.wr64(0x200_u64, base)?;
         instobj.wr64(0x208_u64, self.limit - 1)?;
+        instobj.release();
 
+        instobj.acquire();
         let mask: u64 = bit_u64!(0);
 
         instobj.wr32(0x21c_u64, 0)?;

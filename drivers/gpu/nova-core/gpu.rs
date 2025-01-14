@@ -593,6 +593,7 @@ impl Gpu {
                                      Some(pdev.resource_len(3)?),
                                      pdev.resource_start(3)?)?, GFP_KERNEL)?;
 
+        let id_allocator = AllocId::new()?;
         instmem.set_bar(bars.clone())?;
 
 	#[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
@@ -604,8 +605,8 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        let gr_ctx_bufs = Gr::golden_init(instmem.clone(), gsp.clone())?;
-        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs }))
+        let gr_ctx_bufs = Gr::golden_init(instmem.clone(), gsp.clone(), id_allocator.clone())?;
+        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs, alloc_id: id_allocator }))
     }
 
     pub(crate) fn release(&self) {

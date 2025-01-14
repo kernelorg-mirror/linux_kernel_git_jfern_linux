@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use core::sync::atomic::{fence, Ordering};
+
 use kernel::prelude::*;
 use kernel::bindings;
 use kernel::sync::Arc;
@@ -239,6 +241,7 @@ impl Drop for VramObj {
 pub(crate) struct InstObj {
     instmem: Arc<InstMem>,
     pub vram: VramObj,
+    bar2_vma_addr: Option<u64>,
     bar2_io: Option<Io::<PAGE_SIZE>>,
     bar2_map: Option<*mut core::ffi::c_void>,
     use_fast: Option<bool>,
@@ -285,6 +288,7 @@ impl Memory for InstObj {
 
             self.vram.vram_map(0, vmm, bar.clone(), 0)?;
 
+            self.bar2_vma_addr = Some(bar.addr());
             pr_info!("kmap inst {:#x} {:#x}\n", bar.clone().addr(), bar.clone().size());
             self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
             self.bar2_map = Some(unsafe { self.bar2_io.as_ref().unwrap().remap(bar.size() as usize) });
@@ -311,7 +315,7 @@ impl Memory for InstObj {
             self.vram.vram_map_locked(0, vmm, bar.clone())?;
             // map memory to bar
             // do ioremap
-
+            self.bar2_vma_addr = Some(bar.addr());
             pr_info!("kmap inst {:#x} {:#x}\n", bar.clone().addr(), bar.clone().size());
             self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((vmm.instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
             self.bar2_map = Some(unsafe { self.bar2_io.as_ref().unwrap().remap(bar.size() as usize) });
@@ -321,6 +325,16 @@ impl Memory for InstObj {
     }
 
     fn kunmap(&mut self) {
+        match self.instmem.get_bar().unwrap() {
+            Some(bar) => {
+                if self.bar2_vma_addr.is_some() {
+                    pr_info!("kunmap inst {:#x}\n", self.bar2_vma_addr.unwrap());
+                    bar.bar2_vmm().unwrap().put_addr(self.bar2_vma_addr.unwrap());
+                }
+            }
+            _ => {}
+        }
+
         if let Some(map) = self.bar2_map {
             unsafe { self.bar2_io.as_ref().unwrap().unmap(map) };
             self.bar2_map = None;
@@ -427,6 +441,7 @@ impl InstObj {
         let mut obj = Self {
             instmem: instmem.clone(),
             vram: VramObj::new(instmem.vram_mm.clone(), 0, 1, page, size, true, true)?,
+            bar2_vma_addr: None,
             bar2_map: None,
             bar2_io: None,
             use_fast: None,
@@ -443,6 +458,7 @@ impl InstObj {
         Ok(Self {
             instmem: instmem.clone(),
             vram: vramobj,
+            bar2_vma_addr: None,
             bar2_map: None,
             bar2_io: None,
             use_fast: None,
@@ -489,6 +505,7 @@ impl InstObj {
 
     pub(crate) fn release(&mut self) {
         //        self.kunmap();
+        fence(Ordering::Acquire);
         match self.instmem.get_bar().unwrap() {
             None => {},
             Some(bar) => { let _ = bar.flush(); }

@@ -1,10 +1,10 @@
 
 use kernel::prelude::*;
 use kernel::sync::Arc;
-use crate::gpu::{Gpu, GpuBase};
+use crate::gpu::{Gpu, GpuBase, AllocId};
 use crate::gsp::GspManager;
 use crate::mmu::memory::{InstMem, InstObj, Memory};
-use crate::mmu::vmm::{Vmm, VmmMap};
+use crate::mmu::vmm::{Vmm, VmmMap, NVKM_VMM_TYPE_UNMANAGED};
 use crate::accel::fifo::GpuPromoteBufferEntry;
 
 const GR_MAX_CTXBUFS: usize = 9;
@@ -58,17 +58,17 @@ impl Gr {
         Ok(vec)
     }
 
-    pub(crate) fn golden_init(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>) -> Result<KVec<Arc<InstObj>>> {
+    pub(crate) fn golden_init(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>, id_allocator: Arc<AllocId>) -> Result<KVec<Arc<InstObj>>> {
         let base = &instmem.base;
-        let (internal_client, internal_device) = gsp.get_internals()?;
+        let (internal_client, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
         let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
 
-        let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, 0, false,
+        let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
                                 false, None, None, true, "grGoldenVmm")?;
 
-        let gold_va = gsp.alloc_vaspace(internal_device.clone(), &gold_vmm)?;
+        let gold_va = gsp.alloc_vaspace(internal_device.gsp.clone(), &gold_vmm)?;
 
-        let gold_chan = gsp.alloc_golden_chan(internal_device.clone(),
+        let gold_chan = gsp.alloc_golden_chan(internal_device.gsp.clone(),
                                               &gold_va,
                                               &gold_inst,
                                               base.spec.gpu_consts.fifo_class)?;
@@ -114,7 +114,7 @@ impl Gr {
             buf_ent_vec.push(ent, GFP_KERNEL)?;
         }
 
-        gsp.promote_gr_ctx(internal_device, gold_chan.clone(), &buf_ent_vec)?;
+        gsp.promote_gr_ctx(internal_device.gsp.clone(), gold_chan.clone(), &buf_ent_vec)?;
 
         let gold_obj = gsp.alloc_chan_obj(gold_chan.clone(), 0x97000000, base.spec.gpu_consts.gr_classes[2])?;
 
