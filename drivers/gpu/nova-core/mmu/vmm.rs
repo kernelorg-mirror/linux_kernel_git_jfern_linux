@@ -217,6 +217,9 @@ impl VmmDescType {
             VmmDescType::Spt(x) => {
                 VmmDescSPT::unmap(pt, ptei, ptes)
             }
+            VmmDescType::Lpt(x) => {
+                VmmDescLPT::unmap(pt, ptei, ptes)
+            }
             VmmDescType::PgdPd0(x) => {
                 VmmDescPd0::unmap(pt, ptei, ptes)
             }
