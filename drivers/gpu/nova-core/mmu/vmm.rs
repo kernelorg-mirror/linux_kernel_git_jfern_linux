@@ -1143,25 +1143,6 @@ impl VmmInner {
         Ok(res)
     }
 
-    pub(crate) fn node_split(&mut self, vma: Arc<Vma>, addr: u64, size: u64) -> Result<Arc<Vma>> {
-
-        if vma.addr() != addr {
-            let prev = vma.clone();
-
-            let vma = self.tail(vma.as_ref(), vma.size() + vma.addr() - size, true)?;
-
-            vma.set_part(true);
-            self.node_insert(vma)?;
-        }
-
-        if vma.size() != size {
-            let tmp = self.tail(vma.clone().as_ref(), vma.size() - size, true)?;
-            tmp.set_part(true);
-            self.node_insert(tmp)?;
-        }
-        Ok(vma)
-    }
-
     pub(crate) fn node_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
         self.root.try_create_and_insert(vma.addr(), vma, GFP_KERNEL)?;
         Ok(())
@@ -1253,23 +1234,11 @@ impl VmmInner {
         let mut use_next = None;
         vma.set_mapped(false);
 
-        if (vma.part()) {
-            let prev = Self::node_prev(&mut self.list, vma.clone());
-            match prev {
-                None => {},
-                Some(x) => {
-                    if !x.mapped() {
-                        use_prev = Some(x);
-                    }
-                }
-            }
-        }
-
         let next = Self::node_next(&mut self.list, vma.clone());
         match next {
             None => {},
             Some (x) => {
-                if x.part() && !x.mapped() {
+                if x.mapped() {
                     use_next = Some(x);
                 }
             }
@@ -1372,12 +1341,12 @@ impl VmmInner {
         }
 
         if addr != curr.addr() {
-            let tmp = self.tail(curr.as_ref(), curr.size() + curr.addr() - addr, true)?;
+            let tmp = self.tail(curr.as_ref(), curr.size() + curr.addr() - addr, false)?;
             self.free_insert(curr.clone())?;
             curr = tmp;
         }
         if size != curr.size() {
-            let tmp = self.tail(curr.as_ref(), curr.size() - size, true)?;
+            let tmp = self.tail(curr.as_ref(), curr.size() - size, false)?;
             self.free_insert(tmp)?;
         }
 
