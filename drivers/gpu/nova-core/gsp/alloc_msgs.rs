@@ -106,7 +106,7 @@ pub(crate) struct AllocEvent {
 
 #[versions(GSP)]
 impl AllocEvent::ver {
-    pub(crate) fn new(handle: u32, id: u32, device: &GspDevice) -> Result<Self> {
+    pub(crate) fn new(device: &GspDevice, handle: u32, id: u32) -> Result<Self> {
         let oclass = fw::ver::gen::NV01_EVENT_KERNEL_CALLBACK_EX;
 
         let client = device.object.client.as_ref().unwrap();

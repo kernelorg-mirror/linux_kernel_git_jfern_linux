@@ -68,11 +68,9 @@ impl EventSetNotification::ver {
             EventSetNotificationAction::REPEAT => { fw::ver::gen::NV2080_CTRL_EVENT_SET_NOTIFICATION_ACTION_REPEAT },
         }
     }
-    pub(crate) fn new(object: &GspObject, event: u32, action: EventSetNotificationAction) -> Result<Self> {
+    pub(crate) fn new(device: &GspDevice, event: u32, action: EventSetNotificationAction) -> Result<Self> {
         let msg_size = fw::ver::gen::s_NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS::str_size();
-
-        let mut ctrl = ControlMsg::ver::get(object, fw::ver::gen::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, msg_size, true)?;
-
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, msg_size, true)?;
         let mut _msg = fw::ver::gen::s_NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS::new(ctrl.get_data_ptr())
             .event(event)
             .action(Self::conv_action(action));

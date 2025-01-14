@@ -227,6 +227,11 @@ pub(crate) enum EventSetNotificationAction {
     REPEAT,
 }
 
+pub(crate) struct GspEvent {
+    object: Arc<GspObject>,
+    id: u32,
+}
+
 #[versions(GSP)]
 pub(crate) struct GspManager {
     gpu_base: Arc<GpuBase>,
@@ -254,6 +259,9 @@ pub(crate) trait GspManager: Send + Sync {
 
     fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa>;
     fn free_vaspace(&self, va: &GspVa) -> Result<()>;
+
+    fn alloc_event(&self, device: Arc<GspDevice>, handle: u32, id: u32) -> Result<GspEvent>;
+    fn free_event(&self, event: &GspEvent) -> Result<()>;
 
     fn alloc_chid(&self) -> Result<usize>;
     fn free_chid(&self, chid: usize);
@@ -481,6 +489,38 @@ impl GspManager for GspManager::ver {
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
+
+    fn alloc_event(&self, device: Arc<GspDevice>, handle: u32, id: u32) -> Result<GspEvent> {
+        let mut msg = AllocEvent::ver::new(&device, handle, id)?;
+
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+
+        let gsp_event = GspEvent {
+            object: Arc::new(GspObject {
+                client: device.object.client.clone(),
+                parent: Some(device.object.clone()),
+                handle: msg.handle,
+            }, GFP_KERNEL)?,
+            id
+        };
+
+        let mut msg = EventSetNotification::ver::new(&device, id, EventSetNotificationAction::REPEAT)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(gsp_event)
+    }
+
+    fn free_event(&self, event: &GspEvent) -> Result<()> {
+        let mut msg = FreeMsg::ver::get(&event.object)?;
+        let gsp_objs = self.gsp_objs.clone();
+        let mut gsp_objs = gsp_objs.inner.lock();
+        msg.push(&mut gsp_objs.queues)?;
+        Ok(())
+    }
+
 
     fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa> {
         let mut msg = AllocVMM::ver::new(&device)?;
