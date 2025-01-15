@@ -29,6 +29,7 @@ use crate::gpu::Chipset;
 use crate::gpu::FBInfo;
 use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
+use crate::gpu::IntrInfo;
 
 use crate::gsp::alloc_msgs::*;
 use crate::gsp::ctrl_msgs::*;
@@ -249,6 +250,7 @@ pub(crate) struct GspManager {
     internal_client: Arc<GspClient>,
     internal_device: Arc<GspDevice>,
     gr_ctx_info: KVec<CtxBufInfo>,
+    intr_info: KVec<IntrInfo>,
 }
 
 pub(crate) trait GspManager: Send + Sync {
@@ -314,6 +316,8 @@ pub(crate) trait GspManager: Send + Sync {
     fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
     fn bootload_vgpu_plugin_task(&self, device: Arc<GspDevice>, params: *const bindings::bootload_vgpu) -> i32;
     fn add_vgpu_type(&self, device: Arc<GspDevice>, count: u32, ptr: *const core::ffi::c_void) -> i32;
+
+    fn find_nonstall(&self, runl_id: u32) -> Result<u32>;
 }
 
 #[versions(GSP)]
@@ -586,6 +590,11 @@ impl GspManager for GspManager::ver {
 
     fn get_runlist(&self) -> &FifoRunList {
         &self.runl
+    }
+
+    fn find_nonstall(&self, runl_id: u32) -> Result<u32> {
+        let nonstall = self.runl.find_nonstall(&self.intr_info, runl_id)?;
+        Ok(nonstall)
     }
 
     fn get_engine_bitmap(&self) -> u64 {
@@ -1005,8 +1014,9 @@ impl GspManager::ver {
         let gsp_outer  = GSPSharedMemObjectsOuter::ver { inner: gsp_objs };
         let gsp_outer = Arc::new(gsp_outer, GFP_KERNEL)?;
 
-        vfn.add_handler(intr_table[0].stall, gsp_outer.clone() as Arc<dyn VfnHandler>)?;
-        vfn.intr_allow(intr_table[0].stall)?;
+        let gsp_stall = IntrInfo::find_stall(&intr_table, EngineType::GSP, 0)?;
+        vfn.add_handler(gsp_stall, gsp_outer.clone() as Arc<dyn VfnHandler>)?;
+        vfn.intr_allow(gsp_stall)?;
         vfn.rearm()?;
 
         let mgr = GspManager::ver {
@@ -1025,6 +1035,7 @@ impl GspManager::ver {
             internal_client,
             internal_device,
             gr_ctx_info,
+            intr_info: intr_table,
         };
 
         let mgr = Arc::new(mgr, GFP_KERNEL)?;

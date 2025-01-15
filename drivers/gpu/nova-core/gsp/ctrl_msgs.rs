@@ -29,6 +29,18 @@ impl InternalIntrGetKernelTableParams::ver {
         })
     }
 
+    fn convert_mcid_to_engine_inst(mcid: u32) -> Result<(EngineType, u32)> {
+        // TODO autogenerate
+        match mcid {
+            fw::ver::gen::MC_ENGINE_IDX_GSP => { Ok((EngineType::GSP, 0)) },
+            r @ fw::ver::gen::MC_ENGINE_IDX_GR0..=fw::ver::gen::MC_ENGINE_IDX_GR7 => { Ok((EngineType::GR, r - fw::ver::gen::MC_ENGINE_IDX_GR0)) },
+            r @ fw::ver::gen::MC_ENGINE_IDX_CE0..=fw::ver::gen::MC_ENGINE_IDX_CE9 => Ok((EngineType::CE, r - fw::ver::gen::MC_ENGINE_IDX_CE0)),
+            r @ fw::ver::gen::MC_ENGINE_IDX_NVDEC0..=fw::ver::gen::MC_ENGINE_IDX_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::MC_ENGINE_IDX_NVDEC0)),
+            r @ fw::ver::gen::MC_ENGINE_IDX_MSENC..=fw::ver::gen::MC_ENGINE_IDX_MSENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::MC_ENGINE_IDX_MSENC)),
+            other => Err(EINVAL)
+        }
+    }
+
     pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<KVec<IntrInfo>> {
         self.ctrl.push(queues)?;
 
@@ -39,12 +51,14 @@ impl InternalIntrGetKernelTableParams::ver {
         for i in 0..msg.get_tableLen() {
             let tbl = msg.new_S_table(i as isize);
 
-            if tbl.get_engineIdx() != fw::ver::gen::MC_ENGINE_IDX_GSP as u16 {
-                continue;
-            }
 
+            let (engine_type, inst) = match Self::convert_mcid_to_engine_inst(tbl.get_engineIdx() as u32) {
+                Err(x) => continue,
+                Ok((e, i)) => (e, i),
+            };
             intr_table.push(IntrInfo {
-                inst: 0,
+                engine_type,
+                inst,
                 stall: tbl.get_vectorStall(),
                 nonstall: tbl.get_vectorNonStall(),
             }, GFP_KERNEL)?;

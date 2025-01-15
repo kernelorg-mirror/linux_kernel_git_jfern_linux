@@ -72,3 +72,6 @@ EXPORT_SYMBOL_GPL(nova_core_chan_alloc_object);
 
 extern int nova_core_chan_free_object;
 EXPORT_SYMBOL_GPL(nova_core_chan_free_object);
+
+extern int nova_core_chan_register_nonstall;
+EXPORT_SYMBOL_GPL(nova_core_chan_register_nonstall);

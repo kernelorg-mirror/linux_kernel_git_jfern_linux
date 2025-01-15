@@ -2,15 +2,18 @@
 use kernel::prelude::*;
 use kernel::c_str;
 use kernel::bindings;
-use kernel::sync::{Arc, SpinLock};
+use kernel::sync::{Arc, SpinLock, Mutex};
 use kernel::new_spinlock;
+use kernel::new_mutex;
 
 use crate::dma::DmaObject;
 use crate::gpu::{Gpu, GpuClient, GpuDevice, GpuDeviceVmm, GpuChanObject};
+use crate::gpu::IntrInfo;
 use crate::mmu::memory::{InstObj, VramObj};
 use crate::gsp::{GspChannel, GspManager};
+use crate::vfn::VfnHandler;
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,PartialEq)]
 pub(crate) enum EngineType {
     GR,
     CE,
@@ -19,6 +22,7 @@ pub(crate) enum EngineType {
     SW,
     SEC2,
     JPEG,
+    GSP,
 }
 
 impl EngineType {
@@ -40,7 +44,7 @@ impl EngineType {
             bindings::NOVA_CORE_ENGINE_SW => EngineType::SW,
             bindings::NOVA_CORE_ENGINE_NVDEC => EngineType::NVDEC,
             bindings::NOVA_CORE_ENGINE_NVENC => EngineType::NVENC,
-            _ => return { Err(EINVAL) },
+            _ => return Err(EINVAL),
         })
     }
 }
@@ -197,6 +201,17 @@ impl FifoRunList {
         (id >= 0 && entry.id == id) || (id < 0 && entry.addr == addr)
     }
 
+    pub(crate) fn find_nonstall(&self, info: &KVec<IntrInfo>, runl_id: u32) -> Result<u32> {
+        for ent in &self.entries {
+            if ent.id as u32 == runl_id {
+                let eng = &ent.engns[0];
+                let ns = IntrInfo::find_nonstall(info, eng.eng_type, eng.inst)?;
+                return Ok(ns);
+            }
+        }
+        return Err(EINVAL);
+    }
+
     pub(crate) fn create_runlist_from_table(table: &FifoDeviceInfoTable) -> Result<FifoRunList> {
         let mut entries: KVec<RunListEntry> = KVec::new();
 
@@ -260,21 +275,41 @@ pub(crate) struct GpuPromoteBufferEntry {
     pub nonmapped: bool,
 }
 
+pub(crate) struct ChannelNonStallInfo {
+    cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
+    data: *mut core::ffi::c_void,
+}
+
+#[pin_data]
 pub(crate) struct Channel {
     name: &'static CStr,
     pub id: u32,
+    pub runl_id: u32,
     pub doorbell: u32,
 //  userd: &'dyn Memory,
     //  obj: GspObject,
     instbuf: InstObj,
     mthdbuf: DmaObject,
+
+    #[pin]
+    nonstall: Mutex<ChannelNonStallInfo>,
     pub mgr: Arc<dyn GspManager>,
-    pub(crate) gsp_chan: Arc<GspChannel>
+    pub(crate) gsp_chan: Arc<GspChannel>,
+
+}
+
+impl VfnHandler for Channel {
+    fn handle_vfn(&self) -> Result<u32> {
+        let mut locked = self.nonstall.lock();
+        pr_info!("nonstall handler\n");
+        unsafe { (locked.cb.unwrap())(locked.data) };
+        Ok(0)
+    }
 }
 
 impl Channel {
     pub(crate) fn new(gpu: &Gpu, client: Arc<GpuClient>, device: Arc<GpuDevice>,
-                      vmm: &GpuDeviceVmm, userd: &VramObj, runl_id: u32, offset: u64, length: u64, chan_priv: bool) -> Result<Self> {
+                      vmm: &GpuDeviceVmm, userd: &VramObj, runl_id: u32, offset: u64, length: u64, chan_priv: bool) -> Result<Arc<Self>> {
         let chid = gpu.gsp.alloc_chid()? as u32;
         let mthdbuf_size = gpu.gsp.get_mthdbuf_size();
         /* need a vctx engine rm.size */
@@ -292,15 +327,21 @@ impl Channel {
 
         gpu.gsp.bind_fifo(&gsp_chan);
         gpu.gsp.schedule_fifo(&gsp_chan, true);
-        Ok(Self {
+
+        Arc::pin_init(pin_init!(Self {
             name: c_str!("chan"),
             id: chid,
+            runl_id,
             doorbell,
             instbuf,
             mthdbuf,
+            nonstall <- new_mutex!(ChannelNonStallInfo {
+                cb: None,
+                data: core::ptr::null_mut()
+            }),
             gsp_chan,
             mgr: gpu.gsp.clone()
-        })
+        }), GFP_KERNEL)
     }
 
     pub(crate) fn alloc_obj(&self, handle: u32, oclass: u32, engine_type: EngineType, engine_inst: u8) -> Result<Arc<GpuChanObject>> {
@@ -314,13 +355,30 @@ impl Channel {
         };
         Ok(Arc::new(GpuChanObject {
             gsp,
-            mgr: self.mgr.clone()
+            mgr: self.mgr.clone(),
         }, GFP_KERNEL)?)
     }
-}
 
-impl Drop for Channel {
-    fn drop(&mut self) {
+    pub(crate) fn register_nonstall(chan: Arc<Channel>,
+                                    gpu: &Gpu,
+                                    cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
+                                    data: *mut core::ffi::c_void) -> i32 {
+        let nonstall = match chan.mgr.find_nonstall(chan.runl_id) {
+            Err(x) => { return 0; },
+            Ok(ns) => ns
+        };
+
+        let mut locked = chan.nonstall.lock();
+        locked.cb = cb;
+        locked.data = data;
+
+        pr_info!("nonstall registered {:#x}\n", nonstall);
+        let _ = gpu.vfn.add_handler(nonstall, chan.clone() as Arc<dyn VfnHandler>);
+        gpu.vfn.intr_allow(nonstall);
+        0
+    }
+
+    pub(crate) fn free(&self) {
         self.mgr.free_fifo_chan(&self.gsp_chan);
         self.mgr.free_chid(self.id as usize);
     }

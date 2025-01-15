@@ -171,9 +171,30 @@ pub(crate) struct FBInfo {
 #[derive(Debug)]
 #[allow(unused)]
 pub(crate) struct IntrInfo {
+    pub engine_type: EngineType,
     pub inst: u32,
     pub stall: u32,
     pub nonstall: u32,
+}
+
+impl IntrInfo {
+    pub(crate) fn find_stall(ivec: &KVec<IntrInfo>, engine_type: EngineType, inst: u32) -> Result<u32> {
+        for ent in ivec {
+            if ent.engine_type == engine_type && ent.inst == inst {
+                return Ok(ent.stall);
+            }
+        }
+        return Err(ENOENT);
+    }
+
+    pub(crate) fn find_nonstall(ivec: &KVec<IntrInfo>, engine_type: EngineType, inst: u32) -> Result<u32> {
+        for ent in ivec {
+            if ent.engine_type == engine_type && ent.inst == inst {
+                return Ok(ent.nonstall);
+            }
+        }
+        return Err(ENOENT);
+    }
 }
 
 /// Structure holding the base pre-GSP boot GPU pieces
@@ -527,7 +548,7 @@ impl Gpu {
                                  vmm: Arc<GpuDeviceVmm>,
                                  userd: &VramObj) -> Result<Arc<Channel>> {
 
-        Ok(Arc::new(Channel::new(self, client, device, &vmm, userd, runl, offset, length, chan_priv)?, GFP_KERNEL)?)
+        Ok(Channel::new(self, client, device, &vmm, userd, runl, offset, length, chan_priv)?)
     }
 
     pub(crate) fn create_channel_obj(&self,
