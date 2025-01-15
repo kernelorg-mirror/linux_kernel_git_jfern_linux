@@ -34,7 +34,6 @@
 #include "nouveau_fence.h"
 
 static const struct dma_fence_ops nouveau_fence_ops_uevent;
-static const struct dma_fence_ops nouveau_fence_ops_legacy;
 
 static inline struct nouveau_fence *
 from_fence(struct dma_fence *fence)
@@ -71,8 +70,7 @@ nouveau_fence_signal(struct nouveau_fence *fence)
 static struct nouveau_fence *
 nouveau_local_fence(struct dma_fence *fence, struct nouveau_drm *drm)
 {
-	if (fence->ops != &nouveau_fence_ops_legacy &&
-	    fence->ops != &nouveau_fence_ops_uevent)
+	if (fence->ops != &nouveau_fence_ops_uevent)
 		return NULL;
 
 	return from_fence(fence);
@@ -168,15 +166,14 @@ nouveau_fence_uevent_work(struct work_struct *work)
 	spin_unlock_irqrestore(&fctx->lock, flags);
 }
 
-#if 0
-static enum nvif_event_stat
-nouveau_fence_wait_uevent_handler(struct nvif_event *event, void *repv, u32 repc)
+static int
+nouveau_fence_wait_uevent_handler(void *data)
 {
-    	struct nouveau_fence_chan *fctx = container_of(event, typeof(*fctx), event);
+	struct nouveau_fence_chan *fctx = data;
+	printk(KERN_ERR "%s\n", __func__);
 	schedule_work(&fctx->uevent_work);
-	return 0;//_EVENT_KEEP;
+	return 0;
 }
-#endif
 
 void
 nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_chan *fctx)
@@ -184,7 +181,7 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	struct nouveau_cli *cli = chan->cli;
 	struct nouveau_drm *drm = cli->drm;
 	struct nouveau_fence_priv *priv = (void*)drm->fence;
-	int ret;
+	int ret = 0;
 
 	INIT_WORK(&fctx->uevent_work, nouveau_fence_uevent_work);
 	INIT_LIST_HEAD(&fctx->flip);
@@ -201,11 +198,12 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	kref_init(&fctx->fence_ref);
 	if (!priv->uevent)
 		return;
-#if 0
-	ret = nvif_chan_event_ctor(&chan->chan, "fenceNonStallIntr",
-				   chan->chan.impl->event.nonstall,
-				   nouveau_fence_wait_uevent_handler, &fctx->event);
-#endif
+
+	nova_core_chan_register_nonstall(drm->auxdev,
+					 &chan->chan.nova,
+					 nouveau_fence_wait_uevent_handler,
+					 (void *)fctx);
+
 	WARN_ON(ret);
 }
 
@@ -219,12 +217,8 @@ nouveau_fence_emit(struct nouveau_fence *fence)
 
 	fence->timeout  = jiffies + (15 * HZ);
 
-	if (priv->uevent)
-		dma_fence_init(&fence->base, &nouveau_fence_ops_uevent,
-			       &fctx->lock, fctx->context, ++fctx->sequence);
-	else
-		dma_fence_init(&fence->base, &nouveau_fence_ops_legacy,
-			       &fctx->lock, fctx->context, ++fctx->sequence);
+	dma_fence_init(&fence->base, &nouveau_fence_ops_uevent,
+		       &fctx->lock, fctx->context, ++fctx->sequence);
 	kref_get(&fctx->fence_ref);
 
 	ret = fctx->emit(fence);
@@ -239,7 +233,7 @@ nouveau_fence_emit(struct nouveau_fence *fence)
 		}
 
 		if (nouveau_fence_update(chan, fctx))
-		  ;
+			;
 		//			nvif_event_block(&fctx->event);
 
 		list_add_tail(&fence->head, &fctx->pending);
@@ -252,8 +246,7 @@ nouveau_fence_emit(struct nouveau_fence *fence)
 bool
 nouveau_fence_done(struct nouveau_fence *fence)
 {
-	if (fence->base.ops == &nouveau_fence_ops_legacy ||
-	    fence->base.ops == &nouveau_fence_ops_uevent) {
+	if (fence->base.ops == &nouveau_fence_ops_uevent) {
 		struct nouveau_fence_chan *fctx = nouveau_fctx(fence);
 		struct nouveau_channel *chan;
 		unsigned long flags;
@@ -269,41 +262,6 @@ nouveau_fence_done(struct nouveau_fence *fence)
 		spin_unlock_irqrestore(&fctx->lock, flags);
 	}
 	return dma_fence_is_signaled(&fence->base);
-}
-
-static long
-nouveau_fence_wait_legacy(struct dma_fence *f, bool intr, long wait)
-{
-	struct nouveau_fence *fence = from_fence(f);
-	unsigned long sleep_time = NSEC_PER_MSEC / 1000;
-	unsigned long t = jiffies, timeout = t + wait;
-
-	while (!nouveau_fence_done(fence)) {
-		ktime_t kt;
-
-		t = jiffies;
-
-		if (wait != MAX_SCHEDULE_TIMEOUT && time_after_eq(t, timeout)) {
-			__set_current_state(TASK_RUNNING);
-			return 0;
-		}
-
-		__set_current_state(intr ? TASK_INTERRUPTIBLE :
-					   TASK_UNINTERRUPTIBLE);
-
-		kt = sleep_time;
-		schedule_hrtimeout(&kt, HRTIMER_MODE_REL);
-		sleep_time *= 2;
-		if (sleep_time > NSEC_PER_MSEC)
-			sleep_time = NSEC_PER_MSEC;
-
-		if (intr && signal_pending(current))
-			return -ERESTARTSYS;
-	}
-
-	__set_current_state(TASK_RUNNING);
-
-	return timeout - t;
 }
 
 static int
@@ -513,15 +471,6 @@ static void nouveau_fence_release(struct dma_fence *f)
 	kref_put(&fctx->fence_ref, nouveau_fence_context_put);
 	dma_fence_free(&fence->base);
 }
-
-static const struct dma_fence_ops nouveau_fence_ops_legacy = {
-	.get_driver_name = nouveau_fence_get_get_driver_name,
-	.get_timeline_name = nouveau_fence_get_timeline_name,
-	.enable_signaling = nouveau_fence_no_signaling,
-	.signaled = nouveau_fence_is_signaled,
-	.wait = nouveau_fence_wait_legacy,
-	.release = nouveau_fence_release
-};
 
 static bool nouveau_fence_enable_signaling(struct dma_fence *f)
 {
