@@ -136,7 +136,9 @@ pub unsafe extern "C" fn nova_core_free_gsp_client(client: *mut bindings::nova_c
 {
     let ncclient = unsafe { &mut (*client) };
 
-    let _gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
+    let gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
+    /* ensure the gpu device gets dropped before the client */
+    drop(gpu_device);
     ncclient.gsp_device = core::ptr::null_mut();
 
     let _gpu_client : Arc<GpuClient> = unsafe { Arc::from_foreign(ncclient.gsp_client) };
