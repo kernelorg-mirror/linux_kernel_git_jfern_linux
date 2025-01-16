@@ -259,7 +259,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn free_client(&self, client: Arc<GspClient>) -> Result<()>;
     fn free_device(&self, device: Arc<GspDevice>) -> Result<()>;
 
-    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa>;
+    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm, vmm_type: u8) -> Result<GspVa>;
     fn free_vaspace(&self, va: &GspVa) -> Result<()>;
 
     fn alloc_event(&self, device: Arc<GspDevice>, handle: u32, id: u32) -> Result<GspEvent>;
@@ -309,8 +309,8 @@ pub(crate) trait GspManager: Send + Sync {
     fn get_runlist(&self) -> &FifoRunList;
     fn get_engine_bitmap(&self) -> u64;
     fn get_gr_ctx_info(&self) -> &KVec<CtxBufInfo>;
-    fn promote_gr_ctx(&self, device: Arc<GspDevice>, channel: Arc<GspChannel>,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
+    fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<()>;
 
     fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
     fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
@@ -526,8 +526,9 @@ impl GspManager for GspManager::ver {
     }
 
 
-    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm) -> Result<GspVa> {
-        let mut msg = AllocVMM::ver::new(&device)?;
+    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm, vmm_type: u8) -> Result<GspVa> {
+	let id = if vmm_type == 3 { 1 } else { 0 };
+        let mut msg = AllocVMM::ver::new(&device, id)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -613,10 +614,10 @@ impl GspManager for GspManager::ver {
         &self.gr_ctx_info
     }
 
-    fn promote_gr_ctx(&self, device: Arc<GspDevice>, channel: Arc<GspChannel>,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
-        let mut msg = GpuPromoteCtx::ver::new_promote_gr(&device, &channel,
-                                                         bufferEntries)?;
+    fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<()> {
+        let mut msg = GpuPromoteCtx::ver::new_promote_gr(device, channel,
+                                                         bufferEntries, skip_priv)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();

@@ -792,6 +792,11 @@ impl Vma {
                            vma.mapref(), vma.sparse, NVKM_VMA_PAGE_NONE, NVKM_VMA_PAGE_NONE, false,
                            vma.part(), vma.busy, vma.mapped(), vma.no_comp)
     }
+
+    fn new_managed(addr: u64, size: u64) -> Result<ListArc<Self>> {
+        Self::new_internal(addr, size, true, false, NVKM_VMA_PAGE_NONE, NVKM_VMA_PAGE_NONE,
+                           true, false, false, false, false)
+    }
 }
 
 const NVKM_VMM_LEVELS_MAX: usize = 5;
@@ -1073,6 +1078,28 @@ impl VmmInner {
     pub(crate) fn smallest_page_idx(base: &GpuBase) -> u8 {
         // eventually match on gpu family if this changes.
         (VMM_TU102.len() - 2) as u8
+    }
+
+    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
+        let mgd = match &self.managed {
+            None => { return false; }
+            Some(m) => m
+        };
+
+        let p_start = mgd.p.addr;
+        let p_end = p_start + mgd.p.size;
+        let n_start = mgd.n.addr;
+        let n_end = n_start + mgd.n.size;
+        let end = start + size;
+
+        if start >= p_start && end <= p_end {
+            return true;
+        }
+
+        if start >= n_start && end <= n_end {
+            return true;
+        }
+        return false;
     }
 
     pub(crate) fn aper(target: MemTarget) -> Result<u32> {
@@ -2111,10 +2138,25 @@ impl Vmm {
             name,
         };
 
-        let vma = Vma::new(inner.start, inner.limit - inner.start)?;
+        if inner.managed.is_some() {
+            let managed = &inner.managed.as_ref().unwrap();
+            let pvma = Vma::new_managed(managed.p.addr, managed.p.size)?;
+            let vma = Vma::new(managed.p.size, size)?;
+            let nvma = Vma::new_managed(managed.n.addr, managed.n.size)?;
 
-        inner.free_insert(vma.clone_arc())?;
-        inner.list.push_back(vma);
+            inner.node_insert(pvma.clone_arc())?;
+            inner.list.push_back(pvma);
+
+            inner.free_insert(vma.clone_arc())?;
+            inner.list.push_back(vma);
+
+            inner.node_insert(nvma.clone_arc())?;
+            inner.list.push_back(nvma);
+        } else {
+            let vma = Vma::new(inner.start, inner.limit - inner.start)?;
+            inner.free_insert(vma.clone_arc())?;
+            inner.list.push_back(vma);
+        }
 
         if needs_bootstrap {
             let _ = inner.boot();
@@ -2209,7 +2251,10 @@ impl Vmm {
         let addr0: u64 = locked_inner.pd.pt[0].as_ref().unwrap().addr;
         let addr1: u64 = locked_inner.pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
 
-        let addr2: u64 = locked_inner.pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+        let mut addr2: u64 = 0;
+        if num_levels == 3 {
+            addr2 = locked_inner.pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+        }
 
         Ok(VmmPromoteInfo {
             rsvd_lo: rsvd.addr(),

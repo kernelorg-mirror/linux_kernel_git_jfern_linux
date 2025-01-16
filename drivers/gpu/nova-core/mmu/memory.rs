@@ -648,7 +648,7 @@ impl Memory for DmaMemObj {
 }
 
 impl DmaMemObj {
-    pub(crate) fn new(addr: *mut bindings::dma_addr_t, heap: u8, mm_type: u8, rpage: u8, size: u64, contig: bool, back: bool) -> Result<Self> {
+    pub(crate) fn new(addr: *mut bindings::dma_addr_t, heap: u8, mm_type: u8, rpage: u8, size: u64) -> Result<Self> {
 
         Ok(Self {
             target: MemTarget::Host,

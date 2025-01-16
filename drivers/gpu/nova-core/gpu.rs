@@ -27,6 +27,7 @@ use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::accel::fifo::{Channel};
 use crate::accel::gr::Gr;
+use crate::accel::gr::GrCtx;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
 use crate::gsp::*;
@@ -40,6 +41,7 @@ use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
 use crate::sec2::{Sec2, Sec2Fw};
+use crate::vfn::VfnHandler;
 use core::fmt::Debug;
 
 #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
@@ -502,6 +504,13 @@ impl Drop for GpuChanObject {
 pub(crate) struct GpuDeviceVmm {
     pub vmm: Vmm,
     pub va: GspVa,
+    pub mgr: Arc<dyn GspManager>,
+}
+
+impl Drop for GpuDeviceVmm {
+    fn drop(&mut self) {
+        let _ = self.mgr.free_vaspace(&self.va);
+    }
 }
 
 impl Gpu {
@@ -516,13 +525,20 @@ impl Gpu {
                             addr: u64, size: u64, vmm_type: u8) -> Result<Arc<GpuDeviceVmm>> {
         let vmm = Vmm::new(self.instmem.clone(), addr, size, vmm_type, false, false, None,
                            None, true, "uvmm")?;
-
-        let va = self.gsp.alloc_vaspace(device.gsp.clone(), &vmm)?;
+        let va = self.gsp.alloc_vaspace(device.gsp.clone(), &vmm, vmm_type)?;
 
         Ok(Arc::new(GpuDeviceVmm {
             vmm,
-            va
+            va,
+            mgr: self.gsp.clone()
         }, GFP_KERNEL)?)
+    }
+
+    pub(crate) fn gr_ctx(&self, device: Arc<GpuDevice>, chan: Arc<Channel>,
+                         vmm: Arc<GpuDeviceVmm>) -> Result<Arc<GrCtx>>{
+        Gr::new_ctx(self.instmem.clone(), self.gsp.clone(),
+                    device, chan,
+                    &vmm.vmm, &self.gr_ctx_bufs)
     }
 
     pub(crate) fn int_alloc_client_device(alloc_id: Arc<AllocId>, gsp: Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
@@ -549,15 +565,6 @@ impl Gpu {
                                  userd: &VramObj) -> Result<Arc<Channel>> {
 
         Ok(Channel::new(self, client, device, &vmm, userd, runl, offset, length, chan_priv)?)
-    }
-
-    pub(crate) fn create_channel_obj(&self,
-                                     channel: &Channel,
-                                     handle: u32,
-                                     oclass: u32,
-                                     engine_type: EngineType,
-                                     engine_inst: u8) -> Result<Arc<GpuChanObject>> {
-        channel.alloc_obj(handle, oclass, engine_type, engine_inst)
     }
 
     pub(crate) fn get_engine_bitmap(&self) -> u64 {
@@ -592,6 +599,11 @@ impl Gpu {
             base.spec.chipset,
             base.spec.boot0
         );
+
+        {
+            let bar = base.bar.try_access().ok_or(ENXIO)?;
+            bar.try_writel(0x40, 0x110004)?;
+        }
 
         let sec2 = Sec2::new(base.clone())?;
         let gsp_falcon = GspFalcon::new(base.clone())?;

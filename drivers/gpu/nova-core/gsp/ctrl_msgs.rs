@@ -394,9 +394,20 @@ impl VASpaceCopyServerReservedPdes::ver {
         let mut ctrl = ControlMsg::ver::get(&gsp_va.object, fw::ver::gen::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES, msg_size, false)?;
 
         let promote_info = vmm.get_promote_info()?;
-        let lvl2_size = 0x1000;
-        let lvl2_aperture = 1;
-        let lvl2_page_shift = 0x1d;
+        let lvl2_size;
+        let lvl2_aperture;
+        let lvl2_page_shift;
+
+        if promote_info.num_levels == 3 {
+            lvl2_size = 0x1000;
+            lvl2_aperture = 1;
+            lvl2_page_shift = 0x1d;
+        } else {
+            lvl2_size = 0;
+            lvl2_aperture = 0;
+            lvl2_page_shift = 0;
+        }
+
         let mut msg = fw::ver::gen::s_NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS::new(ctrl.get_data_ptr())
             .virtAddrLo(promote_info.rsvd_lo)
             .virtAddrHi(promote_info.rsvd_hi)
@@ -412,8 +423,8 @@ impl VASpaceCopyServerReservedPdes::ver {
             .levels_1_pageShift(0x26)
             .levels_2_physAddress(promote_info.level2_phys_addr)
             .levels_2_size(lvl2_size)
-            .levels_2_aperture(1)
-            .levels_2_pageShift(0x1d);
+            .levels_2_aperture(lvl2_aperture)
+            .levels_2_pageShift(lvl2_page_shift);
 
         Ok(Self {
             ctrl
@@ -432,11 +443,15 @@ pub(crate) struct GpuPromoteCtx {
 #[versions(GSP)]
 impl GpuPromoteCtx::ver {
     pub(crate) fn new_promote_gr(device: &GspDevice, channel: &GspChannel,
-                                 entries: &KVec<GpuPromoteBufferEntry>) -> Result<Self> {
+                                 entries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<Self> {
         let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::str_size();
         let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_PROMOTE_CTX, msg_size, false)?;
 
-        let num_ents = entries.len();
+
+        let mut num_ents = entries.len();
+        if skip_priv {
+            num_ents -= 1;
+        }
 
         let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::new(ctrl.get_data_ptr())
             .engineType(1)
@@ -450,6 +465,11 @@ impl GpuPromoteCtx::ver {
                  entries.len());
 
         for i in 0..num_ents {
+            let mut nonmapped = entries[i].nonmapped;
+
+            if skip_priv && entries[i].buffer_id as u32 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
+                nonmapped = false;
+            }
             pr_info!("promote {}: pa:{:#x}/{:#x} sz {:#x} va {:#x} init:{} nm:{}\n",
                      entries[i].buffer_id,
                      entries[i].gpu_phys_addr,
@@ -457,7 +477,7 @@ impl GpuPromoteCtx::ver {
                      entries[i].size,
                      entries[i].gpu_virt_addr,
                      entries[i].initialize,
-                     entries[i].nonmapped);
+                     nonmapped);
             let _ent = msg.new_S_promoteEntry(i as isize)
                 .gpuPhysAddr(entries[i].gpu_phys_addr)
                 .gpuVirtAddr(entries[i].gpu_virt_addr)
@@ -465,7 +485,7 @@ impl GpuPromoteCtx::ver {
                 .size(entries[i].size)
                 .bufferId(entries[i].buffer_id)
                 .bInitialize(entries[i].initialize as u8)
-                .bNonmapped(entries[i].nonmapped as u8);
+                .bNonmapped(nonmapped as u8);
         }
 
         Ok(Self {

@@ -95,6 +95,8 @@ struct nova_core_info {
 
 	struct engine {
 		u8 eng_type;
+		u8 oclass_nr;
+		u32 oclass[8];
 	} engine[8];
 
 	struct runl {
@@ -156,6 +158,8 @@ int nova_core_alloc_vmm(struct auxiliary_device *auxdev,
 			struct nova_core_gsp_client *client,
 			struct nova_core_mmu *mmu,
 			u8 vmm_type,
+			u64 vmm_start,
+			u64 vmm_size,
 			struct nova_core_vmm *vmm);
 int nova_core_free_vmm(struct nova_core_vmm *vmm);
 
@@ -214,6 +218,7 @@ struct nova_core_chan_info {
 struct nova_core_chan {
 	void *arc;
 	struct nova_core_chan_info info;
+	void *gr_ctx_arc;
 };
 
 int nova_core_alloc_chan(struct auxiliary_device *auxdev,
@@ -239,6 +244,10 @@ struct nova_core_chan_obj {
 	u8 engine_inst;
 };
 
+int nova_core_chan_init_gr(struct auxiliary_device *auxdev,
+			   struct nova_core_gsp_client *client,
+			   struct nova_core_vmm *vmm,
+			   struct nova_core_chan *chan);
 int nova_core_chan_alloc_object(struct auxiliary_device *auxdev,
 				struct nova_core_chan *chan,
 				struct nova_core_chan_obj *cobj);

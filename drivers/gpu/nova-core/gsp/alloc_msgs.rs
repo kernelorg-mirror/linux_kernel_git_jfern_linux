@@ -138,11 +138,11 @@ pub(crate) struct AllocVMM {
 
 #[versions(GSP)]
 impl AllocVMM::ver {
-    pub(crate) fn new(device: &GspDevice) -> Result<Self> {
+    pub(crate) fn new(device: &GspDevice, id: u32) -> Result<Self> {
 
         let client = device.object.client.as_ref().unwrap();
         let oclass = fw::ver::gen::FERMI_VASPACE_A;
-        let handle = 0x90f10000;
+        let handle = 0x90f10000 | id;
         let mut msg = AllocMsg::ver::get(Some(&client),
                                          Some(&device.object),
                                          handle,

@@ -8,6 +8,7 @@ use kernel::{
 
 use kernel::types::ForeignOwnable;
 use crate::accel::fifo::EngineType;
+use crate::accel::gr::GrCtx;
 use crate::gpu::{Gpu, GpuDevice, GpuClient, Chipset, GpuDeviceVmm, GpuChanObject};
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mmu::Mmu;
@@ -74,6 +75,16 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
             }
             if idx == ncinfo.engine_nr {
                 ncinfo.engine[idx as usize].eng_type = core_type;
+
+                if eng.eng_type == EngineType::GR {
+                    ncinfo.engine[idx as usize].oclass_nr = gpu.base.spec.gpu_consts.gr_classes.len() as u8;
+                    for i in 0..gpu.base.spec.gpu_consts.gr_classes.len() {
+                        ncinfo.engine[idx as usize].oclass[i] = gpu.base.spec.gpu_consts.gr_classes[i];
+                    }
+                } else if eng.eng_type == EngineType::CE {
+                    ncinfo.engine[idx as usize].oclass_nr = 1;
+                    ncinfo.engine[idx as usize].oclass[0] = gpu.base.spec.gpu_consts.ce_class;
+                }
                 ncinfo.engine_nr += 1;
             }
 
@@ -199,18 +210,20 @@ pub unsafe extern "C" fn nova_core_alloc_vmm(auxdev: *mut bindings::auxiliary_de
                                              client: *mut bindings::nova_core_gsp_client,
                                              mmu_ptr: *mut bindings::nova_core_mmu,
                                              vmm_type: u8,
+                                             vmm_start: u64,
+                                             vmm_size: u64,
                                              vmm: *mut bindings::nova_core_vmm) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
     let gpu = unsafe { &(*core_driver).gpu };
     let ncvmm = unsafe { &mut (*vmm) };
 
     let mmu: ArcBorrow<'_, Mmu> = unsafe { Arc::borrow((*mmu_ptr).arc) };
-    let cli: ArcBorrow<'_, GpuClient>=  unsafe { Arc::borrow((*client).gsp_client) };
-    let dev: ArcBorrow<'_, GpuDevice>=  unsafe { Arc::borrow((*client).gsp_device) };
+    let cli: ArcBorrow<'_, GpuClient> = unsafe { Arc::borrow((*client).gsp_client) };
+    let dev: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
 
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
 
-    let gpu_vmm = match gpu.alloc_vmm(dev_arc, kernel::page::PAGE_SIZE as u64, 0, vmm_type) {
+    let gpu_vmm = match gpu.alloc_vmm(dev_arc, vmm_start, vmm_size, vmm_type) {
         Err(x) => { return x.to_errno() }
         Ok(x) => { x }
     };
@@ -309,7 +322,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
         pr_info!("allocated uvram {:?} {:?} {} {} {}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
                  ncobj.addr, ncobj.size, nodes);
     } else {
-        let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size, contig, true) {
+        let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size) {
             Err(x) => { return x.to_errno(); }
             Ok(x) => x
         };
@@ -524,7 +537,7 @@ pub unsafe extern "C" fn nova_core_chan_alloc_object(auxdev: *mut bindings::auxi
         Err(x) => { return x.to_errno(); },
         Ok(x) => x
     };
-    let obj = match gpu.create_channel_obj(&chan.clone(), obj_info.handle, obj_info.class, eng_type, obj_info.engine_inst) {
+    let obj = match chan.alloc_obj(obj_info.handle, obj_info.class, eng_type, obj_info.engine_inst) {
         Err(x) => { pr_info!("failed to allocate chan obj\n"); return x.to_errno() }
         Ok(x) => { x }
     };
@@ -585,5 +598,32 @@ pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings:
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
     Channel::register_nonstall(chan.clone(), gpu, cb, data);
+    0
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary_device,
+                                                client: *mut bindings::nova_core_gsp_client,
+                                                vmm_ptr: *mut bindings::nova_core_vmm,
+                                                chan_ptr: *mut bindings::nova_core_chan) -> i32 {
+    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
+    let gpu = unsafe { &(*core_driver).gpu };
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
+    let cli: ArcBorrow<'_, GpuClient> = unsafe { Arc::borrow((*client).gsp_client) };
+    let dev: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
+
+    let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
+    let cli_arc: Arc<GpuClient> = Arc::<GpuClient>::from(cli);
+    let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
+    let vmm_arc: Arc<GpuDeviceVmm> = Arc::<GpuDeviceVmm>::from(vmm);
+
+    let gr_ctx_arc = match gpu.gr_ctx(dev_arc.clone(), chan.clone(), vmm_arc.clone()) {
+        Err(x) => { return x.to_errno(); },
+        Ok(gr) => gr
+    };
+
+    unsafe { (*chan_ptr).gr_ctx_arc = gr_ctx_arc.into_foreign() as *mut core::ffi::c_void; }
     0
 }
