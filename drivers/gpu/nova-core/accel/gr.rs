@@ -1,11 +1,12 @@
 
 use kernel::prelude::*;
 use kernel::sync::Arc;
-use crate::gpu::{Gpu, GpuBase, AllocId};
+use crate::gpu::{Gpu, GpuBase, AllocId, GpuDevice};
 use crate::gsp::GspManager;
+use crate::gsp::{GspDevice, GspChannel};
 use crate::mmu::memory::{InstMem, InstObj, Memory};
 use crate::mmu::vmm::{Vmm, VmmMap, NVKM_VMM_TYPE_UNMANAGED};
-use crate::accel::fifo::GpuPromoteBufferEntry;
+use crate::accel::fifo::{Channel, GpuPromoteBufferEntry};
 
 const GR_MAX_CTXBUFS: usize = 9;
 
@@ -25,9 +26,14 @@ pub(crate) struct CtxBufInfo {
     pub nonmapped: bool,
 }
 
+pub(crate) struct GrCtx {
+    vmm: Arc<Vmm>,
+    bufs: KVec<Arc<InstObj>>,
+    vma_addrs: KVec<u64>,
+}
+
 pub(crate) struct Gr {
     golden_bufs: KVec<Arc<InstObj>>,
-    ctxbufmem: [InstObj; GR_MAX_CTXBUFS],
 }
 
 impl Gr {
@@ -58,24 +64,10 @@ impl Gr {
         Ok(vec)
     }
 
-    pub(crate) fn golden_init(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>, id_allocator: Arc<AllocId>) -> Result<KVec<Arc<InstObj>>> {
-        let base = &instmem.base;
-        let (internal_client, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
-        let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
-
-        let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
-                                false, None, None, true, "grGoldenVmm")?;
-
-        let gold_va = gsp.alloc_vaspace(internal_device.gsp.clone(), &gold_vmm)?;
-
-        let gold_chan = gsp.alloc_golden_chan(internal_device.gsp.clone(),
-                                              &gold_va,
-                                              &gold_inst,
-                                              base.spec.gpu_consts.fifo_class)?;
-        /* engine buffers */
-        let ctxbufinfo = gsp.get_gr_ctx_info();
-        let mem_vec = Self::alloc_ctx_bufs(instmem.clone(), None, ctxbufinfo)?;
+    fn promote_ctx(gsp: Arc<dyn GspManager>, vmm: &Vmm, device: &GspDevice, chan: &GspChannel, mem_vec: &KVec<Arc<InstObj>>, ctxbufinfo: &KVec<CtxBufInfo>) -> Result<KVec<u64>> {
         let mut buf_ent_vec : KVec<GpuPromoteBufferEntry> = KVec::new();
+        let mut vma_addrs: KVec<u64> = KVec::with_capacity(ctxbufinfo.len(), GFP_KERNEL)?;
+
         for info_idx in 0..ctxbufinfo.len() {
             let info = &ctxbufinfo[info_idx];
             let mem = &mem_vec[info_idx];
@@ -91,7 +83,7 @@ impl Gr {
             };
 
             if !info.nonmapped {
-                let vma = gold_vmm.get(false, true, false, 0, info.align, mem.size()? as u64)?;
+                let vma = vmm.get(false, true, false, 0, info.align, mem.size()? as u64)?;
                 let mut vmmmap = VmmMap {
                     memory: (*mem).as_ref(),
                     offset: 0,
@@ -102,7 +94,10 @@ impl Gr {
                 };
 
                 ent.gpu_virt_addr = vma.addr();
-                let _ = gold_vmm.map(vma, &mut vmmmap)?;
+                vma_addrs.push(vma.addr(), GFP_KERNEL)?;
+                let _ = vmm.map(vma, &mut vmmmap)?;
+            } else {
+                vma_addrs.push(0x0, GFP_KERNEL)?;
             }
 
             if info.init {
@@ -111,10 +106,34 @@ impl Gr {
                 ent.physattr = 4;
             }
 
+            vmm.dump();
             buf_ent_vec.push(ent, GFP_KERNEL)?;
         }
 
-        gsp.promote_gr_ctx(internal_device.gsp.clone(), gold_chan.clone(), &buf_ent_vec)?;
+        gsp.promote_gr_ctx(device, chan, &buf_ent_vec)?;
+        Ok(vma_addrs)
+    }
+
+    pub(crate) fn golden_init(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>, id_allocator: Arc<AllocId>) -> Result<KVec<Arc<InstObj>>> {
+        let base = &instmem.base;
+        let (internal_client, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
+        let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
+
+        let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
+                                false, None, None, true, "grGoldenVmm")?;
+
+        let gold_va = gsp.alloc_vaspace(internal_device.gsp.clone(), &gold_vmm, NVKM_VMM_TYPE_UNMANAGED)?;
+
+        let gold_chan = gsp.alloc_golden_chan(internal_device.gsp.clone(),
+                                              &gold_va,
+                                              &gold_inst,
+                                              base.spec.gpu_consts.fifo_class)?;
+        /* engine buffers */
+        let ctxbufinfo = gsp.get_gr_ctx_info();
+        let mem_vec = Self::alloc_ctx_bufs(instmem.clone(), None, ctxbufinfo)?;
+
+        let vma_addrs = Self::promote_ctx(gsp.clone(), &gold_vmm, &internal_device.gsp,
+                                          &gold_chan, &mem_vec, &ctxbufinfo)?;
 
         let gold_obj = gsp.alloc_chan_obj(gold_chan.clone(), 0x97000000, base.spec.gpu_consts.gr_classes[2])?;
 
@@ -124,12 +143,30 @@ impl Gr {
 
         gsp.free_vaspace(&gold_va);
 
-        for buf in &buf_ent_vec {
-            if buf.gpu_virt_addr != 0 {
-                gold_vmm.unmap_addr(buf.gpu_virt_addr);
-                gold_vmm.put_addr(buf.gpu_virt_addr);
+        for addr in vma_addrs {
+            if addr != 0 {
+                gold_vmm.unmap_addr(addr);
+                gold_vmm.put_addr(addr);
             }
         }
         Ok(mem_vec)
+    }
+
+    pub(crate) fn new_ctx(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>,
+                          device: Arc<GpuDevice>, channel: Arc<Channel>,
+                          vmm: Arc<Vmm>, golden: &KVec<Arc<InstObj>>) -> Result<Arc<GrCtx>> {
+
+
+        let ctxbufinfo = gsp.get_gr_ctx_info();
+        let mem_vec = Self::alloc_ctx_bufs(instmem.clone(), Some(golden), ctxbufinfo)?;
+
+        let vma_addrs = Self::promote_ctx(gsp.clone(), &vmm, &device.gsp,
+                                          &channel.gsp_chan, &mem_vec, &ctxbufinfo)?;
+
+        Ok(Arc::new(GrCtx {
+            vmm,
+            bufs: mem_vec,
+            vma_addrs,
+        }, GFP_KERNEL)?)
     }
 }
