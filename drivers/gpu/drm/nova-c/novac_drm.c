@@ -311,11 +311,12 @@ nouveau_drm_device_del(struct nouveau_drm *drm)
 }
 
 static struct nouveau_drm *
-nouveau_drm_device_new(const struct drm_driver *drm_driver, struct device *parent,		       struct nvkm_device *device)
+nouveau_drm_device_new(const struct drm_driver *drm_driver,
+		       struct auxiliary_device *parent)
 {
 	struct nouveau_drm *drm;
 
-	drm = devm_drm_dev_alloc(parent, drm_driver, typeof(*drm), dev);
+	drm = devm_drm_dev_alloc(parent->dev.parent, drm_driver, typeof(*drm), dev);
 	if (IS_ERR(drm))
 		return drm;
 	drm->dev.dev_private = drm;
@@ -326,14 +327,37 @@ nouveau_drm_device_new(const struct drm_driver *drm_driver, struct device *paren
 		       
 static struct drm_driver driver_stub;
 
+static void
+dump_core_info(struct nova_core_info *info) {
+	int i, e;
+	printk(KERN_ERR "boot0 is %016llx\n", info->boot0);
+
+	printk(KERN_ERR "class 0x%x 0x%x\n", info->fifo_class, info->ce_class);
+
+	printk(KERN_ERR "engine: %d\n", info->engine_nr);	
+	for (i = 0; i < info->engine_nr; i++) {	
+		printk(KERN_ERR "engine %d: %d\n", i,
+		       info->engine[i].eng_type);
+	}
+	printk(KERN_ERR "runlists: %d\n", info->runl_nr);
+	for (i = 0; i < info->runl_nr; i++) {
+		printk(KERN_ERR "runlist %d: %02x %d %d %d\n",
+		       i, info->runl[i].id, info->runl[i].chan_nr,
+		       info->runl[i].runq_nr, info->runl[i].engn_nr);
+
+		for (e = 0; e < info->runl[i].engn_nr; e++) {
+			printk(KERN_ERR "    engn: %d: %d %d\n", e,
+			       info->runl[i].engn[e].engine, info->runl[i].engn[e].inst);
+		}
+	}
+}
 static int
 nouveau_drm_probe(struct auxiliary_device *auxdev, const struct auxiliary_device_id *id)
 {
-	struct nvkm_device *device = NULL;//container_of(auxdev, typeof(*device), auxdev);	
 	struct nouveau_drm *drm;
 	int ret;
 	
-	drm = nouveau_drm_device_new(&driver_stub, &auxdev->dev, device);
+	drm = nouveau_drm_device_new(&driver_stub, auxdev);
 	if (IS_ERR(drm)) {
 		ret = PTR_ERR(drm);
 		goto fail_nvkm;

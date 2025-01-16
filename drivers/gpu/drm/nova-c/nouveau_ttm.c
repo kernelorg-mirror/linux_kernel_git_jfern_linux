@@ -224,7 +224,7 @@ nouveau_ttm_init(struct nouveau_drm *drm)
 
 	drm->ttm.type_vram = typei;
 
-	ret = ttm_device_init(&drm->ttm.bdev, &nouveau_bo_driver, dev->dev->parent,
+	ret = ttm_device_init(&drm->ttm.bdev,  &nouveau_bo_driver, dev->dev,
 			      dev->anon_inode->i_mapping,
 			      dev->vma_offset_manager,
 			      drm_need_swiotlb(drm->cli.mmu.info.dmabits),
