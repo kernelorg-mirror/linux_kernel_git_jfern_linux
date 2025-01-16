@@ -12,6 +12,10 @@ use crate::{
     types::ARef,
 };
 
+pub fn dma_set_mask_and_coherent(dev: ARef<Device>, mask: u64) -> i32 {
+    unsafe { bindings::dma_set_mask_and_coherent(dev.as_raw(), mask) }
+}
+
 /// Abstraction of dma_alloc_coherent
 ///
 /// # Invariants

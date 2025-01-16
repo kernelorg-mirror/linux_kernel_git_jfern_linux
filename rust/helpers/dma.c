@@ -14,3 +14,8 @@ void rust_helper_dma_unmap_sgtable(struct device *dev, struct sg_table *sgt,
 {
     return dma_unmap_sgtable(dev, sgt, dir, attrs);
 }
+
+int rust_helper_dma_set_mask_and_coherent(struct device *dev, u64 mask)
+{
+    return dma_set_mask_and_coherent(dev, mask);
+}
