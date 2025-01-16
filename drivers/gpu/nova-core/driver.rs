@@ -10,6 +10,7 @@ use kernel::{
 };
 
 use crate::{gpu::Gpu};
+use crate::mmu::mmu::DMA_BITS;
 
 pub(crate) struct NovaCoreDriver(Arc<NovaCoreData>);
 
@@ -63,6 +64,7 @@ impl pci::Driver for NovaCoreDriver {
         pdev.set_master();
         pdev.enable_msi();
 
+        kernel::dma::dma_set_mask_and_coherent(pdev.as_dev(), (1_u64 << DMA_BITS) - 1);
         let bar = Arc::new(pdev.iomap_region_sized::<BAR0_SIZE>(0, c_str!("nova"))?, GFP_KERNEL)?;
         let p = pdev.clone();
 
