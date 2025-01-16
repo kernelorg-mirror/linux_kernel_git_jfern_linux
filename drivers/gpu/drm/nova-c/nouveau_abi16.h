@@ -15,8 +15,10 @@ int nouveau_abi16_ioctl_gpuobj_free(ABI16_IOCTL_ARGS);
 struct nouveau_abi16_chan {
 	struct list_head head;
 	struct nouveau_channel *chan;
-  //	struct nvif_engobj ce;
+	struct nova_core_chan_obj ce;
 	struct nouveau_sched *sched;
+	u32 num_objs;
+	u32 allocated_objs[64];
 };
 
 struct nouveau_abi16 {

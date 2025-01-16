@@ -89,7 +89,8 @@ nouveau_fence_context_kill(struct nouveau_fence_chan *fctx, int error)
 		if (error)
 			dma_fence_set_error(&fence->base, error);
 
-		//		if (nouveau_fence_signal(fence))
+		if (nouveau_fence_signal(fence))
+		  ;
 		//			nvif_event_block(&fctx->event);
 	}
 	fctx->killed = 1;

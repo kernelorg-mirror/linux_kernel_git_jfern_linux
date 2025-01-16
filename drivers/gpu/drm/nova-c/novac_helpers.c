@@ -42,3 +42,36 @@ novac_get_engine_inst(struct nova_core_info *info, u8 runl_index, u8 eng_type, u
 	printk(KERN_ERR "%s: %d %d\n", __func__, ret, *eng_inst);
 	return engi;
 }
+
+int
+novac_find_engine_info(struct nova_core_info *info, u8 runl_index, u32 oclass,
+		       u32 *engine_type, u32 *engine_inst)
+{
+	const struct runl *runl;
+	int ret = -ENODEV;
+	int engi, inst;
+
+	runl = &info->runl[runl_index];
+
+	for (engi = 0; engi < runl->engn_nr; engi++) {
+		const struct engine *engine =
+			&info->engine[runl->engn[engi].engine];
+
+		for (int i = 0; i < engine->oclass_nr; i++) {
+			if (engine->oclass[i] == oclass) {
+				ret = 0;
+				break;
+			}
+		}
+
+		if (ret == 0)
+			break;
+	}
+
+	if (ret)
+		return ret;
+
+	*engine_type = info->engine[runl->engn[engi].engine].eng_type;
+	*engine_inst = runl->engn[engi].inst;
+	return 0;
+}

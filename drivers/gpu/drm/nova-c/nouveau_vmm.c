@@ -134,6 +134,8 @@ nouveau_vmm_init(struct nouveau_cli *cli, struct nouveau_vmm *vmm)
 				      &cli->gsp,
 				      &cli->mmu,
 				      NVIF_VMM_TYPE_UNMANAGED,
+				      PAGE_SIZE,
+				      0,
 				      &vmm->vmm);
 	if (ret)
 		return ret;

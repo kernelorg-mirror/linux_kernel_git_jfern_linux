@@ -4,7 +4,7 @@
 #define DRIVER_AUTHOR		"NovaC Project"
 #define DRIVER_EMAIL		"novac@lists.freedesktop.org"
 
-#define DRIVER_NAME		"novac"
+#define DRIVER_NAME		"nouveau"
 #define DRIVER_DESC		"HACKS"
 #define DRIVER_DATE		"20120801"
 

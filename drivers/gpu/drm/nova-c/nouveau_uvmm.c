@@ -1866,17 +1866,18 @@ nouveau_uvmm_ioctl_vm_init(struct drm_device *dev,
 		       &gpuvm_ops);
 	/* GPUVM takes care from here on. */
 	drm_gem_object_put(r_obj);
-#if 0
-	ret = nvif_vmm_ctor(&cli->mmu, "uvmm", NVIF_VMM_TYPE_RAW,
-			    init->kernel_managed_addr,
-			    init->kernel_managed_size,
-			    NULL, 0, &uvmm->vmm.vmm);
+
+	ret = nova_core_alloc_vmm(cli->drm->auxdev,
+				  &cli->gsp,
+				  &cli->mmu,
+				  NVIF_VMM_TYPE_RAW,
+				  init->kernel_managed_addr,
+				  init->kernel_managed_size,
+				  &uvmm->vmm.vmm);
 	if (ret)
 		goto out_gpuvm_fini;
-#endif
-	//	uvmm->vmm.cli = cli;
 
-	
+	uvmm->vmm.cli = cli;
 	cli->uvmm.ptr = uvmm;
 	mutex_unlock(&cli->mutex);
 
@@ -1894,8 +1895,7 @@ nouveau_uvmm_fini(struct nouveau_uvmm *uvmm)
 {
 	MA_STATE(mas, &uvmm->region_mt, 0, 0);
 	struct nouveau_uvma_region *reg;
-	//	struct nouveau_cli *cli = uvmm->vmm.cli;
-	struct nouveau_cli *cli = NULL;
+	struct nouveau_cli *cli = uvmm->vmm.cli;
 	struct drm_gpuva *va, *next;
 
 	nouveau_uvmm_lock(uvmm);
@@ -1931,7 +1931,7 @@ nouveau_uvmm_fini(struct nouveau_uvmm *uvmm)
 	nouveau_uvmm_unlock(uvmm);
 
 	mutex_lock(&cli->mutex);
-	//	nouveau_vmm_fini(&uvmm->vmm);
+	nouveau_vmm_fini(&uvmm->vmm);
 	drm_gpuvm_put(&uvmm->base);
 	mutex_unlock(&cli->mutex);
 }

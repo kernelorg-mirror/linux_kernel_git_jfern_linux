@@ -29,8 +29,84 @@
 #include "nouveau_abi16.h"
 #include "nouveau_vmm.h"
 #include "nouveau_sched.h"
+#include "novac_helpers.h"
 #include <drm/nova_core_if.h>
 
+struct nvif_ioctl_v0 {
+        __u8  version;
+#define NVIF_IOCTL_V0_SCLASS                                               0x01
+#define NVIF_IOCTL_V0_NEW                                                  0x02
+#define NVIF_IOCTL_V0_DEL                                                  0x03
+#define NVIF_IOCTL_V0_MTHD                                                 0x04
+        __u8  type;
+        __u8  pad02[4];
+#define NVIF_IOCTL_V0_OWNER_NVIF                                           0x00
+#define NVIF_IOCTL_V0_OWNER_ANY                                            0xff
+        __u8  owner;
+#define NVIF_IOCTL_V0_ROUTE_NVIF                                           0x00
+#define NVIF_IOCTL_V0_ROUTE_HIDDEN                                         0xff
+        __u8  route;
+        __u64 token;
+        __u64 object;
+        __u8  data[];           /* ioctl data (below) */
+};
+
+struct nvif_ioctl_sclass_v0 {
+	/* nvif_ioctl ... */
+	__u8  version;
+	__u8  count;
+	__u8  pad02[6];
+	struct nvif_ioctl_sclass_oclass_v0 {
+		__s32 oclass;
+		__s16 minver;
+		__s16 maxver;
+	} oclass[];
+};
+
+struct nvif_ioctl_new_v0 {
+	/* nvif_ioctl ... */
+	__u8  version;
+	__u8  pad01[6];
+	__u8  route;
+	__u64 token;
+	__u64 object;
+	__u32 handle;
+	__s32 oclass;
+	__u8  data[];		/* class data (class.h) */
+};
+
+
+struct nvif_ioctl_mthd_v0 {
+	/* nvif_ioctl ... */
+	__u8  version;
+	__u8  method;
+	__u8  pad02[6];
+	__u8  data[];		/* method data (class.h) */
+};
+
+#define NV_DEVICE                                     /* cl0080.h */ 0x00000080
+#define NV_DEVICE_V0_INFO                                                  0x00
+
+struct nv_device_info_v0 {
+        __u8  version;
+#define NV_DEVICE_INFO_V0_IGP                                              0x00
+#define NV_DEVICE_INFO_V0_PCI                                              0x01
+#define NV_DEVICE_INFO_V0_AGP                                              0x02
+#define NV_DEVICE_INFO_V0_PCIE                                             0x03
+#define NV_DEVICE_INFO_V0_SOC                                              0x04
+        __u8  platform;
+        __u16 chipset;  /* from NV_PMC_BOOT_0 */
+        __u8  revision; /* from NV_PMC_BOOT_0 */
+#define NV_DEVICE_INFO_V0_TURING                                           0x0c
+#define NV_DEVICE_INFO_V0_AMPERE                                           0x0d
+#define NV_DEVICE_INFO_V0_ADA                                              0x0e
+        __u8  family;
+        __u8  pad06[2];
+        __u64 ram_size;
+        __u64 ram_user;
+        char  chip[16];
+        char  name[64];
+};
 
 static struct nouveau_abi16 *
 nouveau_abi16(struct drm_file *file_priv)
@@ -85,7 +161,7 @@ struct nouveau_abi16_obj {
 	u64 object;
 
 	union {
-//		struct nvif_engobj engobj;
+		struct nova_core_chan_obj obj;
 	};
 
 	struct list_head head; /* protected by nouveau_abi16.cli.mutex */
@@ -276,26 +352,16 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	 * The client lock is already acquired by nouveau_abi16_get().
 	 */
 	__nouveau_cli_disable_uvmm_noinit(cli);
-#if 0
-	engine = NVIF_ENGINE_GR;
+	engine = NOVA_CORE_ENGINE_GR;
 
 	/* hack to allow channel engine type specification on kepler */
 	if (init->fb_ctxdma_handle == ~0) {
 		switch (init->tt_ctxdma_handle) {
 		case NOUVEAU_FIFO_ENGINE_GR:
-			engine = NVIF_ENGINE_GR;
+			engine = NOVA_CORE_ENGINE_GR;
 			break;
-		case NOUVEAU_FIFO_ENGINE_VP:
-			engine = NVIF_ENGINE_MSPDEC;
-			break;
-		case NOUVEAU_FIFO_ENGINE_PPP:
-			engine = NVIF_ENGINE_MSPPP;
-				break;
-		case NOUVEAU_FIFO_ENGINE_BSP:
-			engine = NVIF_ENGINE_MSVLD;
-				break;
 		case NOUVEAU_FIFO_ENGINE_CE:
-			engine = NVIF_ENGINE_CE;
+			engine = NOVA_CORE_ENGINE_CE;
 			break;
 		default:
 			return nouveau_abi16_put(abi16, -ENOSYS);
@@ -305,11 +371,11 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 		init->tt_ctxdma_handle = 0;
 	}
 
-	if (engine != NVIF_ENGINE_CE)
-		runm = nvif_fifo_runlist(device, engine);
+	if (engine != NOVA_CORE_ENGINE_CE)
+		runm = novac_fifo_runlist(&drm->info, engine);
 	else
-		runm = nvif_fifo_runlist_ce(device);
-#endif
+		runm = novac_fifo_runlist_ce(&drm->info);
+
 	if (!runm || init->fb_ctxdma_handle == ~0 || init->tt_ctxdma_handle == ~0)
 		return nouveau_abi16_put(abi16, -EINVAL);
 
@@ -339,34 +405,8 @@ nouveau_abi16_ioctl_channel_alloc(ABI16_IOCTL_ARGS)
 	init->channel = chan->chan->chid;
 
 	init->pushbuf_domains = NOUVEAU_GEM_DOMAIN_VRAM |
-	  NOUVEAU_GEM_DOMAIN_GART;
+		NOUVEAU_GEM_DOMAIN_GART;
 
-#if 0
-	/* Workaround "nvc0" gallium driver using classes it doesn't allocate on
-	 * Kepler and above.  NVKM no longer always sets CE_CTX_VALID as part of
-	 * channel init, now we know what that stuff actually is.
-	 *
-	 * Doesn't matter for Kepler/Pascal, CE context stored in NV_RAMIN.
-	 *
-	 * Userspace was fixed prior to adding Ampere support.
-	 */
-	switch (device->impl->family) {
-	case NVIF_DEVICE_VOLTA:
-		ret = nvif_engobj_ctor(&chan->chan->chan, "abi16CeWar", 0, VOLTA_DMA_COPY_A,
-				       &chan->ce);
-		if (ret)
-			goto done;
-		break;
-	case NVIF_DEVICE_TURING:
-		ret = nvif_engobj_ctor(&chan->chan->chan, "abi16CeWar", 0, TURING_DMA_COPY_A,
-				       &chan->ce);
-		if (ret)
-			goto done;
-		break;
-	default:
-		break;
-	}
-#endif
 done:
 	if (ret)
 		nouveau_abi16_chan_fini(abi16, chan);
@@ -420,15 +460,15 @@ nouveau_abi16_ioctl_gpuobj_free(ABI16_IOCTL_ARGS)
 {
 	return -ENOSYS;
 }
-#if 0
+
 static int
 nouveau_abi16_ioctl_mthd(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
 	struct nouveau_cli *cli = abi16->cli;
 //	struct nvif_device *device = &cli->drm->device;
-//	struct nvif_ioctl_mthd_v0 *args;
+	struct nvif_ioctl_mthd_v0 *args;
 	struct nouveau_abi16_obj *obj;
-//	struct nv_device_info_v0 *info;
+	struct nv_device_info_v0 *info;
 
 	if (ioctl->route || argc < sizeof(*args))
 		return -EINVAL;
@@ -446,6 +486,12 @@ nouveau_abi16_ioctl_mthd(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioct
 	info = (void *)args->data;
 	if (info->version != 0x00)
 		return -EINVAL;
+
+	info->platform = 3;
+	info->chipset = cli->drm->info.chipset;
+	info->revision = 0;//cli->drm->info.revision;
+	info->ram_size = cli->drm->info.ram_user;
+	info->ram_user = cli->drm->info.ram_user;	
 #if 0
 	info->platform = device->impl->platform;
 	info->chipset = device->impl->chipset;
@@ -483,7 +529,9 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	struct nvif_ioctl_new_v0 *args;
 	struct nouveau_abi16_chan *chan;
 	struct nouveau_abi16_obj *obj;
+	struct nouveau_drm *drm;
 	int ret;
+	u32 engine_type, eng_inst;
 
 	if (argc < sizeof(*args))
 		return -EINVAL;
@@ -510,23 +558,40 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	obj = nouveau_abi16_obj_new(abi16, ENGOBJ, args->object);
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
-#if 0
 
-	ret = nvif_engobj_ctor(&chan->chan->chan, "abi16EngObj", args->handle, args->oclass,
-			       &obj->engobj);
-	if (ret)
-		nouveau_abi16_obj_del(obj);
-#endif
+	drm = chan->chan->cli->drm;
+
+	ret = novac_find_engine_info(&drm->info, chan->chan->runlist, args->oclass, &engine_type, &eng_inst);
+	if (ret) {
+		printk(KERN_ERR "failed to find class on runlist %d %08x\n", chan->chan->runlist, args->oclass);
+		return -EINVAL;
+	}
+
+	if (!chan->chan->chan.nova.gr_ctx_arc) {
+		ret = nova_core_chan_init_gr(drm->auxdev,
+					     &chan->chan->cli->gsp,
+					     &chan->chan->vmm->vmm,
+					     &chan->chan->chan.nova);
+	}
+	
+	obj->obj.class = args->oclass;
+	obj->obj.handle = args->handle;
+	obj->obj.engine_type = engine_type;
+	obj->obj.engine_inst = eng_inst;
+	ret = nova_core_chan_alloc_object(drm->auxdev,
+					  &chan->chan->chan.nova,
+					  &obj->obj);
+
 	return ret;
 }
 
 static int
 nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
-	const struct nvif_device_impl_fifo *fifo;
-	const struct nvif_device_impl_runl *runl;
+	const struct runl *runl;
 	struct nvif_ioctl_sclass_v0 *args;
 	struct nouveau_abi16_chan *chan;
+	struct nova_core_info *info;
 	int cnt = 0;
 
 	if (!ioctl->route || argc < sizeof(*args))
@@ -541,12 +606,12 @@ nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *io
 	if (!chan)
 		return -EINVAL;
 
-	fifo = &chan->chan->cli->drm->device.impl->fifo;
-	runl = &fifo->runl[chan->chan->chan.runl];
+	info = &chan->chan->cli->drm->info;
+	runl = &info->runl[chan->chan->chan.runl];
 
 	for (int engi = 0; engi < runl->engn_nr; engi++) {
-		const struct nvif_device_impl_engine *engine =
-			&fifo->engine[runl->engn[engi].engine];
+		const struct engine *engine =
+			&info->engine[runl->engn[engi].engine];
 
 		for (int clsi = 0; clsi < engine->oclass_nr; clsi++) {
 			if (cnt < args->count) {
@@ -561,7 +626,7 @@ nouveau_abi16_ioctl_sclass(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *io
 	args->count = cnt;
 	return 0;
 }
-#endif
+
 int
 nouveau_abi16_ioctl(struct drm_file *filp, void __user *user, u32 size)
 {
@@ -570,10 +635,6 @@ nouveau_abi16_ioctl(struct drm_file *filp, void __user *user, u32 size)
 	int ret;
 	struct nvif_ioctl_v0 *ioctl;
 
-	return -EINVAL;
-#if 0
-	       
-		
 	if (argc < sizeof(*ioctl))
 		return -EINVAL;
 	argc -= sizeof(*ioctl);
@@ -598,11 +659,13 @@ nouveau_abi16_ioctl(struct drm_file *filp, void __user *user, u32 size)
 		goto done_free;
 	}
 
+
+	printk(KERN_ERR "NVIF %d\n", ioctl->type);
 	switch (ioctl->type) {
-//	case NVIF_IOCTL_V0_SCLASS: ret = nouveau_abi16_ioctl_sclass(abi16, ioctl, argc); break;
-///	case NVIF_IOCTL_V0_NEW   : ret = nouveau_abi16_ioctl_new   (abi16, ioctl, argc); break;
-//	case NVIF_IOCTL_V0_DEL   : ret = nouveau_abi16_ioctl_del   (abi16, ioctl, argc); break;
-//	case NVIF_IOCTL_V0_MTHD  : ret = nouveau_abi16_ioctl_mthd  (abi16, ioctl, argc); break;
+	case NVIF_IOCTL_V0_SCLASS: ret = nouveau_abi16_ioctl_sclass(abi16, ioctl, argc); break;
+	case NVIF_IOCTL_V0_NEW   : ret = nouveau_abi16_ioctl_new   (abi16, ioctl, argc); break;
+	case NVIF_IOCTL_V0_DEL   : ret = nouveau_abi16_ioctl_del   (abi16, ioctl, argc); break;
+	case NVIF_IOCTL_V0_MTHD  : ret = nouveau_abi16_ioctl_mthd  (abi16, ioctl, argc); break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -618,5 +681,4 @@ nouveau_abi16_ioctl(struct drm_file *filp, void __user *user, u32 size)
 done_free:
 	kfree(ioctl);
 	return ret;
-#endif
 }

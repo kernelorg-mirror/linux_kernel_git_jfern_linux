@@ -740,6 +740,8 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 	u8 eng_inst;
 	do {
 		struct nouveau_channel *chan;
+		u32 engine_type;
+		u32 engine_inst;
 
 		if (mthd->engine)
 			chan = drm->cechan;
@@ -751,15 +753,16 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 		if (mthd->oclass != drm->info.ce_class)
 			continue;
 
-		int engi = novac_get_engine_inst(&drm->info, chan->runlist, NOVA_CORE_ENGINE_CE, &eng_inst);
-		if (engi < 0) {
+		ret = novac_find_engine_info(&drm->info, chan->runlist, drm->info.ce_class,
+					     &engine_type, &engine_inst);
+		if (ret < 0) {
 			printk(KERN_ERR "failed to find ce class on runlist %d %08x\n", chan->runlist, drm->info.ce_class);
 			continue;
 		}
 		drm->ttm.copy.class = drm->info.ce_class;
 		drm->ttm.copy.handle = drm->info.ce_class | (mthd->engine << 16);
-		drm->ttm.copy.engine_type = NOVA_CORE_ENGINE_CE;
-		drm->ttm.copy.engine_inst = eng_inst;
+		drm->ttm.copy.engine_type = engine_type;
+		drm->ttm.copy.engine_inst = engine_inst;
 		ret = nova_core_chan_alloc_object(drm->auxdev, &chan->chan.nova,
 						  &drm->ttm.copy);
 		if (ret == 0) {

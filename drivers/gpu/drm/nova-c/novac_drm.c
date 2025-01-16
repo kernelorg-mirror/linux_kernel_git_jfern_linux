@@ -479,8 +479,7 @@ nouveau_drm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (_IOC_NR(cmd) - DRM_COMMAND_BASE) {
 	case DRM_NOUVEAU_NVIF:
-//		ret = nouveau_abi16_ioctl(filp, (void __user *)arg, _IOC_SIZE(cmd));
-		ret = -EINVAL;
+		ret = nouveau_abi16_ioctl(filp, (void __user *)arg, _IOC_SIZE(cmd));
 		break;
 	default:
 		ret = drm_ioctl(file, cmd, arg);
@@ -500,7 +499,7 @@ nouveau_driver_fops = {
 	.poll = drm_poll,
 	.read = drm_read,
 #if defined(CONFIG_COMPAT)
-///	.compat_ioctl = nouveau_compat_ioctl,
+	.compat_ioctl = nouveau_compat_ioctl,
 #endif
 	.llseek = noop_llseek,
 	.fop_flags = FOP_UNSIGNED_OFFSET,

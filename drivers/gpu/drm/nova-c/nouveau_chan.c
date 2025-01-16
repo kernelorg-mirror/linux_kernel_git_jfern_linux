@@ -297,12 +297,6 @@ nouveau_channel_init(struct nouveau_channel *chan)
 
 	chan->userd.ptr = chan->userd.mem.bar1_map_handle;
 #if 0
-	struct nvif_device *device = &cli->device;
-
-	ret = nvif_mem_map(&chan->userd.mem, NULL, 0, &chan->userd.map);
-	if (ret)
-		return ret;
-
 	ret = nvif_chan_event_ctor(&chan->chan, "abi16ChanKilled",
 				   chan->chan.impl->event.killed,
 				   nouveau_channel_killed, &chan->kill);
