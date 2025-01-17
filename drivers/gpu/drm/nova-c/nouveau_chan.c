@@ -42,21 +42,18 @@ nouveau_channel_kill(struct nouveau_channel *chan)
 	if (chan->fence)
 		nouveau_fence_context_kill(chan->fence, -ENODEV);
 }
-#if 0
-static enum nvif_event_stat
-nouveau_channel_killed(struct nvif_event *event, void *repv, u32 repc)
-{
-	struct nouveau_channel *chan = container_of(event, typeof(*chan), kill);
-	struct nouveau_cli *cli = chan->cli;
 
-	NV_PRINTK(warn, cli, "channel %d killed!\n", chan->chid);
+static int
+nouveau_channel_killed(void *data)
+{
+	struct nouveau_channel *chan = data;
 
 	if (unlikely(!atomic_read(&chan->killed)))
 		nouveau_channel_kill(chan);
 
-	return NVIF_EVENT_DROP;
+	return 0;
 }
-#endif
+
 
 int
 nouveau_channel_idle(struct nouveau_channel *chan)
@@ -296,18 +293,17 @@ nouveau_channel_init(struct nouveau_channel *chan)
 	}
 
 	chan->userd.ptr = chan->userd.mem.bar1_map_handle;
-#if 0
-	ret = nvif_chan_event_ctor(&chan->chan, "abi16ChanKilled",
-				   chan->chan.impl->event.killed,
-				   nouveau_channel_killed, &chan->kill);
-	if (ret == 0)
-		ret = nvif_event_allow(&chan->kill);
+
+	ret = nova_core_chan_register_killed(drm->auxdev,
+					     &chan->chan.nova,
+					     nouveau_channel_killed,
+					     chan);
 	if (ret) {
 		NV_ERROR(drm, "Failed to request channel kill "
 			 "notification: %d\n", ret);
 		return ret;
 	}
-#endif
+
 	/* initialise dma tracking parameters */
 	chan->user_put = 0x40;
 	chan->user_get = 0x44;
