@@ -1686,7 +1686,7 @@ impl VmmInner {
         }
         if pgt.refs[(!pg_type) & 0x1] == 0 {
             // delete vmmpt somehow?
-            iter.pt[iter.lvl as usize] = core::ptr::null_mut() as *mut VmmPt;
+//            iter.pt[iter.lvl as usize] = core::ptr::null_mut() as *mut VmmPt;
         }
         iter.lvl -= 1;
         Ok(())
