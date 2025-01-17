@@ -10,6 +10,7 @@ use crate::timer_usec;
 use crate::timer_nsec;
 use crate::timer::TimerWait;
 use crate::gsp::gsp_falcon;
+use crate::accel::fifo::EventHandler;
 
 use crate::gsp::*;
 
@@ -180,15 +181,23 @@ pub(crate) fn user_shared_data(msg: &mut KVec<u8>) {
     pr_info!("USER SHARED DATA {}", user_shared_data.get_data());
 }
 
-pub(crate) fn rc_triggered(msg: &mut KVec<u8>) {
+pub(crate) fn rc_triggered(msg: &mut KVec<u8>, handlers: &Option<Arc<EventHandler>>) {
     let mut rc_triggered = fw::ver::gen::s_rpc_rc_triggered_v17_02::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
 
+    let chid = rc_triggered.get_chid();
     pr_info!("RC TRIGGERED engn:{:#x} chid:{} type:{}, scope:{} part:{}\n",
              rc_triggered.get_nv2080EngineType(),
              rc_triggered.get_chid(),
              rc_triggered.get_exceptType(),
              rc_triggered.get_scope(),
              rc_triggered.get_partitionAttributionId());
+
+    let handlers = match handlers {
+	None => { return; }
+	Some(h) => h
+    };
+
+    handlers.handle_channel_killed(chid);
 }
 
 pub(crate) fn mmu_fault_queued(_msg: &mut KVec<u8>) {

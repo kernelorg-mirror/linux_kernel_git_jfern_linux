@@ -275,9 +275,23 @@ pub(crate) struct GpuPromoteBufferEntry {
     pub nonmapped: bool,
 }
 
-pub(crate) struct ChannelNonStallInfo {
+pub(crate) struct ChannelCbInfo {
     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
     data: *mut core::ffi::c_void,
+}
+
+pub(crate) struct ChannelKilled {
+    id: u32,
+    killed: ChannelCbInfo,
+}
+
+unsafe impl Send for ChannelKilled {}
+
+impl ChannelKilled {
+    pub(crate) fn killed(&self) {
+        pr_info!("killed handler\n");
+        unsafe { (self.killed.cb.unwrap())(self.killed.data) };
+    }
 }
 
 #[pin_data]
@@ -292,10 +306,10 @@ pub(crate) struct Channel {
     mthdbuf: DmaObject,
 
     #[pin]
-    nonstall: Mutex<ChannelNonStallInfo>,
+    nonstall: Mutex<ChannelCbInfo>,
+
     pub mgr: Arc<dyn GspManager>,
     pub(crate) gsp_chan: Arc<GspChannel>,
-
 }
 
 impl VfnHandler for Channel {
@@ -335,7 +349,7 @@ impl Channel {
             doorbell,
             instbuf,
             mthdbuf,
-            nonstall <- new_mutex!(ChannelNonStallInfo {
+            nonstall <- new_mutex!(ChannelCbInfo {
                 cb: None,
                 data: core::ptr::null_mut()
             }),
@@ -357,6 +371,24 @@ impl Channel {
             gsp,
             mgr: self.mgr.clone(),
         }, GFP_KERNEL)?)
+    }
+
+    pub(crate) fn register_killed(chan: Arc<Channel>,
+                                  gpu: &Gpu,
+                                  cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
+                                  data: *mut core::ffi::c_void) -> i32 {
+
+        let killed = ChannelKilled {
+            id: chan.id,
+            killed: ChannelCbInfo {
+                cb,
+                data,
+            },
+        };
+
+        gpu.event_handler.add_handler(killed);
+        pr_info!("killed registered\n");
+        0
     }
 
     pub(crate) fn register_nonstall(chan: Arc<Channel>,
@@ -381,5 +413,37 @@ impl Channel {
     pub(crate) fn free(&self) {
         self.mgr.free_fifo_chan(&self.gsp_chan);
         self.mgr.free_chid(self.id as usize);
+    }
+}
+
+#[pin_data]
+pub(crate) struct EventHandler {
+    #[pin]
+    handlers: Mutex<KVec<ChannelKilled>>
+}
+
+impl EventHandler {
+
+    pub(crate) fn new() -> Result<Arc<EventHandler>> {
+        Arc::pin_init(pin_init!(EventHandler {
+            handlers <- new_mutex!(KVec::new())
+        }), GFP_KERNEL)
+    }
+
+    pub(crate) fn add_handler(&self, killed: ChannelKilled) -> Result<()> {
+        let mut handlers = self.handlers.lock();
+
+        handlers.push(killed, GFP_KERNEL)?;
+        Ok(())
+    }
+    pub(crate) fn handle_channel_killed(&self, chid: u32) {
+        let handlers = self.handlers.lock();
+
+        for handler in &*handlers {
+            if handler.id == chid {
+                handler.killed();
+                break;
+            }
+        }
     }
 }

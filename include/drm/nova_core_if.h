@@ -234,6 +234,10 @@ int nova_core_chan_register_nonstall(struct auxiliary_device *auxdev,
 				     struct nova_core_chan *chan,
 				     int (*cb)(void *data), void *data);
 
+int nova_core_chan_register_killed(struct auxiliary_device *auxdev,
+				   struct nova_core_chan *chan,
+				   int (*cb)(void *data), void *data);
+
 int nova_core_free_chan(struct nova_core_chan *chan);
 
 struct nova_core_chan_obj {

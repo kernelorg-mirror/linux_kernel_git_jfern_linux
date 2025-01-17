@@ -31,6 +31,7 @@ use crate::gpu::Firmware;
 use crate::gpu::GpuBase;
 use crate::gpu::IntrInfo;
 
+use crate::accel::fifo::EventHandler;
 use crate::gsp::alloc_msgs::*;
 use crate::gsp::ctrl_msgs::*;
 use crate::gsp::msgs::*;
@@ -895,6 +896,7 @@ impl GspManager::ver {
 
     pub(crate) fn new(gpu_base: Arc<GpuBase>,
                       vfn: &Arc<Vfn>,
+                      event_handler: Arc<EventHandler>,
                       mm: &mut MemRange,
                       mut gsp_falcon: GspFalcon,
                       sec2: Sec2,
@@ -937,6 +939,7 @@ impl GspManager::ver {
 
         gsp_objs.queues.bind_falcon(gsp_falcon, sec2.falcon);
 
+        gsp_objs.queues.bind_kill_handler(event_handler);
         let mut gsp_system_info = GspSystemInfoRpcMsg::ver::new(&gpu_base, NOVA_ENABLE_VGPU)?;
         gsp_system_info.push(&mut gsp_objs.queues)?;
 

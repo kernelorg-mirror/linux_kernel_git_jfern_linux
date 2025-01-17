@@ -8,6 +8,8 @@ use core::sync::atomic::{fence, Ordering};
 use core::time::Duration;
 use kernel::delay::sleep;
 
+use crate::accel::fifo::EventHandler;
+
 #[allow(non_snake_case)]
 #[repr(C)]
 struct MsgQTxHeader {
@@ -208,6 +210,7 @@ pub(crate) struct GSPSharedQueues {
     lq: Arc<Pin<KBox<Mutex<LockedQueues>>>>,
     pub gsp_falcon: Option<gsp_falcon::GspFalcon>,
     pub sec2_falcon: Option<Arc<Falcon>>,
+    pub kill_handler: Option<Arc<EventHandler>>,
 }
 
 #[versions(GSP)]
@@ -256,12 +259,17 @@ impl GSPSharedQueues::ver {
             lq: lock,
             gsp_falcon: None,
             sec2_falcon: None,
+            kill_handler: None,
         })
     }
 
     pub(crate) fn bind_falcon(&mut self, gsp_falcon: gsp_falcon::GspFalcon, sec2_falcon: Arc<Falcon>) {
         self.gsp_falcon = Some(gsp_falcon);
         self.sec2_falcon = Some(sec2_falcon);
+    }
+
+    pub(crate) fn bind_kill_handler(&mut self, kill_handler: Arc<EventHandler>) {
+        self.kill_handler = Some(kill_handler);
     }
 
     fn cmdq_push(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver) -> Result<()> {
@@ -491,7 +499,7 @@ impl GSPSharedQueues::ver {
                     notifiers::Notifiers::ver::user_shared_data(&mut msg);
                 }
                 fw::ver::gen::NV_VGPU_MSG_EVENT_RC_TRIGGERED => {
-                    notifiers::Notifiers::ver::rc_triggered(&mut msg);
+                    notifiers::Notifiers::ver::rc_triggered(&mut msg, &self.kill_handler);
                 }
                 fw::ver::gen::NV_VGPU_MSG_EVENT_MMU_FAULT_QUEUED => {
                     notifiers::Notifiers::ver::mmu_fault_queued(&mut msg);

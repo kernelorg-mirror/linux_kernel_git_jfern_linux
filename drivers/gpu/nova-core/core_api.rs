@@ -603,6 +603,22 @@ pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings:
 
 #[no_mangle]
 #[allow(dead_code)]
+pub unsafe extern "C" fn nova_core_chan_register_killed(auxdev: *mut bindings::auxiliary_device,
+                                                        chan_ptr: *mut bindings::nova_core_chan,
+                                                        cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
+                                                        data: *mut core::ffi::c_void) -> i32 {
+    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
+    let gpu = unsafe { &(*core_driver).gpu };
+
+    let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
+
+    let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
+    Channel::register_killed(chan.clone(), gpu, cb, data);
+    0
+}
+
+#[no_mangle]
+#[allow(dead_code)]
 pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary_device,
                                                 client: *mut bindings::nova_core_gsp_client,
                                                 vmm_ptr: *mut bindings::nova_core_vmm,

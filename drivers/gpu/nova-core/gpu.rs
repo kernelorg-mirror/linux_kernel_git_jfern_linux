@@ -20,6 +20,7 @@ use kernel::{
 
 use crate::accel::fifo::BitVec;
 use crate::accel::fifo::EngineType;
+use crate::accel::fifo::EventHandler;
 use crate::bar::Bar;
 use crate::bios::Bios;
 use crate::devinit;
@@ -216,6 +217,7 @@ pub(crate) struct GpuBase {
 pub(crate) struct Gpu {
     pub base: Arc<GpuBase>,
     pub vfn: Arc<Vfn>,
+    pub event_handler: Arc<EventHandler>,
     pub gsp: Arc<dyn GspManager>,
     pub bar: Arc<Bar>,
     pub mmu: Arc<Mmu>,
@@ -605,6 +607,8 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
+        let event_handler = EventHandler::new()?;
+
         let sec2 = Sec2::new(base.clone())?;
         let gsp_falcon = GspFalcon::new(base.clone())?;
 
@@ -612,7 +616,7 @@ impl Gpu {
 
         let mut vram_mm = MemRange::new(1)?;
 
-        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
+        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
 
         let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
 
@@ -639,7 +643,7 @@ impl Gpu {
         }
 
         let gr_ctx_bufs = Gr::golden_init(instmem.clone(), gsp.clone(), id_allocator.clone())?;
-        Ok(pin_init!(Self { base, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs, alloc_id: id_allocator }))
+        Ok(pin_init!(Self { base, event_handler, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs, alloc_id: id_allocator }))
     }
 
     pub(crate) fn release(&self) {
