@@ -1,0 +1,14 @@
+
+GL userspace:
+- SGL handling?
+
+Vulkan userspace:
+- sparse
+- raw vmm handling
+
+General:
+- instmem - LRU not implemented
+- mmu pt - no suballocations or caching
+- suspend/resume INSTMEM objects
+- power mgmt
+- display support
