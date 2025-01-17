@@ -245,7 +245,7 @@ nouveau_channel_ctor(struct nouveau_cli *cli, bool priv, u64 runm,
 
 	ret = nova_core_alloc_mem(cli->drm->auxdev, &cli->mmu,
 				  "abi16ChanUSERD",
-				  typev, false, NULL, 0,
+				  typev, false, NULL, NULL, 0,
 				  PAGE_SIZE, &chan->userd.mem);
 	if (ret)
 		return ret;

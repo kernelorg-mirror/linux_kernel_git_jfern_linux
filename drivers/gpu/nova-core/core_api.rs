@@ -295,6 +295,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
                                              mmu_type: u8,
                                              contig: bool,
                                              dma: *mut bindings::dma_addr_t,
+                                             sgl: *mut bindings::scatterlist,
                                              page: u8,
                                              size: u64,
                                              obj: *mut bindings::nova_core_memory_obj) -> i32 {
@@ -322,18 +323,33 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
         pr_info!("allocated uvram {:?} {:?} {} {} {}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
                  ncobj.addr, ncobj.size, nodes);
     } else {
-        let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size) {
-            Err(x) => { return x.to_errno(); }
-            Ok(x) => x
-        };
-        ncobj.mem_type = mmu_type;
-        ncobj.page = memobj.page();
-        ncobj.size = memobj.size().unwrap();
-        ncobj.obj_type = bindings::NVIF_MEM_OBJ_DMA;
-        let memobj : Pin<KBox<DmaMemObj>> = KBox::pin(memobj, GFP_KERNEL).unwrap();
-        ncobj.obj = memobj.into_foreign() as _;
-        pr_info!("allocated udma {:?} {:?} sz:{:#x}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
-                 ncobj.size);
+        if sgl != core::ptr::null_mut() {
+            let memobj = match SglMemObj::new(sgl, size) {
+                Err(x) => { return x.to_errno(); }
+                Ok(x) => x
+            };
+            ncobj.mem_type = mmu_type;
+            ncobj.page = memobj.page();
+            ncobj.size = memobj.size().unwrap();
+            ncobj.obj_type = bindings::NVIF_MEM_OBJ_SGL;
+            let memobj : Pin<KBox<SglMemObj>> = KBox::pin(memobj, GFP_KERNEL).unwrap();
+            ncobj.obj = memobj.into_foreign() as _;
+            pr_info!("allocated usgl {:?} {:?} sz:{:#x}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
+                     ncobj.size);
+        } else {
+            let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size) {
+                Err(x) => { return x.to_errno(); }
+                Ok(x) => x
+            };
+            ncobj.mem_type = mmu_type;
+            ncobj.page = memobj.page();
+            ncobj.size = memobj.size().unwrap();
+            ncobj.obj_type = bindings::NVIF_MEM_OBJ_DMA;
+            let memobj : Pin<KBox<DmaMemObj>> = KBox::pin(memobj, GFP_KERNEL).unwrap();
+            ncobj.obj = memobj.into_foreign() as _;
+            pr_info!("allocated udma {:?} {:?} sz:{:#x}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
+                     ncobj.size);
+        }
     }
     0
 }
@@ -353,6 +369,9 @@ pub unsafe extern "C" fn nova_core_free_mem(obj_ptr: *mut bindings::nova_core_me
             },
             bindings::NVIF_MEM_OBJ_DMA => {
                 let _dmaobj : KBox<DmaMemObj> = KBox::from_foreign((*obj_ptr).obj);
+            },
+            bindings::NVIF_MEM_OBJ_SGL => {
+                let _sglobj : KBox<SglMemObj> = KBox::from_foreign((*obj_ptr).obj);
             },
             _ => {}
         }
@@ -426,6 +445,7 @@ pub unsafe extern "C" fn nova_core_vmm_map(auxdev: *mut bindings::auxiliary_devi
 
     let vramobj: &VramObj;
     let dmaobj: &DmaMemObj;
+    let sglobj: &SglMemObj;
 
     let obj: &dyn Memory;
 
@@ -436,6 +456,10 @@ pub unsafe extern "C" fn nova_core_vmm_map(auxdev: *mut bindings::auxiliary_devi
         },
         bindings::NVIF_MEM_OBJ_DMA => {
             let _dmaobj : &DmaMemObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = _dmaobj as &dyn Memory;
+        },
+        bindings::NVIF_MEM_OBJ_SGL => {
+            let _dmaobj : &SglMemObj = unsafe { KBox::borrow(memobj.obj) };
             obj = _dmaobj as &dyn Memory;
         },
         _ => { return EINVAL.to_errno(); }

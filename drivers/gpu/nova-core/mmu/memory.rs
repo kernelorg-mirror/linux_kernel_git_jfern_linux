@@ -661,8 +661,8 @@ impl DmaMemObj {
 
 pub(crate) struct SglMemObj {
     target: MemTarget,
-    pages: u64
-    //sgl
+    pages: u64,
+    sgl: *mut bindings::scatterlist,
 }
 
 impl Memory for SglMemObj {
@@ -716,4 +716,16 @@ impl Memory for SglMemObj {
     fn fill128(&mut self, offset: u64, value_lo: u64, value_hi: u64, count: usize) -> Result<()> {
         Err(ENOSPC)
     }
+}
+
+impl SglMemObj {
+    pub(crate) fn new(sgl: *mut bindings::scatterlist, size: u64) -> Result<Self> {
+
+        Ok(Self {
+            target: MemTarget::Host,
+	    pages: size >> PAGE_SHIFT,
+            sgl,
+        })
+    }
+
 }

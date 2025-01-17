@@ -72,14 +72,12 @@ nouveau_mem_host(struct ttm_resource *reg, struct ttm_tt *tt)
 		mem->comp = 0;
 	}
 
-//	if (tt->sg)
-//		args.sgl = tt->sg->sgl;
-
 	ret = nova_core_alloc_mem(drm->auxdev,
 				  mmu,
 				  "ttmHostMem",
 				  type, false,
 				  tt->dma_address,
+				  tt->sg ? tt->sg->sgl : NULL,
 				  PAGE_SHIFT, reg->size,
 				  &mem->mem);
 	return ret;
@@ -97,7 +95,7 @@ nouveau_mem_vram(struct ttm_resource *reg, bool contig, u8 page)
 				  &drm->cli.mmu,
 				  "vramMem",
 				  drm->ttm.type_vram,
-				  contig, NULL,
+				  contig, NULL, NULL,
 				  page, size,
 				  &mem->mem);
 	if (ret == 0)

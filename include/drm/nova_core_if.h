@@ -1,6 +1,8 @@
 #ifndef NOVA_CORE_IF_H
 #define NOVA_CORE_IF_H
 
+struct scatterlist;
+
 #define TURING_CHANNEL_GPFIFO_A                       0x0000c46f
 #define AMPERE_CHANNEL_GPFIFO_A                       0x0000c56f
 #define AMPERE_CHANNEL_GPFIFO_B                       0x0000c76f
@@ -168,6 +170,7 @@ int nova_core_alloc_mem(struct auxiliary_device *auxdev,
 			const char *name,
 			u8 mmu_type, bool contig,
 			dma_addr_t *dma,
+			struct scatterlist *sgl,
 			u8 page, u64 size, struct nova_core_memory_obj *obj);
 int nova_core_free_mem(struct nova_core_memory_obj *obj);
 
