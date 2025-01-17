@@ -465,7 +465,6 @@ static int
 nouveau_abi16_ioctl_mthd(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
 	struct nouveau_cli *cli = abi16->cli;
-//	struct nvif_device *device = &cli->drm->device;
 	struct nvif_ioctl_mthd_v0 *args;
 	struct nouveau_abi16_obj *obj;
 	struct nv_device_info_v0 *info;
@@ -509,14 +508,17 @@ static int
 nouveau_abi16_ioctl_del(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
 	struct nouveau_abi16_obj *obj;
-
+	struct nouveau_cli *cli = abi16->cli;
+	struct nouveau_drm *drm;
 	if (ioctl->route || argc)
 		return -EINVAL;
 
+	drm = cli->drm;
 	obj = nouveau_abi16_obj_find(abi16, ioctl->object);
 	if (obj) {
-///		if (obj->type == ENGOBJ)
-//			nvif_engobj_dtor(&obj->engobj);
+		if (obj->type == ENGOBJ)
+			nova_core_chan_free_object(drm->auxdev,
+						   &obj->obj);
 		nouveau_abi16_obj_del(obj);
 	}
 

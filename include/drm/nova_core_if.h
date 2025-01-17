@@ -257,7 +257,6 @@ int nova_core_chan_alloc_object(struct auxiliary_device *auxdev,
 				struct nova_core_chan_obj *cobj);
 
 int nova_core_chan_free_object(struct auxiliary_device *auxdev,
-			       struct nova_core_chan *chan,
 			       struct nova_core_chan_obj *cobj);
 
 struct nova_core_user_info {

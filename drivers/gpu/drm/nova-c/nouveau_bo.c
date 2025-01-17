@@ -768,7 +768,7 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 		if (ret == 0) {
 			ret = mthd->init(chan, drm->ttm.copy.handle);
 			if (ret) {
-				nova_core_chan_free_object(drm->auxdev, &chan->chan.nova,
+				nova_core_chan_free_object(drm->auxdev,
 							   &drm->ttm.copy);
 				continue;
 			}

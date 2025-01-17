@@ -549,7 +549,6 @@ pub unsafe extern "C" fn nova_core_chan_alloc_object(auxdev: *mut bindings::auxi
 #[no_mangle]
 #[allow(dead_code)]
 pub unsafe extern "C" fn nova_core_chan_free_object(auxdev: *mut bindings::auxiliary_device,
-                                                    chan: *mut bindings::nova_core_chan,
                                                     obj_ptr: *mut bindings::nova_core_chan_obj) {
     let obj_info = unsafe { &mut (*obj_ptr) };
     unsafe {

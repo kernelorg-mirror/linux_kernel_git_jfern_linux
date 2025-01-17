@@ -149,7 +149,6 @@ nouveau_accel_ce_fini(struct nouveau_drm *drm)
 {
 	nouveau_channel_idle(drm->cechan);
 	nova_core_chan_free_object(drm->auxdev,
-				   &drm->cechan->chan.nova,
 				   &drm->ttm.copy);
 	nouveau_channel_del(&drm->cechan);	
 }
@@ -252,16 +251,35 @@ nouveau_accel_init(struct nouveau_drm *drm)
 
 	/* Initialise accelerated TTM buffer moves. */
 	nouveau_bo_move_init(drm);
+
+	nouveau_drm_test(drm);
 }
 
 static void
 nouveau_drm_device_fini(struct nouveau_drm *drm)
 {
 	struct drm_device *dev = &drm->dev;
+	struct nouveau_cli *cli, *temp_cli;
 
 	nouveau_accel_fini(drm);
 	nouveau_ttm_fini(drm);
 
+	/*
+	 * There may be existing clients from as-yet unclosed files. For now,
+	 * clean them up here rather than deferring until the file is closed,
+	 * but this likely not correct if we want to support hot-unplugging
+	 * properly.
+	 */
+	mutex_lock(&drm->clients_lock);
+	list_for_each_entry_safe(cli, temp_cli, &drm->clients, head) {
+		list_del(&cli->head);
+		mutex_lock(&cli->mutex);
+		if (cli->abi16)
+			nouveau_abi16_fini(cli->abi16);
+		mutex_unlock(&cli->mutex);
+		nouveau_cli_fini(cli);
+		kfree(cli);
+	}	
 	nouveau_cli_fini(&drm->cli);
 	destroy_workqueue(drm->sched_wq);
 	mutex_destroy(&drm->clients_lock);
@@ -440,6 +458,11 @@ nouveau_drm_postclose(struct drm_device *dev, struct drm_file *fpriv)
 	 */
 	if (!drm_dev_enter(dev, &dev_index))
 		return;
+
+	mutex_lock(&cli->mutex);
+	if (cli->abi16)
+		nouveau_abi16_fini(cli->abi16);
+	mutex_unlock(&cli->mutex);
 
 	mutex_lock(&drm->clients_lock);
 	list_del(&cli->head);
