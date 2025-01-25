@@ -49,7 +49,8 @@ torture_qemu_mem_default=1
 TORTURE_REMOTE=
 TORTURE_SHUTDOWN_GRACE=180
 TORTURE_STRESS_NG=
-TORTURE_STRESS_NG_DEFAULT_ARGS="--cpu 1 --cpu-method matrixprod --cpu-ops 1000000 --perf -t 5"
+TORTURE_STRESS_NG_COUNT=
+TORTURE_STRESS_NG_ARGS=
 TORTURE_SUITE=rcu
 TORTURE_TRUST_MAKE=""
 debuginfo="CONFIG_DEBUG_INFO_NONE=n CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y"
@@ -93,7 +94,8 @@ usage () {
 	echo "       --results absolute-pathname"
 	echo "       --shutdown-grace seconds"
 	echo "       --stress-ng"
-	echo "       --stress-ng-args \"stress-ng arguments\""
+	echo "       --stress-ng-args \"stress-ng arguments\"  # Override default stressor distribution"
+	echo "       --stress-ng-count N|expr  # N is number or expr like N/2, N*2 etc"
 	echo "       --torture lock|rcu|rcuscale|refscale|scf|X*"
 	echo "       --trust-make"
 	exit 1
@@ -260,7 +262,12 @@ do
 		;;
 	--stress-ng-args)
 		checkarg --stress-ng-args "(stress-ng arguments)" "$#" "$2" '.*' '^error'
-		TORTURE_STRESS_NG_DEFAULT_ARGS="$2"
+		TORTURE_STRESS_NG_ARGS="$2"
+		shift
+		;;
+	--stress-ng-count)
+		checkarg --stress-ng-count "(number or expression)" "$#" "$2" '^[0-9N][0-9N/*+-]*$' '^error'
+		TORTURE_STRESS_NG_COUNT="$2"
 		shift
 		;;
 	--torture)
@@ -301,7 +308,23 @@ then
 	stress_args=""
 	if test -n "$TORTURE_STRESS_NG"
 	then
-		stress_args="stress-ng $TORTURE_STRESS_NG_DEFAULT_ARGS"
+		# If user provided custom arguments, use them above all else
+		if test -n "$TORTURE_STRESS_NG_ARGS"
+		then
+			# User provided custom arguments
+			stress_args="stress-ng $TORTURE_STRESS_NG_ARGS"
+		else
+			if test -z "$TORTURE_STRESS_NG_COUNT"
+			then
+				# Default to 1 stressor if count not specified
+				stress_args=$(stress_ng_generate_args 1)
+			else
+				# Evaluate the count expression, replacing N with TORTURE_ALLOTED_CPUS
+				count_expr=$(echo "$TORTURE_STRESS_NG_COUNT" | sed "s/N/$TORTURE_ALLOTED_CPUS/g")
+				eval "count=$((${count_expr}))"
+				stress_args=$(stress_ng_generate_args $count)
+			fi
+		fi
 	fi
 	if ! "$RCUTORTURE/bin/mkinitrd.sh" $stress_args
 	then
