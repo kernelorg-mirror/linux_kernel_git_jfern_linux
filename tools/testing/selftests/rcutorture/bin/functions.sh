@@ -360,3 +360,64 @@ extract_ftrace_from_console() {
 
 	capture == 2'
 }
+
+# Generate stress-ng command arguments based on CPU count
+# Usage: stress_args=$(stress_ng_generate_args count)
+stress_ng_generate_args() {
+	count=$1
+
+	# Error out if count is 0
+	if test "$count" -le 0; then
+		echo "Error: CPU count must be greater than 0" >&2
+		return 1
+	fi
+
+	cpu_count=0
+	dir_count=0
+	dirdeep_count=0
+	dirmany_count=0
+	stress_args="stress-ng"
+
+	if test "$count" -lt 4
+	then
+		remaining=$count
+	else
+		stressors_per_type=$((count / 4))
+		remaining=$((count % 4))
+
+		# Add base stressors
+		cpu_count=$stressors_per_type
+		dir_count=$stressors_per_type
+		dirdeep_count=$stressors_per_type
+		dirmany_count=$stressors_per_type
+
+		stress_args="$stress_args --cpu $stressors_per_type --cpu-method matrixprod"
+		stress_args="$stress_args --dir $stressors_per_type"
+		stress_args="$stress_args --dirdeep $stressors_per_type"
+		stress_args="$stress_args --dirmany $stressors_per_type"
+	fi
+
+	# Add remaining stressors in order
+	if test "$remaining" -gt 0; then
+		stress_args="$stress_args --cpu 1 --cpu-method matrixprod"
+		cpu_count=$((cpu_count + 1))
+		remaining=$((remaining - 1))
+	fi
+	if test "$remaining" -gt 0; then
+		stress_args="$stress_args --dir 1"
+		dir_count=$((dir_count + 1))
+		remaining=$((remaining - 1))
+	fi
+	if test "$remaining" -gt 0; then
+		stress_args="$stress_args --dirdeep 1"
+		dirdeep_count=$((dirdeep_count + 1))
+		remaining=$((remaining - 1))
+	fi
+	if test "$remaining" -gt 0; then
+		stress_args="$stress_args --dirmany 1"
+		dirmany_count=$((dirmany_count + 1))
+	fi
+
+	stress_args="$stress_args --cpu-ops 1000000 --perf -t 5"
+	echo "$stress_args"
+}
