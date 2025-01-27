@@ -146,19 +146,10 @@ static inline bool rcu_seq_started(unsigned long *sp, unsigned long s)
 
 /*
  * Given a snapshot from rcu_seq_snap(), determine whether or not a
- * full update-side operation has occurred.
+ * full update-side operation has occurred while also handling
+ * wraparounds that exceed the (ULONG_MAX / 2) safety-factor/guard-band.
  */
 static inline bool rcu_seq_done(unsigned long *sp, unsigned long s)
-{
-	return ULONG_CMP_GE(READ_ONCE(*sp), s);
-}
-
-/*
- * Given a snapshot from rcu_seq_snap(), determine whether or not a
- * full update-side operation has occurred, but do not allow the
- * (ULONG_MAX / 2) safety-factor/guard-band.
- */
-static inline bool rcu_seq_done_exact(unsigned long *sp, unsigned long s)
 {
 	unsigned long cur_s = READ_ONCE(*sp);
 
