@@ -73,6 +73,7 @@ impl Gr {
             let info = &ctxbufinfo[info_idx];
             let mem = &mem_vec[info_idx];
             let init = info.init && alloced[info_idx];
+            let mut nonmapped = skip_priv == false && info.nonmapped;
 
             let mut ent = GpuPromoteBufferEntry {
                 buffer_id: info.buffer_id,
@@ -81,10 +82,10 @@ impl Gr {
                 gpu_phys_addr: 0,
                 gpu_virt_addr: 0,
                 physattr: 0,
-                nonmapped: info.nonmapped,
+                nonmapped: nonmapped,
             };
 
-            if !info.nonmapped {
+            if !nonmapped {
                 let vma = vmm.get(false, true, false, 0, info.align, mem.size()? as u64)?;
                 let mut vmmmap = VmmMap {
                     memory: (*mem).as_ref(),
