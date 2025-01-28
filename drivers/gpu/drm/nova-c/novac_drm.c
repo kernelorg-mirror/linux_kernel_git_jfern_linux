@@ -279,7 +279,9 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 		mutex_unlock(&cli->mutex);
 		nouveau_cli_fini(cli);
 		kfree(cli);
-	}	
+	}
+	mutex_unlock(&drm->clients_lock);
+
 	nouveau_cli_fini(&drm->cli);
 	destroy_workqueue(drm->sched_wq);
 	mutex_destroy(&drm->clients_lock);
@@ -542,6 +544,7 @@ driver_stub = {
 	.num_ioctls = ARRAY_SIZE(nouveau_ioctls),
 	.fops = &nouveau_driver_fops,
 
+	.gem_prime_import_sg_table = nouveau_gem_prime_import_sg_table,
 	.name = DRIVER_NAME,
 	.desc = DRIVER_DESC,
 #ifdef GIT_REVISION
