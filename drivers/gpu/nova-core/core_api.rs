@@ -640,7 +640,8 @@ pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::n
         if cns_info.arc == core::ptr::null_mut() {
             return;
         }
-        let _cns : Arc<ChannelNonStall> = Arc::from_foreign(cns_info.arc);
+        let cns : Arc<ChannelNonStall> = Arc::from_foreign(cns_info.arc);
+        cns.unregister();
         cns_info.arc = core::ptr::null_mut();
     }
 }

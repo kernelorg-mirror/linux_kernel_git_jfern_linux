@@ -322,8 +322,8 @@ impl VfnHandler for ChannelNonStall {
     }
 }
 
-impl Drop for ChannelNonStall {
-    fn drop(&mut self) {
+impl ChannelNonStall {
+    pub(crate) fn unregister(&self) {
         pr_info!("nonstall unregistered {:#x}\n", self.nonstall);
         self.vfn.intr_block(self.nonstall);
         let _ = self.vfn.remove_handler(self.nonstall);
@@ -422,7 +422,7 @@ impl Channel {
         }, GFP_KERNEL)?;
 
 
-        pr_info!("nonstall registered {:#x}\n", nonstall);
+        pr_info!("nonstall registered {:#x} {:#x}\n", chan.runl_id, nonstall);
         let _ = gpu.vfn.add_handler(nonstall, cns.clone() as Arc<dyn VfnHandler>);
         gpu.vfn.intr_allow(nonstall);
         Ok(cns)
