@@ -20,7 +20,7 @@ pub(crate) trait VfnHandler {
 struct Inth {
     leaf: u32,
     mask: u32,
-    handler: Arc<dyn VfnHandler>,
+    handler: Option<Arc<dyn VfnHandler>>,
 }
 
 struct VfnInner {
@@ -62,9 +62,12 @@ impl irq::Handler for Vfn {
                 let mut res = 0;
                 let handlers = vfn.handlers.lock();
                 for inth in handlers.iter() {
+                    if inth.handler.is_none() {
+                        continue;
+                    }
                     if x[inth.leaf as usize] & inth.mask != 0 {
                         let _ = vfn.reset(inth.leaf, inth.mask);
-                        res = match inth.handler.handle_vfn() {
+                        res = match inth.handler.as_ref().unwrap().handle_vfn() {
                             Err(_) => { let _ = vfn.rearm(); return irq::Return::None; }
                             Ok(x) => { x }
                         };
@@ -89,7 +92,7 @@ impl irq::Handler for Vfn {
 impl Vfn {
 
     pub(crate) fn user_info() -> (u32, u32) {
-	(VFN_BASE + VFN_USER_OFFSET, VFN_USER_SIZE)
+        (VFN_BASE + VFN_USER_OFFSET, VFN_USER_SIZE)
     }
 
     pub(crate) fn new(bar: Arc<Devres<Bar0>>) -> Result<Arc<Self>> {
@@ -118,9 +121,32 @@ impl Vfn {
 
     pub(crate) fn add_handler(&self, intr: u32, handler: Arc<dyn VfnHandler>) -> Result<()> {
         let (leaf, mask) = self.xlat(intr)?;
-        self.handlers.lock().push(Inth {
-            leaf, mask, handler
+        let mut handlers = self.handlers.lock();
+        for inth in handlers.iter_mut() {
+            if inth.leaf == 0 && inth.mask == 0 {
+                inth.leaf = leaf;
+                inth.mask = mask;
+                inth.handler = Some(handler);
+                return Ok(());
+            }
+        }
+        handlers.push(Inth {
+            leaf, mask, handler: Some(handler)
         }, GFP_KERNEL)?;
+        Ok(())
+    }
+
+    pub(crate) fn remove_handler(&self, intr: u32) -> Result<()> {
+        let (leaf, mask) = self.xlat(intr)?;
+        let mut handlers = self.handlers.lock();
+        for inth in handlers.iter_mut() {
+            if inth.leaf == leaf && inth.mask == mask {
+                inth.leaf = 0;
+                inth.mask = 0;
+                inth.handler = None;
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -147,6 +173,13 @@ impl Vfn {
 
         self.reset(leaf, mask)?;
         self.allow(leaf, mask)?;
+        Ok(())
+    }
+
+    pub(crate) fn intr_block(&self, intr: u32) -> Result <()> {
+        let (leaf, mask) = self.xlat(intr)?;
+
+        self.block(leaf, mask)?;
         Ok(())
     }
 

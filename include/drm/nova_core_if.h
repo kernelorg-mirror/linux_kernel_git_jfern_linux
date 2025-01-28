@@ -233,13 +233,23 @@ int nova_core_alloc_chan(struct auxiliary_device *auxdev,
 			 const char *name,
 			 struct nova_core_chan *chan);
 
+struct nova_core_nonstall {
+	void *arc;
+};
+
 int nova_core_chan_register_nonstall(struct auxiliary_device *auxdev,
 				     struct nova_core_chan *chan,
-				     int (*cb)(void *data), void *data);
+				     int (*cb)(void *data), void *data,
+				     struct nova_core_nonstall *nonstall);
+
+void nova_core_unregister_nonstall(struct nova_core_nonstall *nonstall);
 
 int nova_core_chan_register_killed(struct auxiliary_device *auxdev,
 				   struct nova_core_chan *chan,
 				   int (*cb)(void *data), void *data);
+
+int nova_core_chan_unregister_killed(struct auxiliary_device *auxdev,
+				     struct nova_core_chan *chan);
 
 int nova_core_free_chan(struct nova_core_chan *chan);
 

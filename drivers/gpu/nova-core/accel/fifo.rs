@@ -11,7 +11,7 @@ use crate::gpu::{Gpu, GpuClient, GpuDevice, GpuDeviceVmm, GpuChanObject};
 use crate::gpu::IntrInfo;
 use crate::mmu::memory::{InstObj, VramObj};
 use crate::gsp::{GspChannel, GspManager};
-use crate::vfn::VfnHandler;
+use crate::vfn::{Vfn, VfnHandler};
 
 #[derive(Clone,Copy,Debug,PartialEq)]
 pub(crate) enum EngineType {
@@ -294,7 +294,6 @@ impl ChannelKilled {
     }
 }
 
-#[pin_data]
 pub(crate) struct Channel {
     name: &'static CStr,
     pub id: u32,
@@ -305,19 +304,29 @@ pub(crate) struct Channel {
     instbuf: InstObj,
     mthdbuf: DmaObject,
 
-    #[pin]
-    nonstall: Mutex<ChannelCbInfo>,
-
     pub mgr: Arc<dyn GspManager>,
     pub(crate) gsp_chan: Arc<GspChannel>,
 }
 
-impl VfnHandler for Channel {
+pub(crate) struct ChannelNonStall {
+    nonstall: u32,
+    cb: ChannelCbInfo,
+    vfn: Arc<Vfn>,
+}
+
+impl VfnHandler for ChannelNonStall {
     fn handle_vfn(&self) -> Result<u32> {
-        let mut locked = self.nonstall.lock();
         pr_info!("nonstall handler\n");
-        unsafe { (locked.cb.unwrap())(locked.data) };
+        unsafe { (self.cb.cb.unwrap())(self.cb.data) };
         Ok(0)
+    }
+}
+
+impl Drop for ChannelNonStall {
+    fn drop(&mut self) {
+        pr_info!("nonstall unregistered {:#x}\n", self.nonstall);
+        self.vfn.intr_block(self.nonstall);
+        let _ = self.vfn.remove_handler(self.nonstall);
     }
 }
 
@@ -342,20 +351,16 @@ impl Channel {
         gpu.gsp.bind_fifo(&gsp_chan);
         gpu.gsp.schedule_fifo(&gsp_chan, true);
 
-        Arc::pin_init(pin_init!(Self {
+        Ok(Arc::new(Self {
             name: c_str!("chan"),
             id: chid,
             runl_id,
             doorbell,
             instbuf,
             mthdbuf,
-            nonstall <- new_mutex!(ChannelCbInfo {
-                cb: None,
-                data: core::ptr::null_mut()
-            }),
             gsp_chan,
             mgr: gpu.gsp.clone()
-        }), GFP_KERNEL)
+        }, GFP_KERNEL)?)
     }
 
     pub(crate) fn alloc_obj(&self, handle: u32, oclass: u32, engine_type: EngineType, engine_inst: u8) -> Result<Arc<GpuChanObject>> {
@@ -391,23 +396,36 @@ impl Channel {
         0
     }
 
+    pub(crate) fn unregister_killed(chan: Arc<Channel>,
+                                    gpu: &Gpu) -> i32 {
+        gpu.event_handler.remove_handler(chan.id);
+        pr_info!("killed unregistered\n");
+        0
+    }
+
     pub(crate) fn register_nonstall(chan: Arc<Channel>,
                                     gpu: &Gpu,
                                     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
-                                    data: *mut core::ffi::c_void) -> i32 {
+                                    data: *mut core::ffi::c_void) -> Result<Arc<ChannelNonStall>> {
         let nonstall = match chan.mgr.find_nonstall(chan.runl_id) {
-            Err(x) => { return 0; },
+            Err(x) => { return Err(EINVAL); },
             Ok(ns) => ns
         };
 
-        let mut locked = chan.nonstall.lock();
-        locked.cb = cb;
-        locked.data = data;
+        let cns = Arc::new(ChannelNonStall {
+            nonstall,
+            cb: ChannelCbInfo {
+                cb,
+                data
+            },
+            vfn: gpu.vfn.clone(),
+        }, GFP_KERNEL)?;
+
 
         pr_info!("nonstall registered {:#x}\n", nonstall);
-        let _ = gpu.vfn.add_handler(nonstall, chan.clone() as Arc<dyn VfnHandler>);
+        let _ = gpu.vfn.add_handler(nonstall, cns.clone() as Arc<dyn VfnHandler>);
         gpu.vfn.intr_allow(nonstall);
-        0
+        Ok(cns)
     }
 
     pub(crate) fn free(&self) {
@@ -432,10 +450,28 @@ impl EventHandler {
 
     pub(crate) fn add_handler(&self, killed: ChannelKilled) -> Result<()> {
         let mut handlers = self.handlers.lock();
-
+        for handler in &mut *handlers {
+            if handler.id == 0 {
+                *handler = killed;
+                return Ok(());
+            }
+        }
         handlers.push(killed, GFP_KERNEL)?;
         Ok(())
     }
+
+    pub(crate) fn remove_handler(&self, chid: u32) {
+        let mut handlers = self.handlers.lock();
+
+        for handler in &mut *handlers {
+            if handler.id == chid {
+                handler.id = 0;
+                handler.killed.cb = None;
+                handler.killed.data = core::ptr::null_mut();
+            }
+        }
+    }
+
     pub(crate) fn handle_channel_killed(&self, chid: u32) {
         let handlers = self.handlers.lock();
 

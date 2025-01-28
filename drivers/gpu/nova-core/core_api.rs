@@ -9,6 +9,7 @@ use kernel::{
 use kernel::types::ForeignOwnable;
 use crate::accel::fifo::EngineType;
 use crate::accel::gr::GrCtx;
+use crate::accel::fifo::ChannelNonStall;
 use crate::gpu::{Gpu, GpuDevice, GpuClient, Chipset, GpuDeviceVmm, GpuChanObject};
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mmu::Mmu;
@@ -613,15 +614,35 @@ pub unsafe extern "C" fn nova_core_unmap_user(auxdev: *mut bindings::auxiliary_d
 pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings::auxiliary_device,
                                                           chan_ptr: *mut bindings::nova_core_chan,
                                                           cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
-                                                          data: *mut core::ffi::c_void) -> i32 {
+                                                          data: *mut core::ffi::c_void,
+                                                          cns_ptr: *mut bindings::nova_core_nonstall) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
     let gpu = unsafe { &(*core_driver).gpu };
+    let cns_info = unsafe { &mut (*cns_ptr) };
 
     let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
-    Channel::register_nonstall(chan.clone(), gpu, cb, data);
+    let cns = match Channel::register_nonstall(chan.clone(), gpu, cb, data) {
+        Err(x) => { return x.to_errno(); },
+        Ok(x) => x
+    };
+
+    cns_info.arc = cns.into_foreign() as *mut core::ffi::c_void;
     0
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::nova_core_nonstall) {
+    let cns_info = unsafe { &mut (*cns_ptr) };
+    unsafe {
+        if cns_info.arc == core::ptr::null_mut() {
+            return;
+        }
+        let _cns : Arc<ChannelNonStall> = Arc::from_foreign(cns_info.arc);
+        cns_info.arc = core::ptr::null_mut();
+    }
 }
 
 #[no_mangle]
@@ -637,6 +658,19 @@ pub unsafe extern "C" fn nova_core_chan_register_killed(auxdev: *mut bindings::a
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
     Channel::register_killed(chan.clone(), gpu, cb, data);
+    0
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+pub unsafe extern "C" fn nova_core_chan_unregister_killed(auxdev: *mut bindings::auxiliary_device,
+                                                          chan_ptr: *mut bindings::nova_core_chan) -> i32 {
+    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
+    let gpu = unsafe { &(*core_driver).gpu };
+    let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
+
+    let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
+    Channel::unregister_killed(chan.clone(), gpu);
     0
 }
 
