@@ -102,7 +102,8 @@ nouveau_fence_context_del(struct nouveau_fence_chan *fctx)
 {
 	cancel_work_sync(&fctx->uevent_work);
 	nouveau_fence_context_kill(fctx, 0);
-	//	nvif_event_dtor(&fctx->event);
+
+	nova_core_unregister_nonstall(&fctx->nonstall);
 	fctx->dead = 1;
 
 	/*
@@ -203,7 +204,8 @@ nouveau_fence_context_new(struct nouveau_channel *chan, struct nouveau_fence_cha
 	nova_core_chan_register_nonstall(drm->auxdev,
 					 &chan->chan.nova,
 					 nouveau_fence_wait_uevent_handler,
-					 (void *)fctx);
+					 (void *)fctx,
+					 &fctx->nonstall);
 
 	WARN_ON(ret);
 }

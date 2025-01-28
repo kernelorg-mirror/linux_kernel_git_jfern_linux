@@ -86,17 +86,13 @@ nouveau_channel_del(struct nouveau_channel **pchan)
 		if (chan->fence)
 			nouveau_fence(chan->cli->drm)->context_del(chan);
 
-		nova_core_free_chan(&chan->chan.nova);
+		if (chan->userd.mem.bar1_map_handle)
+			nova_core_mem_bar1_unmap(chan->cli->drm->auxdev, &chan->userd.mem);
 		nova_core_free_mem(&chan->userd.mem);
-//		if (chan->chan.impl)
-//			nouveau_svmm_part(chan->vmm->svmm, chan->inst);
 
-
-//		nvif_ctxdma_dtor(&chan->vram);
-//		nvif_event_dtor(&chan->kill);
-//		nvif_object_unmap_cpu(&chan->userd.map);
-//		nvif_chan_dtor(&chan->chan);
-//		nvif_ctxdma_dtor(&chan->push.ctxdma);
+		nova_core_chan_unregister_killed(chan->cli->drm->auxdev, &chan->chan.nova);
+		
+		nova_core_free_chan(&chan->chan.nova);
 		nouveau_vma_del(&chan->push.vma);
 		nouveau_bo_unmap(chan->push.buffer);
 		if (chan->push.buffer && chan->push.buffer->bo.pin_count)

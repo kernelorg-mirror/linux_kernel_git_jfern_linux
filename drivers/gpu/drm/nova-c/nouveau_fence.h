@@ -44,7 +44,7 @@ struct nouveau_fence_chan {
 	char name[32];
 
 	struct work_struct uevent_work;
-  //	struct nvif_event event;
+	struct nova_core_nonstall nonstall;
 	int notify_ref, dead, killed;
 };
 
