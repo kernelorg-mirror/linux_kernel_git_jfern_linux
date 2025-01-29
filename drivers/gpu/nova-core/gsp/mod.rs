@@ -310,7 +310,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn get_engine_bitmap(&self) -> u64;
     fn get_gr_ctx_info(&self) -> &KVec<CtxBufInfo>;
     fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<()>;
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
 
     fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
     fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
