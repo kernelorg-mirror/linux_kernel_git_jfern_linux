@@ -96,7 +96,7 @@ impl MmuPt {
 }
 
 pub(crate) const NVKM_MEM_VRAM: u8 = 0x1;
-const NVKM_MEM_HOST: u8 = 0x2;
+pub(crate) const NVKM_MEM_HOST: u8 = 0x2;
 const NVKM_MEM_COMP: u8 = 0x4;
 const NVKM_MEM_DISP: u8 = 0x8;
 pub(crate) struct MmuHeap {
@@ -106,8 +106,8 @@ pub(crate) struct MmuHeap {
 
 const NVKM_MEM_KIND: u8 = 0x10;
 const NVKM_MEM_MAPPABLE: u8 = 0x20;
-const NVKM_MEM_COHERENT: u8 = 0x40;
-const NVKM_MEM_UNCACHED: u8 = 0x80;
+pub(crate) const NVKM_MEM_COHERENT: u8 = 0x40;
+pub(crate) const NVKM_MEM_UNCACHED: u8 = 0x80;
 
 pub(crate) struct MmuType {
     pub mmu_type: u8,

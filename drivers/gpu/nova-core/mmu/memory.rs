@@ -12,6 +12,7 @@ use kernel::io::Io;
 use kernel::page::{PAGE_SIZE, PAGE_SHIFT};
 use crate::order_base_2;
 use crate::gpu::GpuBase;
+use crate::mmu::mmu::{NVKM_MEM_COHERENT, NVKM_MEM_UNCACHED};
 use crate::mmu::mm::MemRangeNode;
 use crate::mmu::mm::MemRange;
 use crate::mmu::vmm::{Vmm,Vma,VmmMap,VmmInner};
@@ -158,7 +159,7 @@ impl VramObj {
     pub(crate) fn new(mm: Arc<MemRange>, heap: u8, mm_type: u8, rpage: u8, size: usize, contig: bool, back: bool) -> Result<Self> {
         let page: u8 = core::cmp::max(rpage, NVKM_MM_PAGE_SHIFT as u8);
         let szalign: usize = (1 << page) >> NVKM_MM_PAGE_SHIFT;
-        let szmax: usize = align(size, 1 << page) >> NVKM_MM_PAGE_SHIFT;
+        let mut szmax: usize = align(size, 1 << page) >> NVKM_MM_PAGE_SHIFT;
         let szmin: usize;
 
         if contig {
@@ -169,23 +170,32 @@ impl VramObj {
 
         let mut nodes = KVec::with_capacity(1, GFP_KERNEL)?;
 
-        let node;
+        loop {
+            let node;
 
-        if back {
-            node = mm.tail(heap, mm_type, szmax, szmin, szalign)?;
-        } else {
-            node = mm.head(heap, mm_type, szmax, szmin, szalign)?;
+            if back {
+                node = mm.tail(heap, mm_type, szmax, szmin, szalign)?;
+            } else {
+                node = mm.head(heap, mm_type, szmax, szmin, szalign)?;
+            }
+
+            szmax -= node.size();
+
+            nodes.push(VramNode {
+                node
+            }, GFP_KERNEL);
+
+            if szmax == 0 {
+                break;
+            }
         }
-        nodes.push(VramNode {
-            node
-        }, GFP_KERNEL);
         let ret = Self {
             nodes,
             mm: Some(mm.clone()),
             page
         };
 
-        pr_info!("allocated vram: {:#x} {:#x}\n", ret.addr()?, ret.size()?);
+        pr_info!("allocated vram: {:#x} {:#x} {}\n", ret.addr()?, ret.size()?, ret.nodes.len());
 
         Ok(ret)
     }
@@ -226,6 +236,7 @@ impl Drop for VramObj {
         match &self.mm {
             Some(mmp) => {
                 for node in &self.nodes {
+                    pr_info!("freeing vram {:#x} {:#x}\n", node.node.addr(), node.node.size());
                     mmp.free(node.node.clone());
                 }
             }
@@ -649,9 +660,15 @@ impl Memory for DmaMemObj {
 
 impl DmaMemObj {
     pub(crate) fn new(addr: *mut bindings::dma_addr_t, heap: u8, mm_type: u8, rpage: u8, size: u64) -> Result<Self> {
+        let target;
 
+        if (mm_type & NVKM_MEM_COHERENT) != 0 && (mm_type & NVKM_MEM_UNCACHED) == 0 {
+            target = MemTarget::Host;
+        } else {
+            target = MemTarget::Ncoh;
+        }
         Ok(Self {
-            target: MemTarget::Host,
+            target,
             pages: size >> PAGE_SHIFT,
             addr_array: addr,
         })
@@ -723,7 +740,7 @@ impl SglMemObj {
 
         Ok(Self {
             target: MemTarget::Host,
-	    pages: size >> PAGE_SHIFT,
+            pages: size >> PAGE_SHIFT,
             sgl,
         })
     }
