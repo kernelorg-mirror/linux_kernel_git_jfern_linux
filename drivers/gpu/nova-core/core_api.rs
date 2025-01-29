@@ -305,15 +305,16 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
     let gpu = unsafe { &(*core_driver).gpu };
     let mmu: ArcBorrow<'_, Mmu> = unsafe { Arc::borrow((*mmu_ptr).arc) };
 
-    if (*mmu).types[mmu_type as usize].mmu_type & NVKM_MEM_VRAM != 0 {
+    let mmu_internal_type = (*mmu).types[mmu_type as usize].mmu_type;
+    if mmu_internal_type & NVKM_MEM_VRAM != 0 {
         let vram = match VramObj::new(gpu.instmem.vram_mm.clone(),
-                                      0, mmu_type, page, size as usize, contig, false) {
+                                      0, mmu_internal_type, page, size as usize, contig, false) {
             Err(x) => { return x.to_errno(); }
             Ok(x) => x
         };
 
         let nodes = vram.nodes.len();
-        ncobj.mem_type = mmu_type;
+        ncobj.mem_type = mmu_internal_type;
         ncobj.addr = vram.addr().unwrap();
         ncobj.size = vram.size().unwrap();
         ncobj.page = vram.page();
@@ -329,7 +330,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
                 Err(x) => { return x.to_errno(); }
                 Ok(x) => x
             };
-            ncobj.mem_type = mmu_type;
+            ncobj.mem_type = mmu_internal_type;
             ncobj.page = memobj.page();
             ncobj.size = memobj.size().unwrap();
             ncobj.obj_type = bindings::NVIF_MEM_OBJ_SGL;
@@ -338,11 +339,11 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
             pr_info!("allocated usgl {:?} {:?} sz:{:#x}\n", unsafe { CStr::from_char_ptr(name) }, ncobj.obj,
                      ncobj.size);
         } else {
-            let memobj = match DmaMemObj::new(dma, 0, mmu_type, page, size) {
+            let memobj = match DmaMemObj::new(dma, 0, mmu_internal_type, page, size) {
                 Err(x) => { return x.to_errno(); }
                 Ok(x) => x
             };
-            ncobj.mem_type = mmu_type;
+            ncobj.mem_type = mmu_internal_type;
             ncobj.page = memobj.page();
             ncobj.size = memobj.size().unwrap();
             ncobj.obj_type = bindings::NVIF_MEM_OBJ_DMA;
