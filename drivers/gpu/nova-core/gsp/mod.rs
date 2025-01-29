@@ -256,19 +256,19 @@ pub(crate) struct GspManager {
 pub(crate) trait GspManager: Send + Sync {
     fn alloc_client_device(&self, client_id: u32) -> Result<(Arc<GspClient>,
                                                              Arc<GspDevice>)>;
-    fn free_client(&self, client: Arc<GspClient>) -> Result<()>;
-    fn free_device(&self, device: Arc<GspDevice>) -> Result<()>;
+    fn free_client(&self, client: &GspClient) -> Result<()>;
+    fn free_device(&self, device: &GspDevice) -> Result<()>;
 
-    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm, vmm_type: u8) -> Result<GspVa>;
+    fn alloc_vaspace(&self, device: &GspDevice, vmm: &Vmm, vmm_type: u8) -> Result<GspVa>;
     fn free_vaspace(&self, va: &GspVa) -> Result<()>;
 
-    fn alloc_event(&self, device: Arc<GspDevice>, handle: u32, id: u32) -> Result<GspEvent>;
+    fn alloc_event(&self, device: &GspDevice, handle: u32, id: u32) -> Result<GspEvent>;
     fn free_event(&self, event: &GspEvent) -> Result<()>;
 
     fn alloc_chid(&self) -> Result<usize>;
     fn free_chid(&self, chid: usize);
     fn alloc_fifo_chan(&self,
-                       device: Arc<GspDevice>,
+                       device: &GspDevice,
                        runl_id: u32,
                        va: &GspVa,
                        inst: &InstObj,
@@ -289,13 +289,13 @@ pub(crate) trait GspManager: Send + Sync {
 
 
     fn alloc_golden_chan(&self,
-                         device: Arc<GspDevice>,
+                         device: &GspDevice,
                          va: &GspVa,
                          inst: &InstObj,
                          fifo_class: u32) -> Result<Arc<GspChannel>>;
 
-    fn alloc_ce_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>>;
-    fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>>;
+    fn alloc_ce_obj(&self, channel: &GspChannel, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>>;
+    fn alloc_chan_obj(&self, channel: &GspChannel, handle: u32, oclass: u32) -> Result<Arc<GspObject>>;
     fn free_chan_obj(&self, object: &GspObject) -> Result<()>;
 
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()>;
@@ -312,10 +312,10 @@ pub(crate) trait GspManager: Send + Sync {
     fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
                       bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
 
-    fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
-    fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32;
-    fn bootload_vgpu_plugin_task(&self, device: Arc<GspDevice>, params: *const bindings::bootload_vgpu) -> i32;
-    fn add_vgpu_type(&self, device: Arc<GspDevice>, count: u32, ptr: *const core::ffi::c_void) -> i32;
+    fn cleanup_vgpu_plugin(&self, device: &GspDevice, gfid: u32) -> i32;
+    fn shutdown_vgpu_plugin_task(&self, device: &GspDevice, gfid: u32) -> i32;
+    fn bootload_vgpu_plugin_task(&self, device: &GspDevice, params: *const bindings::bootload_vgpu) -> i32;
+    fn add_vgpu_type(&self, device: &GspDevice, count: u32, ptr: *const core::ffi::c_void) -> i32;
 
     fn find_nonstall(&self, runl_id: u32) -> Result<u32>;
 }
@@ -330,7 +330,7 @@ impl GspManager for GspManager::ver {
         Ok((client, device))
     }
 
-    fn free_client(&self, client: Arc<GspClient>) -> Result<()> {
+    fn free_client(&self, client: &GspClient) -> Result<()> {
         let mut msg = FreeMsg::ver::get(&client.object)?;
 
         let gsp_objs = self.gsp_objs.clone();
@@ -340,7 +340,7 @@ impl GspManager for GspManager::ver {
         Ok(())
     }
 
-    fn free_device(&self, device: Arc<GspDevice>) -> Result<()>{
+    fn free_device(&self, device: &GspDevice) -> Result<()>{
         let mut msg = FreeMsg::ver::get(&device.subdevice)?;
 
         let gsp_objs = self.gsp_objs.clone();
@@ -362,7 +362,7 @@ impl GspManager for GspManager::ver {
     }
 
     fn alloc_fifo_chan(&self,
-                       device: Arc<GspDevice>,
+                       device: &GspDevice,
                        runl_id: u32,
                        va: &GspVa,
                        inst: &InstObj,
@@ -384,7 +384,7 @@ impl GspManager for GspManager::ver {
         }
         pr_info!("alloc fifo et:{:?} ei:{} fc:{:#x} chid:{} offset:{:#x} length:{:#x} \n", engine_type, engine_inst, fifo_class, chid, offset, length);
 
-        let mut msg = FifoAlloc::ver::new(&device, engine_type, engine_inst, va,
+        let mut msg = FifoAlloc::ver::new(device, engine_type, engine_inst, va,
                                           inst, userd, mthdbuf,
                                           chid, fifo_class, offset, length, chan_priv)?;
 
@@ -432,11 +432,11 @@ impl GspManager for GspManager::ver {
     }
 
     fn alloc_golden_chan(&self,
-                         device: Arc<GspDevice>,
+                         device: &GspDevice,
                          va: &GspVa,
                          inst: &InstObj,
                          fifo_class: u32) -> Result<Arc<GspChannel>> {
-        let mut msg = FifoAlloc::ver::golden(&device, va,
+        let mut msg = FifoAlloc::ver::golden(device, va,
                                           inst, fifo_class)?;
 
         let gsp_objs = self.gsp_objs.clone();
@@ -455,8 +455,8 @@ impl GspManager for GspManager::ver {
 
     }
 
-    fn alloc_ce_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>> {
-        let mut msg = CEAlloc::ver::new(&channel, handle, oclass, inst as u32)?;
+    fn alloc_ce_obj(&self, channel: &GspChannel, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>> {
+        let mut msg = CEAlloc::ver::new(channel, handle, oclass, inst as u32)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -469,7 +469,7 @@ impl GspManager for GspManager::ver {
         }, GFP_KERNEL)?)
     }
 
-    fn alloc_chan_obj(&self, channel: Arc<GspChannel>, handle: u32, oclass: u32) -> Result<Arc<GspObject>> {
+    fn alloc_chan_obj(&self, channel: &GspChannel, handle: u32, oclass: u32) -> Result<Arc<GspObject>> {
         let mut msg = AllocMsg::ver::get(Some(&channel.object.client.as_ref().unwrap()),
                                          Some(&channel.object),
                                          handle,
@@ -494,8 +494,8 @@ impl GspManager for GspManager::ver {
         Ok(())
     }
 
-    fn alloc_event(&self, device: Arc<GspDevice>, handle: u32, id: u32) -> Result<GspEvent> {
-        let mut msg = AllocEvent::ver::new(&device, handle, id)?;
+    fn alloc_event(&self, device: &GspDevice, handle: u32, id: u32) -> Result<GspEvent> {
+        let mut msg = AllocEvent::ver::new(device, handle, id)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -526,9 +526,9 @@ impl GspManager for GspManager::ver {
     }
 
 
-    fn alloc_vaspace(&self, device: Arc<GspDevice>, vmm: &Vmm, vmm_type: u8) -> Result<GspVa> {
+    fn alloc_vaspace(&self, device: &GspDevice, vmm: &Vmm, vmm_type: u8) -> Result<GspVa> {
 	let id = if vmm_type == 3 { 1 } else { 0 };
-        let mut msg = AllocVMM::ver::new(&device, id)?;
+        let mut msg = AllocVMM::ver::new(device, id)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -624,8 +624,8 @@ impl GspManager for GspManager::ver {
         msg.push(&mut gsp_objs.queues)
     }
 
-    fn cleanup_vgpu_plugin(&self, device: Arc<GspDevice>, gfid: u32) -> i32 {
-        let mut msg = CleanupVgpuPlugin::ver::new(&device, gfid).unwrap();
+    fn cleanup_vgpu_plugin(&self, device: &GspDevice, gfid: u32) -> i32 {
+        let mut msg = CleanupVgpuPlugin::ver::new(device, gfid).unwrap();
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -635,8 +635,8 @@ impl GspManager for GspManager::ver {
         }
     }
 
-    fn shutdown_vgpu_plugin_task(&self, device: Arc<GspDevice>, gfid: u32) -> i32 {
-        let mut msg = ShutdownVgpuPluginTask::ver::new(&device, gfid).unwrap();
+    fn shutdown_vgpu_plugin_task(&self, device: &GspDevice, gfid: u32) -> i32 {
+        let mut msg = ShutdownVgpuPluginTask::ver::new(device, gfid).unwrap();
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -646,8 +646,8 @@ impl GspManager for GspManager::ver {
         }
     }
 
-    fn bootload_vgpu_plugin_task(&self, device: Arc<GspDevice>, params: *const bindings::bootload_vgpu) -> i32 {
-        let mut msg = BootloadVgpuPluginTask::ver::new(&device, params).unwrap();
+    fn bootload_vgpu_plugin_task(&self, device: &GspDevice, params: *const bindings::bootload_vgpu) -> i32 {
+        let mut msg = BootloadVgpuPluginTask::ver::new(device, params).unwrap();
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
         match msg.push(&mut gsp_objs.queues) {
@@ -656,7 +656,7 @@ impl GspManager for GspManager::ver {
         }
     }
 
-    fn add_vgpu_type(&self, device: Arc<GspDevice>, count: u32, ptr: *const core::ffi::c_void) -> i32 {
+    fn add_vgpu_type(&self, device: &GspDevice, count: u32, ptr: *const core::ffi::c_void) -> i32 {
         let mut msg = PgpuAddVgpuType::ver::new(&device, count, ptr).unwrap();
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();

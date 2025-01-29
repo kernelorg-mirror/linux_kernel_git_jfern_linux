@@ -470,7 +470,7 @@ pub(crate) struct GpuDevice {
 
 impl Drop for GpuDevice {
     fn drop(&mut self) {
-        let _ = self.mgr.free_device(self.gsp.clone());
+        let _ = self.mgr.free_device(&self.gsp);
     }
 }
 
@@ -485,7 +485,7 @@ impl Drop for GpuClient {
     fn drop(&mut self) {
 
         self.allocator.free(self.gsp.get_client_handle().unwrap() & 0xffff);
-        let _ = self.mgr.free_client(self.gsp.clone());
+        let _ = self.mgr.free_client(&self.gsp);
 
     }
 }
@@ -523,11 +523,11 @@ impl Gpu {
         Ok(Arc::new(mmu, GFP_KERNEL)?)
     }
 
-    pub(crate) fn alloc_vmm(&self, device: Arc<GpuDevice>,
+    pub(crate) fn alloc_vmm(&self, device: &GpuDevice,
                             addr: u64, size: u64, vmm_type: u8) -> Result<Arc<GpuDeviceVmm>> {
         let vmm = Vmm::new(self.instmem.clone(), addr, size, vmm_type, false, false, None,
                            None, true, "uvmm")?;
-        let va = self.gsp.alloc_vaspace(device.gsp.clone(), &vmm, vmm_type)?;
+        let va = self.gsp.alloc_vaspace(&device.gsp, &vmm, vmm_type)?;
 
         Ok(Arc::new(GpuDeviceVmm {
             vmm,
@@ -536,8 +536,8 @@ impl Gpu {
         }, GFP_KERNEL)?)
     }
 
-    pub(crate) fn gr_ctx(&self, device: Arc<GpuDevice>, chan: Arc<Channel>,
-                         vmm: Arc<GpuDeviceVmm>) -> Result<Arc<GrCtx>>{
+    pub(crate) fn gr_ctx(&self, device: &GpuDevice, chan: &Channel,
+                         vmm: &GpuDeviceVmm) -> Result<Arc<GrCtx>>{
         Gr::new_ctx(self.instmem.clone(), self.gsp.clone(),
                     device, chan,
                     &vmm.vmm, &self.gr_ctx_bufs)
@@ -557,16 +557,15 @@ impl Gpu {
     }
 
     pub(crate) fn create_channel(&self,
-                                 client: Arc<GpuClient>,
-                                 device: Arc<GpuDevice>,
+                                 device: &GpuDevice,
                                  runl: u32,
                                  chan_priv: bool,
                                  offset: u64,
                                  length: u64,
-                                 vmm: Arc<GpuDeviceVmm>,
+                                 vmm: &GpuDeviceVmm,
                                  userd: &VramObj) -> Result<Arc<Channel>> {
 
-        Ok(Channel::new(self, client, device, &vmm, userd, runl, offset, length, chan_priv)?)
+        Ok(Channel::new(self, device, &vmm, userd, runl, offset, length, chan_priv)?)
     }
 
     pub(crate) fn get_engine_bitmap(&self) -> u64 {

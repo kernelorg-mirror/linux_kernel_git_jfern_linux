@@ -208,26 +208,26 @@ unsafe extern "C" fn free_chids(_handle: *mut core::ffi::c_void, offset: i32, co
 unsafe extern "C" fn shutdown_vgpu_plugin_task(client: *mut bindings::nvidia_vgpu_gsp_client,
                                                gfid: u32) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-    device_borrow.mgr.shutdown_vgpu_plugin_task(device_borrow.gsp.clone(), gfid)
+    device_borrow.mgr.shutdown_vgpu_plugin_task(&device_borrow.gsp, gfid)
 }
 
 unsafe extern "C" fn cleanup_vgpu_plugin(client: *mut bindings::nvidia_vgpu_gsp_client,
                                          gfid: u32) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-    device_borrow.mgr.cleanup_vgpu_plugin(device_borrow.gsp.clone(), gfid)
+    device_borrow.mgr.cleanup_vgpu_plugin(&device_borrow.gsp, gfid)
 }
 
 unsafe extern "C" fn bootload_vgpu_plugin_task(client: *mut bindings::nvidia_vgpu_gsp_client,
                                                params: *const bindings::bootload_vgpu) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-    device_borrow.mgr.bootload_vgpu_plugin_task(device_borrow.gsp.clone(), params)
+    device_borrow.mgr.bootload_vgpu_plugin_task(&device_borrow.gsp, params)
 }
 
 unsafe extern "C" fn add_vgpu_info(client: *mut bindings::nvidia_vgpu_gsp_client,
                                    count: u32,
                                    ptr: *const core::ffi::c_void) -> i32 {
     let device_borrow: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-    device_borrow.mgr.add_vgpu_type(device_borrow.gsp.clone(), count, ptr)
+    device_borrow.mgr.add_vgpu_type(&device_borrow.gsp, count, ptr)
 }
 
 unsafe extern "C" fn get_engine_bitmap(handle: *mut core::ffi::c_void, bitmap: *mut u64) {

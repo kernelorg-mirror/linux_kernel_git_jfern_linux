@@ -130,9 +130,9 @@ impl Gr {
         let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
                                 false, None, None, true, "grGoldenVmm")?;
 
-        let gold_va = gsp.alloc_vaspace(internal_device.gsp.clone(), &gold_vmm, NVKM_VMM_TYPE_UNMANAGED)?;
+        let gold_va = gsp.alloc_vaspace(&internal_device.gsp, &gold_vmm, NVKM_VMM_TYPE_UNMANAGED)?;
 
-        let gold_chan = gsp.alloc_golden_chan(internal_device.gsp.clone(),
+        let gold_chan = gsp.alloc_golden_chan(&internal_device.gsp,
                                               &gold_va,
                                               &gold_inst,
                                               base.spec.gpu_consts.fifo_class)?;
@@ -143,7 +143,7 @@ impl Gr {
         let vma_addrs = Self::promote_ctx(gsp.clone(), &gold_vmm, &internal_device.gsp,
                                           &gold_chan, &alloced, &mem_vec, &ctxbufinfo)?;
 
-        let gold_obj = gsp.alloc_chan_obj(gold_chan.clone(), 0x97000000, base.spec.gpu_consts.gr_classes[2])?;
+        let gold_obj = gsp.alloc_chan_obj(&gold_chan, 0x97000000, base.spec.gpu_consts.gr_classes[2])?;
 
         gsp.free_chan_obj(&gold_obj);
 
@@ -161,7 +161,7 @@ impl Gr {
     }
 
     pub(crate) fn new_ctx(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>,
-                          device: Arc<GpuDevice>, channel: Arc<Channel>,
+                          device: &GpuDevice, channel: &Channel,
                           vmm: &Vmm, golden: &KVec<Arc<InstObj>>) -> Result<Arc<GrCtx>> {
         let ctxbufinfo = gsp.get_gr_ctx_info();
         let (alloced, mem_vec) = Self::alloc_ctx_bufs(instmem.clone(), Some(golden), ctxbufinfo)?;

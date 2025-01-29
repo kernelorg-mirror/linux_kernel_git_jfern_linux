@@ -335,8 +335,9 @@ impl ChannelNonStall {
     }
 }
 
+
 impl Channel {
-    pub(crate) fn new(gpu: &Gpu, client: Arc<GpuClient>, device: Arc<GpuDevice>,
+    pub(crate) fn new(gpu: &Gpu, device: &GpuDevice,
                       vmm: &GpuDeviceVmm, userd: &VramObj, runl_id: u32, offset: u64, length: u64, chan_priv: bool) -> Result<Arc<Self>> {
         let chid = gpu.gsp.alloc_chid()? as u32;
         let mthdbuf_size = gpu.gsp.get_mthdbuf_size();
@@ -349,7 +350,7 @@ impl Channel {
         let doorbell = (runl_id << 16) | chid;
         let mthdbuf = DmaObject::new_cleared(&gpu.base.dev, mthdbuf_size as usize, "mthdbuf")?;
 
-        let gsp_chan = gpu.gsp.alloc_fifo_chan(device.gsp.clone(), runl_id, &vmm.va, &instbuf,
+        let gsp_chan = gpu.gsp.alloc_fifo_chan(&device.gsp, runl_id, &vmm.va, &instbuf,
                                                userd, &mthdbuf, gpu.base.spec.gpu_consts.fifo_class, chid, offset, length, chan_priv)?;
 
 
@@ -371,10 +372,10 @@ impl Channel {
     pub(crate) fn alloc_obj(&self, handle: u32, oclass: u32, engine_type: EngineType, engine_inst: u8) -> Result<Arc<GpuChanObject>> {
         let gsp = match engine_type {
             EngineType::CE => {
-                self.mgr.alloc_ce_obj(self.gsp_chan.clone(), handle, oclass, engine_inst)?
+                self.mgr.alloc_ce_obj(&self.gsp_chan, handle, oclass, engine_inst)?
             }
             _ => {
-                self.mgr.alloc_chan_obj(self.gsp_chan.clone(), handle, oclass)?
+                self.mgr.alloc_chan_obj(&self.gsp_chan, handle, oclass)?
             }
         };
         Ok(Arc::new(GpuChanObject {

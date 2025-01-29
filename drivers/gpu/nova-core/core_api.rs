@@ -224,7 +224,7 @@ pub unsafe extern "C" fn nova_core_alloc_vmm(auxdev: *mut bindings::auxiliary_de
 
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
 
-    let gpu_vmm = match gpu.alloc_vmm(dev_arc, vmm_start, vmm_size, vmm_type) {
+    let gpu_vmm = match gpu.alloc_vmm(&dev_arc, vmm_start, vmm_size, vmm_type) {
         Err(x) => { return x.to_errno() }
         Ok(x) => { x }
     };
@@ -508,20 +508,18 @@ pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_d
 
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
     let gpu = unsafe { &(*core_driver).gpu };
-    let cli: ArcBorrow<'_, GpuClient>=  unsafe { Arc::borrow((*client).gsp_client) };
     let dev: ArcBorrow<'_, GpuDevice>=  unsafe { Arc::borrow((*client).gsp_device) };
     let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
 
-    let cli_arc: Arc<GpuClient> = Arc::<GpuClient>::from(cli);
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
     let vmm_arc: Arc<GpuDeviceVmm> = Arc::<GpuDeviceVmm>::from(vmm);
 
     let ncchan = unsafe { &mut (*chan) };
     let userd_obj : &VramObj = unsafe { KBox::borrow((*userd).obj) };
-    let gpu_chan = match gpu.create_channel(cli_arc, dev_arc,
+    let gpu_chan = match gpu.create_channel(&dev_arc,
                                             runl as u32, chan_priv,
                                             offset, length,
-                                            vmm_arc, userd_obj) {
+                                            &vmm_arc, userd_obj) {
         Err(x) => { return x.to_errno() }
         Ok(x) => { x }
     };
@@ -694,7 +692,7 @@ pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
     let vmm_arc: Arc<GpuDeviceVmm> = Arc::<GpuDeviceVmm>::from(vmm);
 
-    let gr_ctx_arc = match gpu.gr_ctx(dev_arc.clone(), chan.clone(), vmm_arc.clone()) {
+    let gr_ctx_arc = match gpu.gr_ctx(&dev_arc, &chan, &vmm_arc) {
         Err(x) => { return x.to_errno(); },
         Ok(gr) => gr
     };
