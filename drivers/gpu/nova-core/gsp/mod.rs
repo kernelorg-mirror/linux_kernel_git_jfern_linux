@@ -616,9 +616,9 @@ impl GspManager for GspManager::ver {
     }
 
     fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<()> {
+                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
         let mut msg = GpuPromoteCtx::ver::new_promote_gr(device, channel,
-                                                         bufferEntries, skip_priv)?;
+                                                         bufferEntries)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -874,7 +874,8 @@ impl GspManager::ver {
                 global: CtxBufMap::ver[map_idx].global,
                 init: CtxBufMap::ver[map_idx].init,
                 ro: CtxBufMap::ver[map_idx].ro,
-                nonmapped: CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
+                priv_access_map: CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
+                unrestricted_priv_access_map: false,
             }, GFP_KERNEL)?;
 
             if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
@@ -887,7 +888,8 @@ impl GspManager::ver {
                     global: buf_info[last_ent].global,
                     init: buf_info[last_ent].init,
                     ro:  buf_info[last_ent].ro,
-                    nonmapped: false,
+                    priv_access_map: false,
+                    unrestricted_priv_access_map: true,
                 }, GFP_KERNEL)?;
             }
         }

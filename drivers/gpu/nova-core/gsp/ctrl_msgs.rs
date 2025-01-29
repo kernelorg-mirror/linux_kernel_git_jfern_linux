@@ -450,33 +450,22 @@ pub(crate) struct GpuPromoteCtx {
 #[versions(GSP)]
 impl GpuPromoteCtx::ver {
     pub(crate) fn new_promote_gr(device: &GspDevice, channel: &GspChannel,
-                                 entries: &KVec<GpuPromoteBufferEntry>, skip_priv: bool) -> Result<Self> {
+                                 entries: &KVec<GpuPromoteBufferEntry>) -> Result<Self> {
         let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::str_size();
         let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_PROMOTE_CTX, msg_size, false)?;
-
-
-        let mut num_ents = entries.len();
-        if skip_priv {
-            num_ents -= 1;
-        }
 
         let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS::new(ctrl.get_data_ptr())
             .engineType(1)
             .hChanClient(device.object.client.as_ref().unwrap().object.handle)
             .hObject(channel.object.handle)
-            .entryCount(num_ents as u32);
+            .entryCount(entries.len() as u32);
 
         pr_info!("promote_gr: dev:{:#x} chan:{:#x} ents:{}\n",
                  device.object.client.as_ref().unwrap().object.handle,
                  channel.object.handle,
-                 num_ents);
+                 entries.len());
 
-        for i in 0..num_ents {
-            let mut nonmapped = entries[i].nonmapped;
-
-            if skip_priv && entries[i].buffer_id as u32 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
-                nonmapped = false;
-            }
+        for i in 0..entries.len() {
             pr_info!("promote {}: pa:{:#x}/{:#x} sz {:#x} va {:#x} init:{} nm:{}\n",
                      entries[i].buffer_id,
                      entries[i].gpu_phys_addr,
@@ -484,7 +473,7 @@ impl GpuPromoteCtx::ver {
                      entries[i].size,
                      entries[i].gpu_virt_addr,
                      entries[i].initialize,
-                     nonmapped);
+                     entries[i].nonmapped);
             let _ent = msg.new_S_promoteEntry(i as isize)
                 .gpuPhysAddr(entries[i].gpu_phys_addr)
                 .gpuVirtAddr(entries[i].gpu_virt_addr)
@@ -492,7 +481,7 @@ impl GpuPromoteCtx::ver {
                 .size(entries[i].size)
                 .bufferId(entries[i].buffer_id)
                 .bInitialize(entries[i].initialize as u8)
-                .bNonmapped(nonmapped as u8);
+                .bNonmapped(entries[i].nonmapped as u8);
         }
 
         Ok(Self {

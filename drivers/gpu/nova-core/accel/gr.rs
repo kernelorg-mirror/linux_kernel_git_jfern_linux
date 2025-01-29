@@ -23,7 +23,8 @@ pub(crate) struct CtxBufInfo {
     pub global: bool,
     pub init: bool,
     pub ro: bool,
-    pub nonmapped: bool,
+    pub priv_access_map: bool,
+    pub unrestricted_priv_access_map: bool,
 }
 
 pub(crate) struct GrCtx {
@@ -57,6 +58,9 @@ impl Gr {
                                              1 << info.page, info.init, info.init)?, GFP_KERNEL)?;
                 alloced.push(true, GFP_KERNEL)?;
             } else {
+                if info.unrestricted_priv_access_map {
+                    continue;
+                }
                 inst = golden.unwrap()[info_idx].clone();
                 alloced.push(false, GFP_KERNEL)?;
             }
@@ -65,15 +69,16 @@ impl Gr {
         Ok((alloced, vec))
     }
 
-    fn promote_ctx(gsp: Arc<dyn GspManager>, vmm: &Vmm, device: &GspDevice, chan: &GspChannel, alloced: &KVec<bool>, mem_vec: &KVec<Arc<InstObj>>, ctxbufinfo: &KVec<CtxBufInfo>, skip_priv: bool) -> Result<KVec<u64>> {
+    fn promote_ctx(gsp: Arc<dyn GspManager>, vmm: &Vmm, device: &GspDevice, chan: &GspChannel, alloced: &KVec<bool>, mem_vec: &KVec<Arc<InstObj>>, ctxbufinfo: &KVec<CtxBufInfo>) -> Result<KVec<u64>> {
         let mut buf_ent_vec : KVec<GpuPromoteBufferEntry> = KVec::new();
-        let mut vma_addrs: KVec<u64> = KVec::with_capacity(ctxbufinfo.len(), GFP_KERNEL)?;
+        let mut num_bufs = mem_vec.len();
 
-        for info_idx in 0..ctxbufinfo.len() {
+        let mut vma_addrs: KVec<u64> = KVec::with_capacity(num_bufs, GFP_KERNEL)?;
+        for info_idx in 0..num_bufs {
             let info = &ctxbufinfo[info_idx];
             let mem = &mem_vec[info_idx];
             let init = info.init && alloced[info_idx];
-            let mut nonmapped = skip_priv == false && info.nonmapped;
+            let mut nonmapped = alloced[info_idx] == true && info.priv_access_map;
 
             let mut ent = GpuPromoteBufferEntry {
                 buffer_id: info.buffer_id,
@@ -113,7 +118,7 @@ impl Gr {
             buf_ent_vec.push(ent, GFP_KERNEL)?;
         }
 
-        gsp.promote_gr_ctx(device, chan, &buf_ent_vec, skip_priv)?;
+        gsp.promote_gr_ctx(device, chan, &buf_ent_vec)?;
         Ok(vma_addrs)
     }
 
@@ -136,7 +141,7 @@ impl Gr {
         let (alloced, mem_vec) = Self::alloc_ctx_bufs(instmem.clone(), None, ctxbufinfo)?;
 
         let vma_addrs = Self::promote_ctx(gsp.clone(), &gold_vmm, &internal_device.gsp,
-                                          &gold_chan, &alloced, &mem_vec, &ctxbufinfo, false)?;
+                                          &gold_chan, &alloced, &mem_vec, &ctxbufinfo)?;
 
         let gold_obj = gsp.alloc_chan_obj(gold_chan.clone(), 0x97000000, base.spec.gpu_consts.gr_classes[2])?;
 
@@ -162,7 +167,7 @@ impl Gr {
         let (alloced, mem_vec) = Self::alloc_ctx_bufs(instmem.clone(), Some(golden), ctxbufinfo)?;
 
         let vma_addrs = Self::promote_ctx(gsp.clone(), vmm, &device.gsp,
-                                          &channel.gsp_chan, &alloced, &mem_vec, &ctxbufinfo, true)?;
+                                          &channel.gsp_chan, &alloced, &mem_vec, &ctxbufinfo)?;
 
         Ok(Arc::new(GrCtx {
             bufs: mem_vec,
