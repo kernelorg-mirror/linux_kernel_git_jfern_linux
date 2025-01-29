@@ -208,7 +208,7 @@ pub(crate) struct GpuBase {
     /// MMIO mapping of PCI BAR 0
     pub bar: Arc<Devres<Bar0>>,
     pub bios: Bios,
-    pub timer: Arc<Timer>,
+    pub timer: Timer,
 }
 
 /// Structure holding the resources required to operate the GPU.
@@ -583,7 +583,7 @@ impl Gpu {
 
         Vfn::install_irq(&vfn, pdev)?;
 
-        let timer = Arc::new(Timer::new(bar.clone())?, GFP_KERNEL)?;
+        let timer = Timer::new(bar.clone())?;
 
         bios.probe(&bar)?;
 
