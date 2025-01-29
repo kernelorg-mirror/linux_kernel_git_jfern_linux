@@ -1794,7 +1794,7 @@ impl VmmInner {
                     return Err(EINVAL);
                 }
             }
-            MemTarget::Host => {
+            MemTarget::Host | MemTarget::Ncoh => {
                 if page.vmm_page_type & NVKM_VMM_PAGE_HOST == 0 {
                     return Err(EINVAL);
                 }
