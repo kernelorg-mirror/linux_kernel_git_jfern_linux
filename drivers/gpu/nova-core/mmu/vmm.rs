@@ -1152,13 +1152,17 @@ impl VmmInner {
 
             cursor = match cursor.next() {
                 None => { return None; }
-                Some(x) => { x}
+                Some(x) => { x }
             };
 
         }
 
-        let next: Arc<Vma> = cursor.next().unwrap().current().into();
-        Some(next)
+        match cursor.next() {
+            None => None,
+            Some(x) => {
+                Some(x.current().into())
+            }
+        }
     }
 
     pub(crate) fn tail(&mut self, vma: &Vma, tail: u64, part: bool) -> Result<Arc<Vma>> {
@@ -1207,70 +1211,9 @@ impl VmmInner {
         }
     }
 
-    fn node_merge(&mut self, prev: Option<Arc<Vma>>, vma: Arc<Vma>, next: Option<Arc<Vma>>,
-                  size: u64) -> Result<Arc<Vma>> {
-        match next {
-            Some(n) => {
-                if vma.size() == size {
-                    vma.add_size(n.size());
-
-                    self.node_delete(n);
-                    match prev {
-                        Some(p) => {
-                            p.add_size(vma.size());
-                            self.node_delete(vma);
-                            return Ok(p);
-                        }
-                        _ => {}
-                    }
-                    return Ok(vma);
-                }
-
-                self.node_remove(&n);
-                vma.sub_size(size);
-                n.set_addr(n.addr() - size);
-                n.add_size(size);
-                self.node_insert(n.clone());
-                return Ok(n);
-            }
-            _ => {}
-        }
-
-        match prev {
-            Some(p) => {
-                if vma.size() != size {
-                    self.node_remove(&vma);
-                    p.add_size(size);
-                    vma.set_addr(vma.addr() + size);
-                    vma.sub_size(size);
-                    self.node_insert(vma);
-                } else {
-                    p.add_size(size);
-                    self.node_delete(vma);
-                }
-                return Ok(p);
-            }
-            _ => {}
-        }
-        Ok(vma)
-    }
-
     fn unmap_region(&mut self, vma: Arc<Vma>) -> Result<()> {
-
-        let mut use_prev = None;
-        let mut use_next = None;
         vma.set_mapped(false);
 
-        let next = Self::node_next(&mut self.list, vma.clone());
-        match next {
-            None => {},
-            Some (x) => {
-                if x.mapped() {
-                    use_next = Some(x);
-                }
-            }
-        }
-        self.node_merge(use_prev, vma.clone(), use_next, vma.size())?;
         Ok(())
     }
 
