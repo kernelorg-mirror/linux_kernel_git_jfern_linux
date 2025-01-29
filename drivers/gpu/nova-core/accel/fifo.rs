@@ -21,7 +21,8 @@ pub(crate) enum EngineType {
     NVENC,
     SW,
     SEC2,
-    JPEG,
+    NVJPG,
+    OFA,
     GSP,
 }
 
@@ -33,6 +34,8 @@ impl EngineType {
             EngineType::SW => bindings::NOVA_CORE_ENGINE_SW,
             EngineType::NVDEC => bindings::NOVA_CORE_ENGINE_NVDEC,
             EngineType::NVENC => bindings::NOVA_CORE_ENGINE_NVENC,
+            EngineType::OFA => bindings::NOVA_CORE_ENGINE_OFA,
+            EngineType::NVJPG => bindings::NOVA_CORE_ENGINE_NVJPG,
             _ => 0,
         }
     }
@@ -44,6 +47,8 @@ impl EngineType {
             bindings::NOVA_CORE_ENGINE_SW => EngineType::SW,
             bindings::NOVA_CORE_ENGINE_NVDEC => EngineType::NVDEC,
             bindings::NOVA_CORE_ENGINE_NVENC => EngineType::NVENC,
+            bindings::NOVA_CORE_ENGINE_NVJPG => EngineType::NVJPG,
+            bindings::NOVA_CORE_ENGINE_OFA => EngineType::OFA,
             _ => return Err(EINVAL),
         })
     }
@@ -250,7 +255,7 @@ impl FifoRunList {
             };
 
             match &ent.eng_type {
-                EngineType::CE | EngineType::GR | EngineType::NVDEC | EngineType::NVENC => {
+                EngineType::CE | EngineType::GR | EngineType::NVDEC | EngineType::NVENC | EngineType::OFA | EngineType::NVJPG => {
                     pr_info!("pushing engine {} {:?} {}\n", ent.id, ent.eng_type, ent.inst);
                     runlentry.engns.push(RunListEngine { eng_type: ent.eng_type, inst: ent.inst, desc: ent.eng_desc, rm_size: ent.desc_size }, GFP_KERNEL)?;
                 },

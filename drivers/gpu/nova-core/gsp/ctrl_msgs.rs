@@ -36,7 +36,10 @@ impl InternalIntrGetKernelTableParams::ver {
             r @ fw::ver::gen::MC_ENGINE_IDX_GR0..=fw::ver::gen::MC_ENGINE_IDX_GR7 => { Ok((EngineType::GR, r - fw::ver::gen::MC_ENGINE_IDX_GR0)) },
             r @ fw::ver::gen::MC_ENGINE_IDX_CE0..=fw::ver::gen::MC_ENGINE_IDX_CE9 => Ok((EngineType::CE, r - fw::ver::gen::MC_ENGINE_IDX_CE0)),
             r @ fw::ver::gen::MC_ENGINE_IDX_NVDEC0..=fw::ver::gen::MC_ENGINE_IDX_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::MC_ENGINE_IDX_NVDEC0)),
+            r @ fw::ver::gen::MC_ENGINE_IDX_NVJPEG0..=fw::ver::gen::MC_ENGINE_IDX_NVJPEG7 => Ok((EngineType::NVJPG, r - fw::ver::gen::MC_ENGINE_IDX_NVJPEG0)),
             r @ fw::ver::gen::MC_ENGINE_IDX_MSENC..=fw::ver::gen::MC_ENGINE_IDX_MSENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::MC_ENGINE_IDX_MSENC)),
+            r @ fw::ver::gen::MC_ENGINE_IDX_OFA0 => Ok((EngineType::OFA, 0)),
+
             other => Err(EINVAL)
         }
     }
@@ -113,6 +116,8 @@ impl FifoGetDeviceInfoTable::ver {
             EngineType::CE => { fw::ver::gen::NV2080_ENGINE_TYPE_COPY0 + inst },
             EngineType::NVDEC => { fw::ver::gen::NV2080_ENGINE_TYPE_NVDEC0 + inst },
             EngineType::NVENC => { fw::ver::gen::NV2080_ENGINE_TYPE_NVENC0 + inst },
+            EngineType::NVJPG => { fw::ver::gen::NV2080_ENGINE_TYPE_NVJPEG0 + inst },
+            EngineType::OFA => { fw::ver::gen::NV2080_ENGINE_TYPE_OFA + inst },
             _ => { 0 }
         }
     }
@@ -124,6 +129,8 @@ impl FifoGetDeviceInfoTable::ver {
             r @ fw::ver::gen::RM_ENGINE_TYPE_COPY0..=fw::ver::gen::RM_ENGINE_TYPE_COPY9 => Ok((EngineType::CE, r - fw::ver::gen::RM_ENGINE_TYPE_COPY0)),
             r @ fw::ver::gen::RM_ENGINE_TYPE_NVDEC0..=fw::ver::gen::RM_ENGINE_TYPE_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::RM_ENGINE_TYPE_NVDEC0)),
             r @ fw::ver::gen::RM_ENGINE_TYPE_NVENC0..=fw::ver::gen::RM_ENGINE_TYPE_NVENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::RM_ENGINE_TYPE_NVENC0)),
+            r @ fw::ver::gen::RM_ENGINE_TYPE_NVJPEG0..=fw::ver::gen::RM_ENGINE_TYPE_NVJPEG7 => Ok((EngineType::NVJPG, r - fw::ver::gen::RM_ENGINE_TYPE_NVJPEG0)),
+            fw::ver::gen::RM_ENGINE_TYPE_OFA => { Ok((EngineType::OFA, 0)) },
             other => Err(EINVAL)
         }
     }
@@ -462,7 +469,7 @@ impl GpuPromoteCtx::ver {
         pr_info!("promote_gr: dev:{:#x} chan:{:#x} ents:{}\n",
                  device.object.client.as_ref().unwrap().object.handle,
                  channel.object.handle,
-                 entries.len());
+                 num_ents);
 
         for i in 0..num_ents {
             let mut nonmapped = entries[i].nonmapped;

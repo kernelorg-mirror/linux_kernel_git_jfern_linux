@@ -38,6 +38,8 @@ static const u8 NOVA_CORE_ENGINE_GR = 2;
 static const u8 NOVA_CORE_ENGINE_CE = 3;
 static const u8 NOVA_CORE_ENGINE_NVDEC = 4;
 static const u8 NOVA_CORE_ENGINE_NVENC = 5;
+static const u8 NOVA_CORE_ENGINE_NVJPG = 6;
+static const u8 NOVA_CORE_ENGINE_OFA = 7;
 
 static const u8 NOVA_CORE_CHAN_INST_APER_INST = 0x1;
 static const u8 NOVA_CORE_CHAN_INST_APER_VRAM = 0x2;
