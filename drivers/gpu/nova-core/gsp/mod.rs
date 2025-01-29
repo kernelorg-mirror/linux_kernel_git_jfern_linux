@@ -70,7 +70,7 @@ pub(crate) struct GSPSharedMemObjects {
     pub logrm: DmaObject,
     pub rmargs: DmaObject,
     pub kern: Option<DmaObject>,
-    pub shm: Arc<DmaObject>,
+    pub shm: DmaObject,
     pub wpr_meta: DmaObject,
     pub queues: GSPSharedQueues::ver,
 }
@@ -175,7 +175,6 @@ impl GSPSharedMemObjects::ver {
         let wpr_meta = DmaObject::new_cleared(&gpu_base.dev, 0x1000, "wpr_meta")?;
 
         let queues = GSPSharedQueues::ver::new(&mut shm, cmdq_size as u32, msgq_size as u32, ptes_size as u32, ptes_nr as u32)?;
-        let shm = Arc::new(shm, GFP_KERNEL)?;
         Ok(Self {
             libos,
             loginit,
