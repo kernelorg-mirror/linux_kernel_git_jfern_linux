@@ -3,6 +3,8 @@
 
 use kernel::prelude::*;
 
+use core::fmt;
+use core::fmt::Debug;
 use kernel::sync::Arc;
 use crate::gpu::GpuBase;
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
@@ -92,6 +94,28 @@ impl MmuPt {
 
     pub(crate) fn fill128(&mut self, offset: u64, val1: u64, val2: u64, count: usize) -> Result<()> {
         self.memory.fill128(self.base as u64 + offset, val1, val2, count)
+    }
+}
+
+impl Drop for MmuPt {
+    fn drop(&mut self) {
+       pr_info!("Dropping MmuPt {:#x}", self.addr);
+    }
+}
+
+impl Debug for MmuPt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+
+       unsafe {
+           let ptr = self as *const MmuPt as *mut MmuPt;
+           (*ptr).memory.acquire();
+           write!(f, "mmupt {:#x} ", self.addr)?;
+           for i in 0..16 {
+               write!(f, "{:#x} ", self.memory.rd32(self.base as u64 + i * 4).unwrap())?;
+           }
+           (*ptr).memory.release();
+       }
+       Ok(())
     }
 }
 
