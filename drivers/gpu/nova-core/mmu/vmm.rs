@@ -161,15 +161,15 @@ pub(crate) trait VmmDescFunc {
         Err(EINVAL)
     }
 
-    fn mem(vmm: &mut VmmInner, pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn mem(pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         Err(EINVAL)
     }
 
-    fn dma(vmm: &mut VmmInner, pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn dma(pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         Err(EINVAL)
     }
 
-    fn sgl(vmm: &mut VmmInner, pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn sgl(pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         Err(EINVAL)
     }
 
@@ -407,9 +407,9 @@ impl VmmDescSPT {
 #[macro_export]
 macro_rules! vmm_map_iter {
     ($pt: expr, $mptes: expr, $mptei: expr, $map_internal: expr,
-     $shift: expr, $size: expr, $base: expr, $fill: expr, $next: expr) => {
+     $size: expr, $base: expr, $fill: expr, $next: expr) => {
         $pt.memory.acquire()?;
-        let _shift = $shift;
+        let _shift = $map_internal.pg_shift;
         while $mptes != 0 {
             let mut _ptes: u32 = (($size - $map_internal.off) >> _shift) as u32;
             let _addr = $base + $map_internal.off;
@@ -438,7 +438,7 @@ impl VmmDescFunc for VmmDescSPT {
         VmmDesc::pgt_sparse(pt, ptei, ptes)
     }
 
-    fn mem(vmm: &mut VmmInner, pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn mem(pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         let mut ptes = in_ptes;
         let mut ptei = in_ptei;
 
@@ -447,8 +447,7 @@ impl VmmDescFunc for VmmDescSPT {
         if VMM_TRACE {
             pr_info!("gp100_vmm_pgt_mem mem {} {}\n", ptei, ptes);
         }
-        let vmmpage = VmmInner::page(&vmm.instmem.base, map_internal.page_idx);
-        vmm_map_iter!(pt, ptes, ptei, map_internal, vmmpage.shift,
+        vmm_map_iter!(pt, ptes, ptei, map_internal,
                       map_internal.mem.unwrap()[map_internal.midx].size() as u64,
                       map_internal.mem.unwrap()[map_internal.midx].addr() as u64,
                       VmmDescSPT::pte,
@@ -457,13 +456,12 @@ impl VmmDescFunc for VmmDescSPT {
         Ok(())
     }
 
-    fn dma(vmm: &mut VmmInner, pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn dma(pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         let mut ptes = in_ptes;
         let mut ptei = in_ptei;
 
         map_internal.midx = 0;
-        let vmmpage = VmmInner::page(&vmm.instmem.base, map_internal.page_idx);
-        vmm_map_iter!(pt, ptes, ptei, map_internal, vmmpage.shift,
+        vmm_map_iter!(pt, ptes, ptei, map_internal,
                       PAGE_SIZE as u64,
                       unsafe { *map_internal.dma_base },
                       VmmDescSPT::pte,
@@ -472,7 +470,7 @@ impl VmmDescFunc for VmmDescSPT {
         Ok(())
     }
 
-    fn sgl(vmm: &mut VmmInner, pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn sgl(pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         pr_err!("TODO SGL SPT\n");
         Ok(())
     }
@@ -502,8 +500,8 @@ impl VmmDescFunc for VmmDescLPT {
         VmmDesc::pgt_sparse(pt, ptei, ptes)
     }
 
-    fn mem(vmm: &mut VmmInner, pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
-        VmmDescSPT::mem(vmm, pt, ptei, ptes, map_internal)
+    fn mem(pt: &mut MmuPt, ptei: u32, ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+        VmmDescSPT::mem(pt, ptei, ptes, map_internal)
     }
 }
 
@@ -562,14 +560,13 @@ impl VmmDescFunc for VmmDescPd0 {
         Ok(())
     }
 
-    fn mem(vmm: &mut VmmInner, pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    fn mem(pt: &mut MmuPt, in_ptei: u32, in_ptes: u32, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         let mut ptes = in_ptes;
         let mut ptei = in_ptei;
 
         map_internal.midx = 0;
 
-        let vmmpage = VmmInner::page(&vmm.instmem.base, map_internal.page_idx);
-        vmm_map_iter!(pt, ptes, ptei, map_internal, vmmpage.shift,
+        vmm_map_iter!(pt, ptes, ptei, map_internal,
                       map_internal.mem.unwrap()[map_internal.midx].size() as u64,
                       map_internal.mem.unwrap()[map_internal.midx].addr() as u64,
                       VmmDescPd0::pte,
@@ -861,7 +858,7 @@ struct VmmIter<'a> {
     flush: usize,
 }
 
-type MapFn = fn(&mut VmmInner, &mut MmuPt, u32, u32, &mut VmmMapInternal<'_>) -> Result<()>;
+type MapFn = fn(&mut MmuPt, u32, u32, &mut VmmMapInternal<'_>) -> Result<()>;
 type RefFn = fn(&mut VmmIter<'_>, bool, u32, u32) -> Result<bool>;
 type ClrFn = fn(&mut MmuPt, u32, u32) -> Result<()>;
 
@@ -1097,7 +1094,7 @@ impl<'a> VmmIter<'a> {
                     let pt = pgt_ref.pt[pg_type].as_mut().unwrap();
 
                     if mapfn.is_some() {
-                        mapfn.unwrap()(it.vmm, pt, ptei, ptes as u32, map_internal.as_mut().unwrap())?;
+                        mapfn.unwrap()(pt, ptei, ptes as u32, map_internal.as_mut().unwrap())?;
                     } else {
                         clrfn.unwrap()(pt, ptei, ptes as u32);
                     }
@@ -1944,6 +1941,7 @@ impl VmmInner {
     pub(crate) fn map_locked(&mut self, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
         let mut map_internal = VmmMapInternal {
             page_idx: 0,
+            pg_shift: 0,
             next: 0,
             off: 0,
             map_type: 0,
@@ -1965,7 +1963,10 @@ impl VmmInner {
             self.map_valid(&vma, map, &mut map_internal)?;
         }
 
-        let desc = Self::page(&self.instmem.base, map_internal.page_idx).get_desc(0);
+        let page = Self::page(&self.instmem.base, map_internal.page_idx);
+        let desc = page.get_desc(0);
+
+        map_internal.pg_shift = page.shift;
 
         map_internal.off = map.offset;
 
@@ -2040,6 +2041,7 @@ impl VmmInner {
 
 pub(crate) struct VmmMapInternal<'a> {
     pub page_idx: u8,
+    pub pg_shift: u8,
     pub next: u64,
     pub off: u64,
     pub map_type: u64,
