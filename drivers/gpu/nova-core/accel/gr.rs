@@ -118,7 +118,7 @@ impl GrCtx {
 
     pub(crate) fn golden_init(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>, id_allocator: Arc<AllocId>) -> Result<KVec<Arc<InstObj>>> {
         let base = &instmem.base;
-        let (_, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
+        let (_internal_client, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
         let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
 
         let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
