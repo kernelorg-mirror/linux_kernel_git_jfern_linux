@@ -425,7 +425,7 @@ macro_rules! vmm_map_iter {
             $mptei += _ptes;
             $mptes -= _ptes;
         }
-        (*$pt).memory.release();
+        $pt.memory.release();
     }
 }
 
@@ -1118,390 +1118,6 @@ impl<'a> VmmIter<'a> {
         it.flush();
         Ok(!0_u64)
     }
-}
-
-#[pin_data]
-#[repr(C)]
-pub(crate) struct VmmInner {
-    pub(crate) instmem: Arc<InstMem>,
-    start: u64,
-    limit: u64,
-    managed: Option<VmmManaged>,
-    bootstrapped: bool,
-    is_bar: bool,
-    rm_bar2_pdb: u64,
-    free: RBTree<SizeAddr, Arc<Vma>>,
-    root: RBTree<u64, Arc<Vma>>,
-    #[pin]
-    list: List<Vma>,
-    pd: VmmPt,
-    name: &'static str,
-}
-
-impl VmmInner {
-
-    pub(crate) fn dump(&self) {
-        pr_info!("VMM {}: {:#x} {:#x} bar: {}\n", self.name, self.start, self.limit, self.is_bar);
-
-        for vma in &self.list {
-            pr_info!("{:?}\n", *vma);
-        }
-    }
-
-    pub(crate) fn page(base: &GpuBase, page_idx: u8) -> &VmmPage {
-        // eventually match on gpu family if this changes.
-        &VMM_TU102[page_idx as usize]
-    }
-
-    pub(crate) fn num_pages(base: &GpuBase) -> u8 {
-        // eventually match on gpu family if this changes.
-        VMM_TU102.len() as u8
-    }
-
-    pub(crate) fn smallest_page_idx(base: &GpuBase) -> u8 {
-        // eventually match on gpu family if this changes.
-        (VMM_TU102.len() - 2) as u8
-    }
-
-    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
-        let mgd = match &self.managed {
-            None => { return false; }
-            Some(m) => m
-        };
-
-        let p_start = mgd.p.addr;
-        let p_end = p_start + mgd.p.size;
-        let n_start = mgd.n.addr;
-        let n_end = n_start + mgd.n.size;
-        let end = start + size;
-
-        if start >= p_start && end <= p_end {
-            return true;
-        }
-
-        if start >= n_start && end <= n_end {
-            return true;
-        }
-        return false;
-    }
-
-    pub(crate) fn aper(target: MemTarget) -> Result<u32> {
-        match target {
-            MemTarget::Vram => { Ok(0) }
-            MemTarget::Host => { Ok(2) }
-            MemTarget::Ncoh => { Ok(3) }
-            _ => Err(EINVAL)
-        }
-    }
-
-    pub(crate) fn node_prev(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
-        let cursor = list.cursor_front();
-
-        let mut cursor = match cursor {
-            None => { return None; }
-            Some(x) => { x }
-        };
-
-        loop {
-            if cursor.eq(vma.as_ref()) {
-                break;
-            }
-
-            cursor = match cursor.next() {
-                None => { return None; }
-                Some(x) => { x}
-            };
-
-        }
-
-        match cursor.prev() {
-            None => None,
-            Some(x) => Some(x.current().into())
-        }
-    }
-
-    pub(crate) fn node_next(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
-        let cursor = list.cursor_front();
-
-        let mut cursor = match cursor {
-            None => { return None; }
-            Some(x) => { x }
-        };
-
-        loop {
-            if cursor.eq(vma.as_ref()) {
-                break;
-            }
-
-            cursor = match cursor.next() {
-                None => { return None; }
-                Some(x) => { x }
-            };
-
-        }
-
-        match cursor.next() {
-            None => None,
-            Some(x) => {
-                Some(x.current().into())
-            }
-        }
-    }
-
-    pub(crate) fn tail(&mut self, vma: &Vma, tail: u64, part: bool) -> Result<Arc<Vma>> {
-        let newvma = Vma::split_new(vma, tail, part)?;
-        vma.sub_size(tail);
-
-        let res = newvma.clone_arc();
-        self.list.push_after(&vma.head, newvma);
-        Ok(res)
-    }
-
-    pub(crate) fn node_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
-        self.root.try_create_and_insert(vma.addr(), vma, GFP_KERNEL)?;
-        Ok(())
-    }
-
-    fn node_remove(&mut self, vma: &Arc<Vma>) {
-        self.root.remove(&vma.addr());
-    }
-
-    pub(crate) fn node_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
-        self.node_remove(&vma);
-        unsafe { self.list.remove(vma.as_ref()) };
-        Ok(())
-    }
-
-    pub(crate) fn free_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
-        self.free.try_create_and_insert(SizeAddr { size: vma.size(), addr: vma.addr() }, vma, GFP_KERNEL)?;
-        Ok(())
-    }
-
-    fn free_remove(&mut self, vma: &Arc<Vma>) {
-        self.free.remove(&SizeAddr { size: vma.size(), addr: vma.addr() });
-    }
-
-    pub(crate) fn free_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
-        self.free_remove(&vma);
-        unsafe { self.list.remove(vma.as_ref()) };
-        Ok(())
-    }
-
-    pub(crate) fn node_search(&mut self, addr: u64) -> Result<Arc<Vma>> {
-        match self.root.get(&addr) {
-            None => Err(ENOENT),
-            Some(vma) => Ok(vma.clone())
-        }
-    }
-
-    fn unmap_region(&mut self, vma: Arc<Vma>) -> Result<()> {
-        vma.set_mapped(false);
-
-        Ok(())
-    }
-
-    pub(crate) fn put_region(&mut self, vma: Arc<Vma>) -> Result<()> {
-
-        let prev = Self::node_prev(&mut self.list, vma.clone());
-        let next = Self::node_next(&mut self.list, vma.clone());
-
-        match prev {
-            None => {},
-            Some(x) => {
-                if !x.used() {
-                    vma.set_addr(x.clone().addr());
-                    vma.add_size(x.size());
-
-                    unsafe {
-                        self.free_delete(x)?;
-                    }
-                }
-            }
-        }
-
-        match next {
-            None => {},
-            Some (x) => {
-                if !x.used() {
-                    vma.add_size(x.size());
-                    unsafe {
-                        self.free_delete(x)?;
-                    }
-                }
-            }
-        }
-
-        self.free_insert(vma.clone())?;
-        Ok(())
-    }
-
-    pub(crate) fn get(&mut self, getref: bool, mapref: bool, sparse: bool,
-                      shift: u8, align_val: u8, size: u64) -> Result<Arc<Vma>> {
-        let int_align;
-
-        if getref && shift == 0 {
-            pr_err!("got invalid getref with no shift\n");
-            return Err(EINVAL);
-        }
-
-        let mut page_idx : Option<u8> = None;
-        if shift != 0 {
-            for p in 0..Self::num_pages(&self.instmem.base) {
-                if shift == Self::page(&self.instmem.base, p).shift {
-                    page_idx = Some(p);
-                    break;
-                }
-            }
-
-            if page_idx.is_none() {
-                pr_err!("failed to find vmm page {}\n", shift);
-                return Err(EINVAL);
-            }
-            int_align = core::cmp::max::<u8>(align_val, shift);
-        } else {
-            int_align = core::cmp::max::<u8>(align_val, 12);
-        }
-
-        /* Locate smallest block that can possibly satisfy the allocation. */
-        let mut free: &mut RBTree<SizeAddr, Arc<Vma>> = &mut self.free;
-        let mut curs = match free.cursor_lower_bound(&SizeAddr { size: size, addr: 0 }) {
-            None => { return Err(ENOSPC); }
-            Some(x) => { x }
-        };
-
-        let curr = curs.current().1;
-
-        let mut addr;
-        let mut curr = curr.clone();
-
-        loop {
-            addr = curr.addr();
-
-            addr = align64(addr, 1_u64 << int_align);
-
-            let tail = curr.addr() + curr.size();
-
-            if addr <= tail && tail - addr >= size {
-                let node;
-                (_, node) = curs.remove_current();
-                (_, curr) = node.to_key_value();
-                break;
-            }
-            curs = match curs.move_next() {
-                None => { return Err(ENOSPC); }
-                Some(x) => x
-            }
-        }
-
-        if addr != curr.addr() {
-            let tmp = self.tail(curr.as_ref(), curr.size() + curr.addr() - addr, false)?;
-            self.free_insert(curr.clone())?;
-            curr = tmp;
-        }
-        if size != curr.size() {
-            let tmp = self.tail(curr.as_ref(), curr.size() - size, false)?;
-            self.free_insert(tmp)?;
-        }
-
-        if getref {
-            let base = self.instmem.base.clone();
-            let page = Self::page(&base, page_idx.unwrap());
-            self.ptes_get(page, curr.addr(), curr.size())?;
-        }
-
-        curr.set_mapref(mapref && !getref);
-        curr.set_used(true);
-        if getref {
-            curr.set_refd(page_idx.unwrap());
-        } else {
-            curr.set_refd(NVKM_VMA_PAGE_NONE);
-        }
-        if page_idx.is_some() {
-            curr.set_page(page_idx.unwrap());
-        }
-        self.node_insert(curr.clone())?;
-
-        Ok(curr.clone())
-    }
-
-    pub(crate) fn put(&mut self, vma: Arc<Vma>) -> Result<()> {
-
-        if vma.mapref() || !vma.sparse {
-            let base = self.instmem.base.clone();
-            if vma.mapped() {
-                let page = Self::page(&base, vma.refd());
-                self.ptes_unmap_put(page, vma.addr(), vma.size());
-            } else {
-                if vma.refd() != NVKM_VMA_PAGE_NONE {
-                    let page = Self::page(&base, vma.refd());
-                    self.ptes_put(page, vma.addr(), vma.size());
-                }
-            }
-        }
-
-        if vma.mapped() {
-            self.unmap_region(vma.clone());
-        }
-        // Remove VMA from the list of allocated nodes.
-        self.node_remove(&vma);
-
-        // Merge VMA back into the free list.
-
-        vma.set_page(NVKM_VMA_PAGE_NONE);
-        vma.set_refd(NVKM_VMA_PAGE_NONE);
-        vma.set_used(false);
-
-        self.put_region(vma)?;
-        Ok(())
-    }
-
-    fn join(&mut self, instobj: &mut InstObj) -> Result<()> {
-        let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
-
-        let pd = self.pd.pt[0].as_ref().unwrap();
-        // replay TODO
-        match pd.memory.target() {
-            MemTarget::Vram => { base |= 0_u64 << 0; }
-            MemTarget::Host => { base |= 2_u64 << 0;
-                                 base |= bit_u64!(2); // VOL
-            }
-            MemTarget::Ncoh => { base |= 3_u64 << 0; }
-            (x) => { pr_err!("Unknown mem target {:?}\n", x); return Err(EINVAL); }
-        }
-
-        base |= pd.addr;
-
-        instobj.acquire()?;
-        instobj.wr64(0x200_u64, base)?;
-        instobj.wr64(0x208_u64, self.limit - 1)?;
-        instobj.release();
-
-        instobj.acquire();
-        let mask: u64 = bit_u64!(0);
-
-        instobj.wr32(0x21c_u64, 0)?;
-
-        for i in 0_u64..64_u64 {
-            if mask & (1_u64.wrapping_shl(i as u32)) != 0 {
-                instobj.wr32(0x2a4_u64 + (i * 0x10), (base >> 32) as u32)?;
-                instobj.wr32(0x2a0_u64 + (i * 0x10), (base & 0xffffffff) as u32)?;
-            } else {
-                instobj.wr32(0x2a4_u64 + (i * 0x10), 1)?;
-                instobj.wr32(0x2a0_u64 + (i * 0x10), 1)?;
-            }
-            instobj.wr32(0x2a8_u64 + (i * 0x10), 0)?;
-        }
-
-        instobj.wr32(0x298_u64, (mask & 0xffffffff) as u32)?;
-        instobj.wr32(0x29c_u64, (mask >> 32) as u32)?;
-
-        instobj.release();
-        Ok(())
-    }
-
-    fn part(&mut self, instobj: &mut InstObj) -> Result<()> {
-        instobj.fill64(0x200, 0x0, 0x2)
-    }
 
     fn ref_sptes(iter: &mut VmmIter<'_>, pgt: &mut VmmPt, in_ptei: u32, in_ptes: u32) -> Result<()> {
         let mut ptes = in_ptes;
@@ -1776,18 +1392,415 @@ impl VmmInner {
         Ok(true)
     }
 
-    pub(crate) fn ptes_get(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "ref", true, false, Some(Self::ref_ptes), None, None, None, None)?;
+    fn boot_ptes(iter: &mut VmmIter<'_>, pfn: bool, ptei: u32, ptes: u32) -> Result<bool> {
+        let reftype = iter.refs_idx(0);
+        let pgt = unsafe { &mut (*iter.pt[0]) };
+
+        pgt.pt[reftype].as_mut().unwrap().memory.boot(iter.vmm)?;
+        Ok(false)
+    }
+
+}
+
+#[pin_data]
+#[repr(C)]
+pub(crate) struct VmmInner {
+    pub(crate) instmem: Arc<InstMem>,
+    start: u64,
+    limit: u64,
+    managed: Option<VmmManaged>,
+    bootstrapped: bool,
+    is_bar: bool,
+    rm_bar2_pdb: u64,
+    free: RBTree<SizeAddr, Arc<Vma>>,
+    root: RBTree<u64, Arc<Vma>>,
+    #[pin]
+    list: List<Vma>,
+    pd: VmmPt,
+    name: &'static str,
+}
+
+impl VmmInner {
+
+    pub(crate) fn dump(&self) {
+        pr_info!("VMM {}: {:#x} {:#x} bar: {}\n", self.name, self.start, self.limit, self.is_bar);
+
+//        pr_info!("VMM PT {:?}\n", self.pd);
+        for vma in &self.list {
+            pr_info!("{:?}\n", *vma);
+        }
+    }
+
+    pub(crate) fn page(base: &GpuBase, page_idx: u8) -> &VmmPage {
+        // eventually match on gpu family if this changes.
+        &VMM_TU102[page_idx as usize]
+    }
+
+    pub(crate) fn num_pages(base: &GpuBase) -> u8 {
+        // eventually match on gpu family if this changes.
+        VMM_TU102.len() as u8
+    }
+
+    pub(crate) fn smallest_page_idx(base: &GpuBase) -> u8 {
+        // eventually match on gpu family if this changes.
+        (VMM_TU102.len() - 2) as u8
+    }
+
+    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
+        let mgd = match &self.managed {
+            None => { return false; }
+            Some(m) => m
+        };
+
+        let p_start = mgd.p.addr;
+        let p_end = p_start + mgd.p.size;
+        let n_start = mgd.n.addr;
+        let n_end = n_start + mgd.n.size;
+        let end = start + size;
+
+        if start >= p_start && end <= p_end {
+            return true;
+        }
+
+        if start >= n_start && end <= n_end {
+            return true;
+        }
+        return false;
+    }
+
+    pub(crate) fn aper(target: MemTarget) -> Result<u32> {
+        match target {
+            MemTarget::Vram => { Ok(0) }
+            MemTarget::Host => { Ok(2) }
+            MemTarget::Ncoh => { Ok(3) }
+            _ => Err(EINVAL)
+        }
+    }
+
+    pub(crate) fn node_prev(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
+        let cursor = list.cursor_front();
+
+        let mut cursor = match cursor {
+            None => { return None; }
+            Some(x) => { x }
+        };
+
+        loop {
+            if cursor.eq(vma.as_ref()) {
+                break;
+            }
+
+            cursor = match cursor.next() {
+                None => { return None; }
+                Some(x) => { x }
+            };
+
+        }
+
+        match cursor.prev() {
+            None => None,
+            Some(x) => Some(x.current().into())
+        }
+    }
+
+    pub(crate) fn node_next(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
+        let cursor = list.cursor_front();
+
+        let mut cursor = match cursor {
+            None => { return None; }
+            Some(x) => { x }
+        };
+
+        loop {
+            if cursor.eq(vma.as_ref()) {
+                break;
+            }
+
+            cursor = match cursor.next() {
+                None => { return None; }
+                Some(x) => { x }
+            };
+
+        }
+
+        pr_info!("cursor cur {:#x}\n", cursor.current().addr());
+        match cursor.next() {
+            None => None,
+            Some(x) => {
+                pr_info!("cursor next {:#x}\n", x.current().addr());
+                Some(x.current().into())
+            }
+        }
+    }
+
+    pub(crate) fn tail(&mut self, vma: &Vma, tail: u64, part: bool) -> Result<Arc<Vma>> {
+        let newvma = Vma::split_new(vma, tail, part)?;
+        vma.sub_size(tail);
+
+        let res = newvma.clone_arc();
+        self.list.push_after(&vma.head, newvma);
+        Ok(res)
+    }
+
+    pub(crate) fn node_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
+        self.root.try_create_and_insert(vma.addr(), vma, GFP_KERNEL)?;
         Ok(())
     }
 
-    pub(crate) fn ptes_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
+    fn node_remove(&mut self, vma: &Arc<Vma>) {
+        self.root.remove(&vma.addr());
+    }
+
+    pub(crate) fn node_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
+        self.node_remove(&vma);
+        unsafe { self.list.remove(vma.as_ref()) };
+        Ok(())
+    }
+
+    pub(crate) fn free_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
+        self.free.try_create_and_insert(SizeAddr { size: vma.size(), addr: vma.addr() }, vma, GFP_KERNEL)?;
+        Ok(())
+    }
+
+    fn free_remove(&mut self, vma: &Arc<Vma>) {
+        self.free.remove(&SizeAddr { size: vma.size(), addr: vma.addr() });
+    }
+
+    pub(crate) fn free_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
+        self.free_remove(&vma);
+        unsafe { self.list.remove(vma.as_ref()) };
+        Ok(())
+    }
+
+    pub(crate) fn node_search(&mut self, addr: u64) -> Result<Arc<Vma>> {
+        match self.root.get(&addr) {
+            None => Err(ENOENT),
+            Some(vma) => Ok(vma.clone())
+        }
+    }
+
+    fn unmap_region(&mut self, vma: Arc<Vma>) -> Result<()> {
+        vma.set_mapped(false);
+
+        Ok(())
+    }
+
+    pub(crate) fn put_region(&mut self, vma: Arc<Vma>) -> Result<()> {
+
+        let prev = Self::node_prev(&mut self.list, vma.clone());
+        let next = Self::node_next(&mut self.list, vma.clone());
+
+        match prev {
+            None => {},
+            Some(x) => {
+                if !x.used() {
+                    vma.set_addr(x.clone().addr());
+                    vma.add_size(x.size());
+
+                    unsafe {
+                        self.free_delete(x)?;
+                    }
+                }
+            }
+        }
+
+        match next {
+            None => {},
+            Some (x) => {
+                if !x.used() {
+                    vma.add_size(x.size());
+                    unsafe {
+                        self.free_delete(x)?;
+                    }
+                }
+            }
+        }
+
+        self.free_insert(vma.clone())?;
+        Ok(())
+    }
+
+    pub(crate) fn get(&mut self, getref: bool, mapref: bool, sparse: bool,
+                      shift: u8, align_val: u8, size: u64) -> Result<Arc<Vma>> {
+        let int_align;
+
+        if getref && shift == 0 {
+            pr_err!("got invalid getref with no shift\n");
+            return Err(EINVAL);
+        }
+
+        let mut page_idx : Option<u8> = None;
+        if shift != 0 {
+            for p in 0..Self::num_pages(&self.instmem.base) {
+                if shift == Self::page(&self.instmem.base, p).shift {
+                    page_idx = Some(p);
+                    break;
+                }
+            }
+
+            if page_idx.is_none() {
+                pr_err!("failed to find vmm page {}\n", shift);
+                return Err(EINVAL);
+            }
+            int_align = core::cmp::max::<u8>(align_val, shift);
+        } else {
+            int_align = core::cmp::max::<u8>(align_val, 12);
+        }
+
+        /* Locate smallest block that can possibly satisfy the allocation. */
+        let mut free: &mut RBTree<SizeAddr, Arc<Vma>> = &mut self.free;
+        let mut curs = match free.cursor_lower_bound(&SizeAddr { size: size, addr: 0 }) {
+            None => { return Err(ENOSPC); }
+            Some(x) => { x }
+        };
+
+        let curr = curs.current().1;
+
+        let mut addr;
+        let mut curr = curr.clone();
+
+        loop {
+            addr = curr.addr();
+
+            addr = align64(addr, 1_u64 << int_align);
+
+            let tail = curr.addr() + curr.size();
+
+            if addr <= tail && tail - addr >= size {
+                let node;
+                (_, node) = curs.remove_current();
+                (_, curr) = node.to_key_value();
+                break;
+            }
+            curs = match curs.move_next() {
+                None => { return Err(ENOSPC); }
+                Some(x) => x
+            }
+        }
+
+        if addr != curr.addr() {
+            let tmp = self.tail(curr.as_ref(), curr.size() + curr.addr() - addr, false)?;
+            self.free_insert(curr.clone())?;
+            curr = tmp;
+        }
+        if size != curr.size() {
+            let tmp = self.tail(curr.as_ref(), curr.size() - size, false)?;
+            self.free_insert(tmp)?;
+        }
+
+        if getref {
+            let base = self.instmem.base.clone();
+            let page = Self::page(&base, page_idx.unwrap());
+            self.ptes_get(page, curr.addr(), curr.size())?;
+        }
+
+        curr.set_mapref(mapref && !getref);
+        curr.set_used(true);
+        if getref {
+            curr.set_refd(page_idx.unwrap());
+        } else {
+            curr.set_refd(NVKM_VMA_PAGE_NONE);
+        }
+        if page_idx.is_some() {
+            curr.set_page(page_idx.unwrap());
+        }
+        self.node_insert(curr.clone())?;
+
+        Ok(curr.clone())
+    }
+
+    pub(crate) fn put(&mut self, vma: Arc<Vma>) -> Result<()> {
+
+        if vma.mapref() || !vma.sparse {
+            let base = self.instmem.base.clone();
+            if vma.mapped() {
+                let page = Self::page(&base, vma.refd());
+                self.ptes_unmap_put(page, vma.addr(), vma.size());
+            } else {
+                if vma.refd() != NVKM_VMA_PAGE_NONE {
+                    let page = Self::page(&base, vma.refd());
+                    self.ptes_put(page, vma.addr(), vma.size());
+                }
+            }
+        }
+
+        if vma.mapped() {
+            self.unmap_region(vma.clone());
+        }
+        // Remove VMA from the list of allocated nodes.
+        self.node_remove(&vma);
+
+        // Merge VMA back into the free list.
+
+        vma.set_page(NVKM_VMA_PAGE_NONE);
+        vma.set_refd(NVKM_VMA_PAGE_NONE);
+        vma.set_used(false);
+
+        self.put_region(vma)?;
+        Ok(())
+    }
+
+    fn join(&mut self, instobj: &mut InstObj) -> Result<()> {
+        let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
+
+        let pd = self.pd.pt[0].as_ref().unwrap();
+        // replay TODO
+        match pd.memory.target() {
+            MemTarget::Vram => { base |= 0_u64 << 0; }
+            MemTarget::Host => { base |= 2_u64 << 0;
+                                 base |= bit_u64!(2); // VOL
+            }
+            MemTarget::Ncoh => { base |= 3_u64 << 0; }
+            (x) => { pr_err!("Unknown mem target {:?}\n", x); return Err(EINVAL); }
+        }
+
+        base |= pd.addr;
+
+        instobj.acquire()?;
+        instobj.wr64(0x200_u64, base)?;
+        instobj.wr64(0x208_u64, self.limit - 1)?;
+        instobj.release();
+
+        instobj.acquire();
+        let mask: u64 = bit_u64!(0);
+
+        instobj.wr32(0x21c_u64, 0)?;
+
+        for i in 0_u64..64_u64 {
+            if mask & (1_u64.wrapping_shl(i as u32)) != 0 {
+                instobj.wr32(0x2a4_u64 + (i * 0x10), (base >> 32) as u32)?;
+                instobj.wr32(0x2a0_u64 + (i * 0x10), (base & 0xffffffff) as u32)?;
+            } else {
+                instobj.wr32(0x2a4_u64 + (i * 0x10), 1)?;
+                instobj.wr32(0x2a0_u64 + (i * 0x10), 1)?;
+            }
+            instobj.wr32(0x2a8_u64 + (i * 0x10), 0)?;
+        }
+
+        instobj.wr32(0x298_u64, (mask & 0xffffffff) as u32)?;
+        instobj.wr32(0x29c_u64, (mask >> 32) as u32)?;
+
+        instobj.release();
+        Ok(())
+    }
+
+    fn part(&mut self, instobj: &mut InstObj) -> Result<()> {
+        instobj.fill64(0x200, 0x0, 0x2)
+    }
+
+
+    fn ptes_get(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let iter = VmmIter::iter(self, page, addr, size, "ref", true, false, Some(VmmIter::ref_ptes), None, None, None, None)?;
+        Ok(())
+    }
+
+    fn ptes_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
         let iter = VmmIter::iter(self, page, addr, size, "map", false, false, None, mapfn, Some(map), Some(map_internal), None)?;
         Ok(())
     }
 
-    pub(crate) fn ptes_get_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "ref + map", true, false, Some(Self::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
+    fn ptes_get_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
+        let iter = VmmIter::iter(self, page, addr, size, "ref + map", true, false, Some(VmmIter::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
         Ok(())
     }
 
@@ -1811,21 +1824,13 @@ impl VmmInner {
             clrfn = desc.unmapfn();
         }
 
-        let iter = VmmIter::iter(self, page, addr, size, "unmap + unref", false, false, Some(Self::unref_ptes), None, None, None, clrfn)?;
+        let iter = VmmIter::iter(self, page, addr, size, "unmap + unref", false, false, Some(VmmIter::unref_ptes), None, None, None, clrfn)?;
         Ok(())
     }
 
     fn ptes_put(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "unref", false, false, Some(Self::unref_ptes), None, None, None, None)?;
+        let iter = VmmIter::iter(self, page, addr, size, "unref", false, false, Some(VmmIter::unref_ptes), None, None, None, None)?;
         Ok(())
-    }
-
-    fn boot_ptes(iter: &mut VmmIter<'_>, pfn: bool, ptei: u32, ptes: u32) -> Result<bool> {
-        let reftype = iter.refs_idx(0);
-        let pgt = unsafe { &mut (*iter.pt[0]) };
-
-        pgt.pt[reftype].as_mut().unwrap().memory.boot(iter.vmm)?;
-        Ok(false)
     }
 
     pub(crate) fn boot(&mut self) -> Result<()> {
@@ -1839,7 +1844,7 @@ impl VmmInner {
         self.ptes_get(pg, self.start, limit)?;
 
         let iter = VmmIter::iter(self, pg, self.start, limit, "boot", false, false,
-                                 Some(Self::boot_ptes), None, None, None, None);
+                                 Some(VmmIter::boot_ptes), None, None, None, None);
         self.bootstrapped = true;
         Ok(())
     }
