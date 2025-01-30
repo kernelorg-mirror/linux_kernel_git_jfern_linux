@@ -270,7 +270,7 @@ impl FifoAlloc::ver {
 
         let _ = msg_params.new_S_userdMem()
             .base(userd.addr()?)
-            .size(userd.size()?)
+            .size(0x200)
             .addressSpace(2)
             .cacheAttrib(1);
 
