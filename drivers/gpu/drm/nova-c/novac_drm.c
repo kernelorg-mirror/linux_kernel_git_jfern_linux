@@ -148,8 +148,7 @@ static void
 nouveau_accel_ce_fini(struct nouveau_drm *drm)
 {
 	nouveau_channel_idle(drm->cechan);
-	nova_core_chan_free_object(drm->auxdev,
-				   &drm->ttm.copy);
+	nova_core_chan_free_object(&drm->ttm.copy);
 	nouveau_channel_del(&drm->cechan);	
 }
 

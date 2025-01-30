@@ -20,7 +20,6 @@ struct nouveau_channel {
 
 	int runlist;
 	int chid;
-	u64 inst;
 	u32 token;
 
 	struct {

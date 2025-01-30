@@ -544,11 +544,11 @@ pub(crate) struct BindParams {
 
 #[versions(GSP)]
 impl BindParams::ver {
-    pub(crate) fn new(channel: &GspChannel, engineType: EngineType, engineInst: u32) -> Result<Self> {
+    pub(crate) fn new(channel: &GspChannel, engine_type: EngineType, engine_inst: u32) -> Result<Self> {
         let msg_size = fw::ver::gen::s_NVA06F_CTRL_BIND_PARAMS::str_size();
         let mut ctrl = ControlMsg::ver::get(&channel.object, fw::ver::gen::NVA06F_CTRL_CMD_BIND, msg_size, false)?;
 
-        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engineType, engineInst);
+        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engine_type, engine_inst);
         let mut msg = fw::ver::gen::s_NVA06F_CTRL_BIND_PARAMS::new(ctrl.get_data_ptr())
             .engineType(nv2080_et);
         Ok(Self {

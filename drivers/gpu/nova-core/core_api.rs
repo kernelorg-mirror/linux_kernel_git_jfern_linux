@@ -8,13 +8,12 @@ use kernel::{
 
 use kernel::types::ForeignOwnable;
 use crate::accel::fifo::EngineType;
-use crate::accel::gr::GrCtx;
 use crate::accel::fifo::ChannelNonStall;
 use crate::gpu::{Gpu, GpuDevice, GpuClient, Chipset, GpuDeviceVmm, GpuChanObject};
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mmu::Mmu;
-use crate::mmu::vmm::{Vmm, VmmMap, SizeAddr};
-use crate::mmu::memory::{VramObj,DmaMemObj,SglMemObj,MemObjType};
+use crate::mmu::vmm::VmmMap;
+use crate::mmu::memory::{VramObj,DmaMemObj,SglMemObj};
 use crate::mmu::memory::{Memory};
 use crate::mmu::mmu::NVKM_MEM_VRAM;
 use crate::vfn::Vfn;
@@ -25,7 +24,7 @@ use crate::mmu::vmm::VMM_TU102;
 
 #[no_mangle]
 #[allow(dead_code)]
-/// Provide the API for the VFIO RFC
+/// Fill the device info structure for the upper level driver.
 pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_device,
                                              info: *mut bindings::nova_core_info) {
     pr_info!("core: {:?} {:?}\n", auxdev, info);
@@ -62,8 +61,6 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
     let chid_nr: u16 = runl.chids.nr as u16;
     pr_info!("got here runl {}\n", runl.entries.len());
     for ent in &runl.entries {
-        let engidx = 0;
-
         for eng in &ent.engns {
             let core_type = eng.eng_type.to_core();
             let mut idx = 0;
@@ -105,7 +102,7 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
 
 #[no_mangle]
 #[allow(dead_code)]
-/// Provide the API for the VFIO RFC
+/// Retrieve the current GPU timer count
 pub unsafe extern "C" fn nova_core_timer_time(auxdev: *mut bindings::auxiliary_device) -> u64 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
 
@@ -129,8 +126,9 @@ fn alloc_gsp_client(gpu: &Gpu,
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Allocate a GSP client/device pair.
 pub unsafe extern "C" fn nova_core_alloc_gsp_client(auxdev: *mut bindings::auxiliary_device,
-                                       client: *mut bindings::nova_core_gsp_client) -> i32
+                                                    client: *mut bindings::nova_core_gsp_client) -> i32
 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
     let gpu = unsafe { &(*core_driver).gpu };
@@ -144,6 +142,7 @@ pub unsafe extern "C" fn nova_core_alloc_gsp_client(auxdev: *mut bindings::auxil
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Free a GSP client/device pair.
 pub unsafe extern "C" fn nova_core_free_gsp_client(client: *mut bindings::nova_core_gsp_client)
 {
     let ncclient = unsafe { &mut (*client) };
@@ -159,7 +158,7 @@ pub unsafe extern "C" fn nova_core_free_gsp_client(client: *mut bindings::nova_c
 
 #[no_mangle]
 #[allow(dead_code)]
-/// Provide the API for the VFIO RFC
+/// Allocate an MMU instance with all information about mmu heaps/types
 pub unsafe extern "C" fn nova_core_alloc_mmu(auxdev: *mut bindings::auxiliary_device,
                                              mmu: *mut bindings::nova_core_mmu) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
@@ -194,6 +193,7 @@ pub unsafe extern "C" fn nova_core_alloc_mmu(auxdev: *mut bindings::auxiliary_de
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Free the MMU structure
 pub unsafe extern "C" fn nova_core_free_mmu(mmu: *mut bindings::nova_core_mmu) {
     unsafe {
         if (*mmu).arc == core::ptr::null_mut() {
@@ -206,10 +206,10 @@ pub unsafe extern "C" fn nova_core_free_mmu(mmu: *mut bindings::nova_core_mmu) {
 
 #[no_mangle]
 #[allow(dead_code)]
-/// Provide the API for the VFIO RFC
+/// Allocate a VMM for the client
 pub unsafe extern "C" fn nova_core_alloc_vmm(auxdev: *mut bindings::auxiliary_device,
                                              client: *mut bindings::nova_core_gsp_client,
-                                             mmu_ptr: *mut bindings::nova_core_mmu,
+                                             _mmu_ptr: *mut bindings::nova_core_mmu,
                                              vmm_type: u8,
                                              vmm_start: u64,
                                              vmm_size: u64,
@@ -218,10 +218,7 @@ pub unsafe extern "C" fn nova_core_alloc_vmm(auxdev: *mut bindings::auxiliary_de
     let gpu = unsafe { &(*core_driver).gpu };
     let ncvmm = unsafe { &mut (*vmm) };
 
-    let mmu: ArcBorrow<'_, Mmu> = unsafe { Arc::borrow((*mmu_ptr).arc) };
-    let cli: ArcBorrow<'_, GpuClient> = unsafe { Arc::borrow((*client).gsp_client) };
     let dev: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
-
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
 
     let gpu_vmm = match gpu.alloc_vmm(&dev_arc, vmm_start, vmm_size, vmm_type) {
@@ -246,6 +243,7 @@ pub unsafe extern "C" fn nova_core_alloc_vmm(auxdev: *mut bindings::auxiliary_de
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Free a client VMM
 pub unsafe extern "C" fn nova_core_free_vmm(vmm: *mut bindings::nova_core_vmm) {
     unsafe {
         if (*vmm).arc == core::ptr::null_mut() {
@@ -258,6 +256,7 @@ pub unsafe extern "C" fn nova_core_free_vmm(vmm: *mut bindings::nova_core_vmm) {
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Reserve an address range in a VMM
 pub unsafe extern "C" fn nova_core_vmm_get(vmm_ptr: *mut bindings::nova_core_vmm,
                                            get_type: u8,
                                            sparse: bool,
@@ -280,16 +279,16 @@ pub unsafe extern "C" fn nova_core_vmm_get(vmm_ptr: *mut bindings::nova_core_vmm
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Release an address range in a VMM
 pub unsafe extern "C" fn nova_core_vmm_put(vmm_ptr: *mut bindings::nova_core_vmm,
                                            addr: u64) {
-    unsafe {
-        let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
-        let _ = (*vmm).vmm.put_addr(addr);
-    }
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    let _ = (*vmm).vmm.put_addr(addr);
 }
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Allocate memory (vram/dma/sgl)
 pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_device,
                                              mmu_ptr: *mut bindings::nova_core_mmu,
                                              name: *const core::ffi::c_char,
@@ -358,6 +357,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Free previously allocated memory (vram/dma/sgl)
 pub unsafe extern "C" fn nova_core_free_mem(obj_ptr: *mut bindings::nova_core_memory_obj) {
     unsafe {
         if (*obj_ptr).obj == core::ptr::null_mut() {
@@ -384,6 +384,7 @@ pub unsafe extern "C" fn nova_core_free_mem(obj_ptr: *mut bindings::nova_core_me
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Map memory into BAR1
 pub unsafe extern "C" fn nova_core_mem_bar1_map(auxdev: *mut bindings::auxiliary_device,
                                                 obj_ptr: *mut bindings::nova_core_memory_obj,
                                                 kind: u32) -> i32 {
@@ -403,7 +404,7 @@ pub unsafe extern "C" fn nova_core_mem_bar1_map(auxdev: *mut bindings::auxiliary
                 Ok(v) => v
             };
 
-            let map = match vramobj.vram_map(0, &vmm, vma.clone(), kind as u8) {
+            match vramobj.vram_map(0, &vmm, vma.clone(), kind as u8) {
                 Err(x) => { return x.to_errno(); }
                 Ok(m) => m
             };
@@ -419,11 +420,11 @@ pub unsafe extern "C" fn nova_core_mem_bar1_map(auxdev: *mut bindings::auxiliary
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Unmap memory from BAR1
 pub unsafe extern "C" fn nova_core_mem_bar1_unmap(auxdev: *mut bindings::auxiliary_device,
                                                   obj_ptr: *mut bindings::nova_core_memory_obj) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
     let gpu = unsafe { &(*core_driver).gpu };
-    let pdev = unsafe { &(*core_driver).pdev };
     let memobj = unsafe { &mut (*obj_ptr) };
     let vmm = gpu.bar.bar1_vmm();
 
@@ -437,32 +438,28 @@ pub unsafe extern "C" fn nova_core_mem_bar1_unmap(auxdev: *mut bindings::auxilia
 
 #[no_mangle]
 #[allow(dead_code)]
-pub unsafe extern "C" fn nova_core_vmm_map(auxdev: *mut bindings::auxiliary_device,
-                                           vmm_ptr: *mut bindings::nova_core_vmm,
+/// Map physical memory into a VMM
+pub unsafe extern "C" fn nova_core_vmm_map(vmm_ptr: *mut bindings::nova_core_vmm,
                                            args: *const bindings::nova_core_map_args,
                                            obj_ptr: *mut bindings::nova_core_memory_obj) -> i32 {
     let memobj = unsafe { &(*obj_ptr) };
     let ncargs = unsafe { &(*args) };
     let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
 
-    let vramobj: &VramObj;
-    let dmaobj: &DmaMemObj;
-    let sglobj: &SglMemObj;
-
     let obj: &dyn Memory;
 
     match memobj.obj_type {
         bindings::NVIF_MEM_OBJ_VRAM => {
-            let _vramobj : &VramObj = unsafe { KBox::borrow(memobj.obj) };
-            obj = _vramobj as &dyn Memory;
+            let vramobj : &VramObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = vramobj as &dyn Memory;
         },
         bindings::NVIF_MEM_OBJ_DMA => {
-            let _dmaobj : &DmaMemObj = unsafe { KBox::borrow(memobj.obj) };
-            obj = _dmaobj as &dyn Memory;
+            let dmaobj : &DmaMemObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = dmaobj as &dyn Memory;
         },
         bindings::NVIF_MEM_OBJ_SGL => {
-            let _dmaobj : &SglMemObj = unsafe { KBox::borrow(memobj.obj) };
-            obj = _dmaobj as &dyn Memory;
+            let sglobj : &SglMemObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = sglobj as &dyn Memory;
         },
         _ => { return EINVAL.to_errno(); }
     }
@@ -485,25 +482,25 @@ pub unsafe extern "C" fn nova_core_vmm_map(auxdev: *mut bindings::auxiliary_devi
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Unmap physical memory from a VMM
 pub unsafe extern "C" fn nova_core_vmm_unmap(vmm_ptr: *mut bindings::nova_core_vmm,
                                              addr: u64) {
-    unsafe {
-        let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
-        let _ = (*vmm).vmm.unmap_addr(addr);
-    }
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    let _ = (*vmm).vmm.unmap_addr(addr);
 }
 
 
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Allocate a channel on the client
 pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_device,
                                               client: *mut bindings::nova_core_gsp_client,
                                               runl: u8, chan_priv: bool,
                                               offset: u64, length: u64,
                                               vmm_ptr: *mut bindings::nova_core_vmm,
                                               userd: *mut bindings::nova_core_memory_obj,
-                                              name: *const core::ffi::c_char,
+                                              _name: *const core::ffi::c_char,
                                               chan: *mut bindings::nova_core_chan) -> i32 {
 
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
@@ -535,12 +532,13 @@ pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_d
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Free a channel on the client
 pub unsafe extern "C" fn nova_core_free_chan(chan: *mut bindings::nova_core_chan) {
     unsafe {
         if (*chan).arc == core::ptr::null_mut() {
             return;
         }
-        let mut chan_arc : Arc<Channel> = Arc::from_foreign((*chan).arc);
+        let chan_arc : Arc<Channel> = Arc::from_foreign((*chan).arc);
         chan_arc.free();
         (*chan).arc = core::ptr::null_mut();
     }
@@ -548,12 +546,10 @@ pub unsafe extern "C" fn nova_core_free_chan(chan: *mut bindings::nova_core_chan
 
 #[no_mangle]
 #[allow(dead_code)]
-pub unsafe extern "C" fn nova_core_chan_alloc_object(auxdev: *mut bindings::auxiliary_device,
-                                                     chan: *mut bindings::nova_core_chan,
+/// Allocate an object on a channel
+pub unsafe extern "C" fn nova_core_chan_alloc_object(chan: *mut bindings::nova_core_chan,
                                                      obj_ptr: *mut bindings::nova_core_chan_obj) -> i32 {
 
-    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
-    let gpu = unsafe { &(*core_driver).gpu };
     let chan: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan).arc) };
     let obj_info = unsafe { &mut (*obj_ptr) };
 
@@ -572,8 +568,8 @@ pub unsafe extern "C" fn nova_core_chan_alloc_object(auxdev: *mut bindings::auxi
 
 #[no_mangle]
 #[allow(dead_code)]
-pub unsafe extern "C" fn nova_core_chan_free_object(auxdev: *mut bindings::auxiliary_device,
-                                                    obj_ptr: *mut bindings::nova_core_chan_obj) {
+/// Free an object on a channel
+pub unsafe extern "C" fn nova_core_chan_free_object(obj_ptr: *mut bindings::nova_core_chan_obj) {
     let obj_info = unsafe { &mut (*obj_ptr) };
     unsafe {
         if obj_info.arc == core::ptr::null_mut() {
@@ -586,6 +582,7 @@ pub unsafe extern "C" fn nova_core_chan_free_object(auxdev: *mut bindings::auxil
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Map the VFN USER doorbell space
 pub unsafe extern "C" fn nova_core_map_user(auxdev: *mut bindings::auxiliary_device,
                                             user_ptr: *mut bindings::nova_core_user_info) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
@@ -595,13 +592,15 @@ pub unsafe extern "C" fn nova_core_map_user(auxdev: *mut bindings::auxiliary_dev
 
     let (offset, size) = Vfn::user_info();
     user.size = size;
+    pr_info!("mapping user door at {:#x}\n", pdev.resource_start(0).unwrap() + offset as u64);
     user.ptr = unsafe { bindings::ioremap(pdev.resource_start(0).unwrap() + offset as u64, size as u64) };
     0
 }
 
 #[no_mangle]
 #[allow(dead_code)]
-pub unsafe extern "C" fn nova_core_unmap_user(auxdev: *mut bindings::auxiliary_device,
+/// Unmap the VFN USER doorbell space
+pub unsafe extern "C" fn nova_core_unmap_user(_auxdev: *mut bindings::auxiliary_device,
                                               user_ptr: *mut bindings::nova_core_user_info) {
     let user = unsafe { &(*user_ptr) };
 
@@ -610,6 +609,7 @@ pub unsafe extern "C" fn nova_core_unmap_user(auxdev: *mut bindings::auxiliary_d
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Register a callback to get nonstall interrupts for a channel
 pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings::auxiliary_device,
                                                           chan_ptr: *mut bindings::nova_core_chan,
                                                           cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
@@ -633,6 +633,7 @@ pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings:
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Unregister a callback to get nonstall interrupts for a channel
 pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::nova_core_nonstall) {
     let cns_info = unsafe { &mut (*cns_ptr) };
     unsafe {
@@ -647,6 +648,7 @@ pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::n
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Register a callback to get channel kill event
 pub unsafe extern "C" fn nova_core_chan_register_killed(auxdev: *mut bindings::auxiliary_device,
                                                         chan_ptr: *mut bindings::nova_core_chan,
                                                         cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
@@ -663,6 +665,7 @@ pub unsafe extern "C" fn nova_core_chan_register_killed(auxdev: *mut bindings::a
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Unregister a callback to get channel kill event
 pub unsafe extern "C" fn nova_core_chan_unregister_killed(auxdev: *mut bindings::auxiliary_device,
                                                           chan_ptr: *mut bindings::nova_core_chan) -> i32 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
@@ -676,6 +679,7 @@ pub unsafe extern "C" fn nova_core_chan_unregister_killed(auxdev: *mut bindings:
 
 #[no_mangle]
 #[allow(dead_code)]
+/// Initialise a graphics context on a client
 pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary_device,
                                                 client: *mut bindings::nova_core_gsp_client,
                                                 vmm_ptr: *mut bindings::nova_core_vmm,
@@ -684,11 +688,9 @@ pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary
     let gpu = unsafe { &(*core_driver).gpu };
     let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
     let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
-    let cli: ArcBorrow<'_, GpuClient> = unsafe { Arc::borrow((*client).gsp_client) };
     let dev: ArcBorrow<'_, GpuDevice> = unsafe { Arc::borrow((*client).gsp_device) };
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
-    let cli_arc: Arc<GpuClient> = Arc::<GpuClient>::from(cli);
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
     let vmm_arc: Arc<GpuDeviceVmm> = Arc::<GpuDeviceVmm>::from(vmm);
 

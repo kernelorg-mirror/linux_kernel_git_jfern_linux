@@ -3,9 +3,8 @@
 pub(crate) use kernel::macros::versions;
 
 use crate::order_base_2;
-use kernel::bindings;
-use core::sync::atomic::{AtomicU16, Ordering};
 use kernel::prelude::*;
+use kernel::bindings;
 use kernel::sync::{Arc, Mutex, new_mutex};
 use kernel::sync::lock::Guard;
 use kernel::sync::lock::mutex::MutexBackend;
@@ -40,7 +39,6 @@ use crate::vfn::{Vfn, VfnHandler};
 use crate::mmu::mm::MemRange;
 use crate::mmu::memory::{InstObj, VramObj};
 use crate::mmu::vmm::Vmm;
-use crate::nvfw::*;
 use crate::sec2::{Sec2, Sec2Fw};
 use crate::timer::TimerWait;
 use crate::{timer_msec, timer_nsec};
@@ -310,7 +308,7 @@ pub(crate) trait GspManager: Send + Sync {
     fn get_engine_bitmap(&self) -> u64;
     fn get_gr_ctx_info(&self) -> &KVec<CtxBufInfo>;
     fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
+                      buffer_entries: &KVec<GpuPromoteBufferEntry>) -> Result<()>;
 
     fn cleanup_vgpu_plugin(&self, device: &GspDevice, gfid: u32) -> i32;
     fn shutdown_vgpu_plugin_task(&self, device: &GspDevice, gfid: u32) -> i32;
@@ -615,9 +613,9 @@ impl GspManager for GspManager::ver {
     }
 
     fn promote_gr_ctx(&self, device: &GspDevice, channel: &GspChannel,
-                      bufferEntries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
+                      buffer_entries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
         let mut msg = GpuPromoteCtx::ver::new_promote_gr(device, channel,
-                                                         bufferEntries)?;
+                                                         buffer_entries)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -675,10 +673,10 @@ struct CtxBufTable {
     ro: bool
 }
 
-const NumCtxBufs: usize = 8;
+const NUM_CTX_BUFS: usize = 8;
 
 #[versions(GSP)]
-const CtxBufMap: [CtxBufTable; NumCtxBufs] = [
+const CTX_BUF_MAP: [CtxBufTable; NUM_CTX_BUFS] = [
     CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS,
                   id1: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN,
                   global: false,
@@ -832,8 +830,8 @@ impl GspManager::ver {
         let mut buf_info = KVec::new();
         for i in 0..gr_ctx_bufs.len() {
             let mut map_idx: usize = 0xffffffff;
-            for map in 0..CtxBufMap::ver.len() {
-                if CtxBufMap::ver[map].id0 == i as u32 {
+            for map in 0..CTX_BUF_MAP::ver.len() {
+                if CTX_BUF_MAP::ver[map].id0 == i as u32 {
                     map_idx = map;
                     break;
                 }
@@ -845,7 +843,7 @@ impl GspManager::ver {
 
             let mut size: u32 = gr_ctx_bufs[i].size;
 
-            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN {
+            if CTX_BUF_MAP::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN {
                 size = (align(size as usize, 0x1000) + 64 * 0x1000) as u32; // per subtx headers
             }
 
@@ -859,25 +857,25 @@ impl GspManager::ver {
             }
 
             let align;
-            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_ATTRIBUTE_CB {
+            if CTX_BUF_MAP::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_ATTRIBUTE_CB {
                 align = order_base_2(size as usize) as u8; //TODO;
             } else {
                 align = page;
             }
 
             buf_info.push(CtxBufInfo {
-                buffer_id: CtxBufMap::ver[map_idx].id1 as u16,
+                buffer_id: CTX_BUF_MAP::ver[map_idx].id1 as u16,
                 size,
                 page,
                 align,
-                global: CtxBufMap::ver[map_idx].global,
-                init: CtxBufMap::ver[map_idx].init,
-                ro: CtxBufMap::ver[map_idx].ro,
-                priv_access_map: CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
+                global: CTX_BUF_MAP::ver[map_idx].global,
+                init: CTX_BUF_MAP::ver[map_idx].init,
+                ro: CTX_BUF_MAP::ver[map_idx].ro,
+                priv_access_map: CTX_BUF_MAP::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP,
                 unrestricted_priv_access_map: false,
             }, GFP_KERNEL)?;
 
-            if CtxBufMap::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
+            if CTX_BUF_MAP::ver[map_idx].id1 == fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_PRIV_ACCESS_MAP {
                 let last_ent = buf_info.len() - 1;
                 buf_info.push(CtxBufInfo {
                     buffer_id: fw::ver::gen::NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_UNRESTRICTED_PRIV_ACCESS_MAP as u16,

@@ -198,7 +198,7 @@ pub(crate) struct FifoAlloc {
 #[versions(GSP)]
 impl FifoAlloc::ver {
     pub(crate) fn new(device: &GspDevice,
-                      engineType: EngineType, engineInst: u32,
+                      engine_type: EngineType, engine_inst: u32,
                       va: &GspVa,
                       instobj: &InstObj,
                       userd: &VramObj,
@@ -217,7 +217,7 @@ impl FifoAlloc::ver {
 
         let mut flags = 0;
 
-        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engineType, engineInst);
+        let nv2080_et = FifoGetDeviceInfoTable::ver::convert_eng_to_nv2080(engine_type, engine_inst);
         //PHYSICAL 0
         //VPR false
         //CHANNEL_SKIP_MAP_REFCOUNTING FALSE

@@ -763,13 +763,12 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 		drm->ttm.copy.handle = drm->info.ce_class | (mthd->engine << 16);
 		drm->ttm.copy.engine_type = engine_type;
 		drm->ttm.copy.engine_inst = engine_inst;
-		ret = nova_core_chan_alloc_object(drm->auxdev, &chan->chan.nova,
+		ret = nova_core_chan_alloc_object(&chan->chan.nova,
 						  &drm->ttm.copy);
 		if (ret == 0) {
 			ret = mthd->init(chan, drm->ttm.copy.handle);
 			if (ret) {
-				nova_core_chan_free_object(drm->auxdev,
-							   &drm->ttm.copy);
+				nova_core_chan_free_object(&drm->ttm.copy);
 				continue;
 			}
 
@@ -900,8 +899,8 @@ nouveau_ttm_io_mem_free_locked(struct nouveau_drm *drm,
 
 	switch (reg->mem_type) {
 	case TTM_PL_TT:
-//		if (mem->kind)
-//			mem->mem.impl->unmap(mem->mem.priv);
+		if (mem->kind)
+			nova_core_mem_bar1_unmap(drm->auxdev, &mem->mem);
 		break;
 	case TTM_PL_VRAM:
 		nova_core_mem_bar1_unmap(drm->auxdev, &mem->mem);

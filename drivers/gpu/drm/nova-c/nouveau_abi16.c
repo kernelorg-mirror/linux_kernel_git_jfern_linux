@@ -517,8 +517,7 @@ nouveau_abi16_ioctl_del(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	obj = nouveau_abi16_obj_find(abi16, ioctl->object);
 	if (obj) {
 		if (obj->type == ENGOBJ)
-			nova_core_chan_free_object(drm->auxdev,
-						   &obj->obj);
+			nova_core_chan_free_object(&obj->obj);
 		nouveau_abi16_obj_del(obj);
 	}
 
@@ -580,8 +579,7 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 	obj->obj.handle = args->handle;
 	obj->obj.engine_type = engine_type;
 	obj->obj.engine_inst = eng_inst;
-	ret = nova_core_chan_alloc_object(drm->auxdev,
-					  &chan->chan->chan.nova,
+	ret = nova_core_chan_alloc_object(&chan->chan->chan.nova,
 					  &obj->obj);
 
 	return ret;

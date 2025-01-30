@@ -27,7 +27,6 @@ use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::accel::fifo::{Channel};
-use crate::accel::gr::Gr;
 use crate::accel::gr::GrCtx;
 use crate::firmware::{BLFirmware, NvkmFirmware, RadixFirmware};
 use crate::gsp::gsp_falcon::GspFalcon;
@@ -42,7 +41,6 @@ use crate::timer::Timer;
 use crate::vfn::Vfn;
 use crate::rm_riscv::RiscvFw;
 use crate::sec2::{Sec2, Sec2Fw};
-use crate::vfn::VfnHandler;
 use core::fmt::Debug;
 
 #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
@@ -538,9 +536,9 @@ impl Gpu {
 
     pub(crate) fn gr_ctx(&self, device: &GpuDevice, chan: &Channel,
                          vmm: &GpuDeviceVmm) -> Result<Arc<GrCtx>>{
-        Gr::new_ctx(self.instmem.clone(), self.gsp.clone(),
-                    device, chan,
-                    &vmm.vmm, &self.gr_ctx_bufs)
+        GrCtx::new_ctx(self.instmem.clone(), self.gsp.clone(),
+                       device, chan,
+                       &vmm.vmm, &self.gr_ctx_bufs)
     }
 
     pub(crate) fn int_alloc_client_device(alloc_id: Arc<AllocId>, gsp: Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
@@ -641,7 +639,7 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        let gr_ctx_bufs = Gr::golden_init(instmem.clone(), gsp.clone(), id_allocator.clone())?;
+        let gr_ctx_bufs = GrCtx::golden_init(instmem.clone(), gsp.clone(), id_allocator.clone())?;
         Ok(pin_init!(Self { base, event_handler, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs, alloc_id: id_allocator }))
     }
 

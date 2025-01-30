@@ -194,8 +194,7 @@ struct nova_core_map_args {
 	u8 vol;
 };
 
-int nova_core_vmm_map(struct auxiliary_device *auxdev,
-		      struct nova_core_vmm *vmm,
+int nova_core_vmm_map(struct nova_core_vmm *vmm,
 		      const struct nova_core_map_args *args,
 		      struct nova_core_memory_obj *obj);
 
@@ -267,12 +266,11 @@ int nova_core_chan_init_gr(struct auxiliary_device *auxdev,
 			   struct nova_core_gsp_client *client,
 			   struct nova_core_vmm *vmm,
 			   struct nova_core_chan *chan);
-int nova_core_chan_alloc_object(struct auxiliary_device *auxdev,
-				struct nova_core_chan *chan,
+int nova_core_chan_alloc_object(struct nova_core_chan *chan,
 				struct nova_core_chan_obj *cobj);
 
-int nova_core_chan_free_object(struct auxiliary_device *auxdev,
-			       struct nova_core_chan_obj *cobj);
+int nova_core_chan_free_object(struct nova_core_chan_obj *cobj);
+
 
 struct nova_core_user_info {
 	void *ptr;

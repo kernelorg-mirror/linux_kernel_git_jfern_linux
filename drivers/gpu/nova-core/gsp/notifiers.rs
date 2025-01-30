@@ -176,13 +176,13 @@ pub(crate) fn os_error_log(msg: &mut KVec<u8>) {
 }
 
 pub(crate) fn user_shared_data(msg: &mut KVec<u8>) {
-    let mut user_shared_data = fw::ver::gen::s_rpc_gsp_send_user_shared_data_v17_00::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
+    let user_shared_data = fw::ver::gen::s_rpc_gsp_send_user_shared_data_v17_00::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
 
     pr_info!("USER SHARED DATA {}", user_shared_data.get_data());
 }
 
 pub(crate) fn rc_triggered(msg: &mut KVec<u8>, handlers: &Option<Arc<EventHandler>>) {
-    let mut rc_triggered = fw::ver::gen::s_rpc_rc_triggered_v17_02::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
+    let rc_triggered = fw::ver::gen::s_rpc_rc_triggered_v17_02::new(unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize)} );
 
     let chid = rc_triggered.get_chid();
     pr_info!("RC TRIGGERED engn:{:#x} chid:{} type:{}, scope:{} part:{}\n",

@@ -39,16 +39,17 @@ nouveau_mem_map(struct nouveau_mem *mem,
 	args.size = mem->mem.size;
 	args.offset = 0;
 
-	return nova_core_vmm_map(mem->drm->auxdev,
-				 vmm, &args, &mem->mem);
+	return nova_core_vmm_map(vmm, &args, &mem->mem);
 }
 
 void
 nouveau_mem_fini(struct nouveau_mem *mem)
 {
 	nova_core_free_mem(&mem->mem);
-	nova_core_vmm_put(&mem->drm->cli.vmm.vmm, mem->vma_addr[1]);
-	nova_core_vmm_put(&mem->drm->cli.vmm.vmm, mem->vma_addr[0]);
+	if (mem->vma_addr[1])
+		nova_core_vmm_put(&mem->drm->cli.vmm.vmm, mem->vma_addr[1]);
+	if (mem->vma_addr[0])	
+		nova_core_vmm_put(&mem->drm->cli.vmm.vmm, mem->vma_addr[0]);
 }
 
 int

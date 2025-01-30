@@ -7,7 +7,7 @@ use kernel::new_spinlock;
 use kernel::new_mutex;
 
 use crate::dma::DmaObject;
-use crate::gpu::{Gpu, GpuClient, GpuDevice, GpuDeviceVmm, GpuChanObject};
+use crate::gpu::{Gpu, GpuDevice, GpuDeviceVmm, GpuChanObject};
 use crate::gpu::IntrInfo;
 use crate::mmu::memory::{InstObj, VramObj};
 use crate::gsp::{GspChannel, GspManager};
@@ -330,7 +330,7 @@ impl VfnHandler for ChannelNonStall {
 impl ChannelNonStall {
     pub(crate) fn unregister(&self) {
         pr_info!("nonstall unregistered {:#x}\n", self.nonstall);
-        self.vfn.intr_block(self.nonstall);
+        let _ = self.vfn.intr_block(self.nonstall);
         let _ = self.vfn.remove_handler(self.nonstall);
     }
 }
@@ -345,7 +345,7 @@ impl Channel {
         /* with a vmm and mapped into it */
         let mut instbuf = InstObj::new(gpu.instmem.clone(), 0x1000, 0x1000, true, true)?;
 
-        vmm.vmm.join(&mut instbuf);
+        vmm.vmm.join(&mut instbuf)?;
 
         let doorbell = (runl_id << 16) | chid;
         let mthdbuf = DmaObject::new_cleared(&gpu.base.dev, mthdbuf_size as usize, "mthdbuf")?;
@@ -354,8 +354,8 @@ impl Channel {
                                                userd, &mthdbuf, gpu.base.spec.gpu_consts.fifo_class, chid, offset, length, chan_priv)?;
 
 
-        gpu.gsp.bind_fifo(&gsp_chan);
-        gpu.gsp.schedule_fifo(&gsp_chan, true);
+        gpu.gsp.bind_fifo(&gsp_chan)?;
+        gpu.gsp.schedule_fifo(&gsp_chan, true)?;
 
         Ok(Arc::new(Self {
             name: c_str!("chan"),
@@ -397,7 +397,7 @@ impl Channel {
             },
         };
 
-        gpu.event_handler.add_handler(killed);
+        let _ = gpu.event_handler.add_handler(killed);
         pr_info!("killed registered\n");
         0
     }
@@ -414,7 +414,7 @@ impl Channel {
                                     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
                                     data: *mut core::ffi::c_void) -> Result<Arc<ChannelNonStall>> {
         let nonstall = match chan.mgr.find_nonstall(chan.runl_id) {
-            Err(x) => { return Err(EINVAL); },
+            Err(x) => { return Err(x); },
             Ok(ns) => ns
         };
 
@@ -430,13 +430,13 @@ impl Channel {
 
         pr_info!("nonstall registered {:#x} {:#x}\n", chan.runl_id, nonstall);
         let _ = gpu.vfn.add_handler(nonstall, cns.clone() as Arc<dyn VfnHandler>);
-        gpu.vfn.intr_allow(nonstall);
+        gpu.vfn.intr_allow(nonstall)?;
         Ok(cns)
     }
 
     pub(crate) fn free(&self) {
-        self.mgr.free_fifo_chan(&self.gsp_chan);
-        self.mgr.free_chid(self.id as usize);
+        let _ = self.mgr.free_fifo_chan(&self.gsp_chan);
+        let _ = self.mgr.free_chid(self.id as usize);
     }
 }
 
