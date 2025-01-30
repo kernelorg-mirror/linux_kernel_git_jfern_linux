@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use kernel::str::CString;
+use kernel::c_str;
 use core::fmt::Debug;
 use core::fmt;
 use core::cell::UnsafeCell;
@@ -59,6 +61,8 @@ const NVKM_VMM_PTE_SPARSE: u8 = 0x80;
 const NVKM_VMM_PTE_VALID: u8 = 0x40;
 const NVKM_VMM_PTE_SPTES: u8 = 0x3f;
 
+const VMM_TRACE: bool = false;
+
 pub(crate) struct VmmPt {
     pt: [Option<MmuPt>; 2],
     refs: [u32; 2],
@@ -99,7 +103,6 @@ impl VmmPt {
             _ => { 0 }
         };
 
-        pr_info!("pte vector is {} pde is {}\n", lpte, pde);
         let mut pte_v = KVec::with_capacity(lpte as usize, GFP_KERNEL)?;
         for _i in 0..lpte {
             pte_v.push(0, GFP_KERNEL)?;
@@ -122,6 +125,24 @@ impl VmmPt {
     }
 }
 
+impl Debug for VmmPt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "page: {} pt {:?} {:?}", self.page, self.pt[0], self.pt[1])?;
+        writeln!(f, "pte: {:x?}", self.pte)?;
+        for i in 0..self.pde.len() {
+            if self.pde[i].is_some() {
+                writeln!(f, "pde: {} {:?}", i, self.pde[i].as_ref().unwrap())?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Drop for VmmPt {
+    fn drop(&mut self) {
+        pr_info!("Dropping VmmPt");
+    }
+}
 
 pub(crate) trait VmmDescFunc {
     fn invalid(_pt: &mut MmuPt, _ptei: u32, _ptes: u32) -> Result<()> {
@@ -166,6 +187,16 @@ pub(crate) enum VmmDescType {
 }
 
 impl VmmDescType {
+    fn tname(&self) -> &'static str {
+        match self {
+            VmmDescType::Empty(_) => { "Empty" },
+            VmmDescType::PgdPd0(x) => { "PGD0" }
+            VmmDescType::PgdPd1(x) => { "PGD1" }
+            VmmDescType::Spt(x) => { "SPT" }
+            VmmDescType::Lpt(x) => { "LPT" }
+        }
+    }
+
     fn bits(&self) -> u8 {
         match self {
             VmmDescType::Empty(_) => { 0 },
@@ -321,7 +352,9 @@ impl VmmDesc {
 
         out_data |= pt.addr >> 4;
 
-        pr_info!("pde: {:#x} {:#x}\n", pt.addr, out_data);
+        if VMM_TRACE {
+            pr_info!("pde: {:#x} {:#x}\n", pt.addr, out_data);
+        }
 
         // target
         //
@@ -357,6 +390,9 @@ impl VmmDescSPT {
         let mut ptes = in_ptes;
 
         map_internal.map_type += (ptes * map_internal.ctag as u32) as u64;
+        if VMM_TRACE {
+            pr_info!("pte {:#x} {:#x} {:#x} {:#x} {:#x}\n", data, map_internal.map_type, map_internal.next, ptei, ptes);
+        }
         while ptes != 0 {
             pt.wo64((ptei * 8) as u64, data)?;
             ptei += 1;
@@ -408,6 +444,9 @@ impl VmmDescFunc for VmmDescSPT {
 
         map_internal.midx = 0;
 
+        if VMM_TRACE {
+            pr_info!("gp100_vmm_pgt_mem mem {} {}\n", ptei, ptes);
+        }
         let vmmpage = VmmInner::page(&vmm.instmem.base, map_internal.page_idx);
         vmm_map_iter!(pt, ptes, ptei, map_internal, vmmpage.shift,
                       map_internal.mem.unwrap()[map_internal.midx].size() as u64,
@@ -449,6 +488,9 @@ impl VmmDescLPT {
 impl VmmDescFunc for VmmDescLPT {
     fn invalid(pt: &mut MmuPt, ptei: u32, ptes: u32) -> Result<()> {
         /* VALID_FALSE + PRIV tells the MMU to ignore corresponding SPTEs. */
+        if VMM_TRACE {
+            pr_info!("invalid: {} {}\n", ptei, ptes);
+        }
         pt.fill64(ptei as u64 * 8, bit_u64!(5), ptes as usize)
     }
 
@@ -511,6 +553,9 @@ impl VmmDescFunc for VmmDescPd0 {
             data[1] = VmmDesc::pde(pgt.pt[1].as_ref().unwrap(), data[1]);
         }
 
+        if VMM_TRACE {
+            pr_info!("writing pde0 to {:#x} off: {:#x}, {:#x} {:#x}\n", pd.memory.addr()?, pdei, data[0], data[1]);
+        }
         let _ = pd.memory.acquire();
         pd.wo128(pdei as u64 * 0x10, data[0], data[1])?;
         let _ = pd.memory.release();
@@ -551,12 +596,15 @@ impl VmmDescFunc for VmmDescPd1 {
         let mut data: u64 = 0;
 
         let pgt = pgd.pde[pdei as usize].as_ref().unwrap();
-        let pd: &mut MmuPt =  pgd.pt[0].as_mut().unwrap();
+        let pd: &mut MmuPt = pgd.pt[0].as_mut().unwrap();
 
         if pgt.pt[0].is_none() {
             return Ok(());
         }
         data = VmmDesc::pde(pgt.pt[0].as_ref().unwrap(), data);
+        if VMM_TRACE {
+            pr_info!("writing pde1 to {:#x} off: {:#x}, {:#x}\n", pd.memory.addr()?, pdei, data);
+        }
         let _ = pd.memory.acquire();
         pd.wo64(pdei as u64 * 8, data)?;
         let _ = pd.memory.release();
@@ -819,6 +867,18 @@ type ClrFn = fn(&mut MmuPt, u32, u32) -> Result<()>;
 
 impl<'a> VmmIter<'a> {
 
+    fn trace_str(&self) -> Result<CString> {
+        let mut outstr = c_str!("").to_cstring()?;
+        for lvl in (0..=self.max).rev() {
+            if lvl >= self.lvl {
+                outstr = CString::try_from_fmt(fmt!("{}{:05x}:", outstr, self.pte[lvl as usize]))?;
+            } else {
+                outstr = CString::try_from_fmt(fmt!("{}xxxxx:", outstr))?;
+            }
+        }
+        Ok(outstr)
+    }
+
     fn refs_idx(&self, offset: usize) -> usize {
         match self.page.get_desc(offset) {
             VmmDescType::Spt(_) => { 1 },
@@ -831,7 +891,9 @@ impl<'a> VmmIter<'a> {
         let pg_type = self.refs_idx((self.lvl - 1) as usize);
         let pgt = &mut pgd.pde[pdei as usize].as_mut().unwrap();
 
-        pr_info!("ref_hwpt: {}: {} {}\n", self.lvl, pg_type, desc.bits());
+        if VMM_TRACE {
+            pr_info!("ref_hwpt: {}: {} {}\n", self.lvl, pg_type, desc.bits());
+        }
         let pten = 1_u32.wrapping_shl(desc.bits() as u32);
         let size = desc.size() as usize * pten as usize;
 
@@ -839,7 +901,9 @@ impl<'a> VmmIter<'a> {
 
         pgd.refs[0] += 1;
 
-        pr_info!("ref_hwpt: {}: {:#x}\n", pg_type, size);
+        if VMM_TRACE {
+            pr_info!("ref_hwpt: {}: {:#x}\n", pg_type, size);
+        }
 
         let mut pt = MmuPtC::get(self.vmm.instmem.clone(), size as usize, (*desc).align() as usize, true)?;
 
@@ -860,8 +924,6 @@ impl<'a> VmmIter<'a> {
                 // or sparse, which would prevent the MMU from looking at
                 // the SPTEs on some GPUs.
                 //
-
-
                 let mut ptei: u32 = 0;
                 let mut pteb: u32 = 0;
                 let mut ptes: u32 = 0;
@@ -908,6 +970,9 @@ impl<'a> VmmIter<'a> {
         }
 
         //call pde function?
+        if VMM_TRACE {
+            pr_info!("{}: {} PDE write {}\n", &self.vmm.name, self.trace_str()?, desc.tname());
+        }
         self.page.get_desc(self.lvl as usize).pde(pgd, pdei)?;
 
         self.flush_mark();
@@ -918,7 +983,9 @@ impl<'a> VmmIter<'a> {
     fn ref_swpt(&mut self, pgd: &mut VmmPt, pdei: u32) -> Result<()> {
         let desc = self.page.get_desc((self.lvl - 1) as usize);
 
-        pr_info!("ref swpt {} {}\n", self.lvl - 1, pdei);
+        if VMM_TRACE {
+            pr_info!("ref swpt {} {}\n", self.lvl - 1, pdei);
+        }
         let pgt = VmmPt::new(desc, false, self.lvl as usize, Some(self.page))?;
 
         pgd.pde[pdei as usize] = Some(pgt);
@@ -929,11 +996,16 @@ impl<'a> VmmIter<'a> {
         self.flush = core::cmp::min(self.flush, (self.max - self.lvl) as usize);
     }
 
-    fn flush(&mut self) {
+    fn flush(&mut self) -> Result<()> {
         if self.flush != NVKM_VMM_LEVELS_MAX {
+            if VMM_TRACE {
+                pr_info!("{} {:?} flush: {}\n", &self.vmm.name,
+                         self.trace_str()?, self.flush);
+            }
             let _ = self.vmm.flush();
             self.flush = NVKM_VMM_LEVELS_MAX;
         }
+        Ok(())
     }
 
     fn iter<'b>(vmm: &'b mut VmmInner, page: &'b VmmPage, addr: u64, size: u64,
@@ -946,7 +1018,9 @@ impl<'a> VmmIter<'a> {
     {
         let mut bits = addr >> page.shift;
 
-        pr_info!("iter: {:#x} {:#x} {}\n", addr, size, page.shift);
+        if VMM_TRACE {
+            pr_info!("iter: {:#x} {:#x} {}\n", addr, size, page.shift);
+        }
         let mut it = VmmIter {
             page,
             vmm,
@@ -968,6 +1042,9 @@ impl<'a> VmmIter<'a> {
                 break;
             }
             it.pte[it.lvl as usize] = (bits as u32 & (1_u32.wrapping_shl(curr_bits as u32) - 1)) as u32;
+            if VMM_TRACE {
+                pr_info!("bits {}: is {} vs {}\n", it.lvl, bits, curr_bits);
+            }
             bits >>= curr_bits;
             it.lvl += 1;
         }
@@ -975,7 +1052,13 @@ impl<'a> VmmIter<'a> {
         it.max = it.lvl;
         it.pt[it.max as usize] = &mut it.vmm.pd as *mut VmmPt;
 
-        pr_info!("{} {} {} {:?}\n", bits, it.max, it.lvl, &mut it.vmm.pd as *mut VmmPt);
+        it.lvl = 0;
+        if VMM_TRACE {
+            pr_info!("{}: {} {} {:016x} {:016x} {} {} PTEs\n", it.vmm.name, it.trace_str()?,
+                     name, addr, size, page.shift, it.cnt);
+        }
+        it.lvl = it.max;
+
         while it.cnt != 0 {
             let mut pgt_ref = unsafe { &mut (*it.pt[it.lvl as usize]) };
             let pg_type = it.refs_idx(0);
@@ -983,12 +1066,16 @@ impl<'a> VmmIter<'a> {
             let ptei = it.pte[0];
             let ptes = core::cmp::min::<u64>(it.cnt, (pten - ptei) as u64 );
 
-            pr_info!("cnt: {} {} {} {} {} {}\n", it.cnt, it.lvl, pg_type, pten, ptei, ptes);
+            if VMM_TRACE {
+                pr_info!("cnt: {} {} {} {} {} {}\n", it.cnt, it.lvl, pg_type, pten, ptei, ptes);
+            }
             while it.lvl != 0 {
                 let pdei = it.pte[it.lvl as usize];
                 let pgd = pgt_ref;
 
-                pr_info!("lvl: {} {}\n", it.lvl, pdei);
+                if VMM_TRACE {
+                    pr_info!("lvl: {} {}\n", it.lvl, pdei);
+                }
                 if pgref && pgd.pde[pdei as usize].is_none() {
                     it.ref_swpt(pgd, pdei)?;
                 }
@@ -1029,7 +1116,6 @@ impl<'a> VmmIter<'a> {
                     it.pte[it.lvl as usize] += 1;
                 }
             }
-            pr_info!("at end of {} {}\n", it.cnt, it.lvl);
         }
 
         it.flush();
@@ -1441,7 +1527,9 @@ impl VmmInner {
             return Ok(());
         }
 
-        pr_info!("ref sptes {} {}\n", spti, lpti);
+        if VMM_TRACE {
+            pr_info!("ref sptes {} {}\n", spti, lpti);
+        }
 
         let mut pteb = ptei >> sptb;
         ptei = pteb;
@@ -1497,6 +1585,9 @@ impl VmmInner {
                 /* MMU supports blocking SPTEs by marking an LPTE
                  * as INVALID.  We need to reverse that here.
                  */
+                if VMM_TRACE {
+                    pr_info!("{}: {:?} LPTE {:05x}: I -> U {} PTEs\n", &iter.vmm.name, iter.trace_str()?, pteb, ptes);
+                }
                 pair.unmap(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             }
 
@@ -1528,7 +1619,9 @@ impl VmmInner {
             return Ok(());
         }
 
-        pr_info!("unref sptes {} {}\n", spti, lpti);
+        if VMM_TRACE {
+            pr_info!("unref sptes {} {} {} {}\n", ptei, sptb, spti, lpti);
+        }
         let mut pteb = ptei >> sptb;
         ptei = pteb;
         loop {
@@ -1583,6 +1676,9 @@ impl VmmInner {
                  * INVALID state to tell the MMU there is no point
                  * trying to fetch the corresponding SPTEs.
                  */
+                if VMM_TRACE {
+                    pr_info!("{} {:?} LPTE {:05x} U -> I {} PTEs\n", &iter.vmm.name, iter.trace_str()?, pteb, ptes);
+                }
                 pair.invalid(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             }
             pteb = ptei;
@@ -1598,12 +1694,18 @@ impl VmmInner {
         let pt = &pgt.pt[pg_type];
         let pdei = iter.pte[(iter.lvl + 1) as usize];
 
+        if VMM_TRACE {
+            pr_info!("unref_pdes: type {} pgt {} pgd refs {} lvl is {}\n", pg_type, pgt.refs[0], pgd.refs[0], iter.lvl);
+        }
         iter.lvl += 1;
 
         pgd.refs[0] -= 1;
 
         if pgd.refs[0] != 0 {
             let desc = iter.page.get_desc((iter.lvl) as usize);
+            if VMM_TRACE {
+                pr_info!("{} {:?} PDE unmap {}\n", &iter.vmm.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
+            }
             pgt.pt[pg_type] = None;
 
             if pgt.refs[(!pg_type) & 0x1] == 0 {
@@ -1627,6 +1729,9 @@ impl VmmInner {
         } else {
             Self::unref_pdes(iter)?;
         }
+        if VMM_TRACE {
+            pr_info!("{} {} {:?} PDE free {}\n", iter.lvl, &iter.vmm.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
+        }
         if pgt.refs[(!pg_type) & 0x1] == 0 {
             // delete vmmpt somehow?
 //            iter.pt[iter.lvl as usize] = core::ptr::null_mut() as *mut VmmPt;
@@ -1642,12 +1747,19 @@ impl VmmInner {
         pgt.refs[reftype] -= ptes;
 
         if reftype == 1 && ((pgt.refs[0] != 0) || (pgt.refs[1] != 0)) {
-            pr_info!("calling unref sptes\n");
+            if VMM_TRACE {
+                pr_info!("calling unref sptes\n");
+            }
             Self::unref_sptes(iter, pgt, ptei, ptes);
         }
 
         if pgt.refs[reftype] == 0 {
             // unref pdees
+            iter.lvl += 1;
+            if VMM_TRACE {
+                pr_info!("{}: {:?} {} empty\n", &iter.vmm.name, iter.trace_str()?, iter.page.get_desc(0).tname());
+            }
+            iter.lvl -= 1;
             Self::unref_pdes(iter);
             return Ok(false);
         }
@@ -2181,7 +2293,6 @@ impl Vmm {
         let mut locked_inner = self.inner.lock();
 
         let mut num_levels = 3;
-        pr_info!("pde 0 is none {:?}\n", locked_inner.pd.pde[0].is_none());
 
         if locked_inner.pd.pde[0].is_none() {
             pr_info!("got pde 0 is none FAIL\n");
