@@ -1884,8 +1884,7 @@ impl VmmInner {
         Ok(())
     }
 
-    pub(crate) fn gp100_valid(&mut self, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
-        let page = Self::page(&self.instmem.base, map_internal.page_idx);
+    pub(crate) fn gp100_valid(page: &VmmPage, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         map_internal.next = (1_u64 << page.shift) >> 4;
         map_internal.map_type = 0;
 
@@ -1898,9 +1897,9 @@ impl VmmInner {
         Ok(())
     }
 
-    pub(crate) fn map_valid(&mut self, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    pub(crate) fn map_valid(base: &GpuBase, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
         // validate targets
-        let page = Self::page(&self.instmem.base, map_internal.page_idx);
+        let page = Self::page(base, map_internal.page_idx);
 
         match map.memory.target() {
             MemTarget::Vram => {
@@ -1928,14 +1927,14 @@ impl VmmInner {
             return Err(EINVAL);
         }
 
-        self.gp100_valid(vma, map, map_internal)
+        Self::gp100_valid(page, vma, map, map_internal)
     }
 
-    pub(crate) fn map_choose(&mut self, vma: &Vma, map: &mut VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+    pub(crate) fn map_choose(base: &GpuBase, vma: &Vma, map: &mut VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
 
-        for mp in 0..Self::num_pages(&self.instmem.base) {
+        for mp in 0..Self::num_pages(base) {
             map_internal.page_idx = mp;
-            match self.map_valid(&vma, map, map_internal) {
+            match Self::map_valid(base, &vma, map, map_internal) {
                 Ok(()) => { return Ok(()); }
                 _ => {}
             }
@@ -1955,9 +1954,10 @@ impl VmmInner {
             midx: 0,
             dma_base: core::ptr::null_mut(),
         };
+        let base = &self.instmem.base.clone();
 
         if vma.page() == NVKM_VMA_PAGE_NONE && vma.refd() == NVKM_VMA_PAGE_NONE {
-            self.map_choose(&vma, map, &mut map_internal)?;
+            Self::map_choose(base, &vma, map, &mut map_internal)?;
         } else {
             if vma.refd() != NVKM_VMA_PAGE_NONE {
                 map_internal.page_idx = vma.refd();
@@ -1965,10 +1965,10 @@ impl VmmInner {
                 map_internal.page_idx = vma.page();
             }
 
-            self.map_valid(&vma, map, &mut map_internal)?;
+            Self::map_valid(base, &vma, map, &mut map_internal)?;
         }
 
-        let page = Self::page(&self.instmem.base, map_internal.page_idx);
+        let page = Self::page(base, map_internal.page_idx);
         let desc = page.get_desc(0);
 
         map_internal.pg_shift = page.shift;
@@ -2016,12 +2016,11 @@ impl VmmInner {
             }
         };
 
-        let base = self.instmem.base.clone();
         if vma.refd() == NVKM_VMA_PAGE_NONE {
-            self.ptes_get_map(Self::page(&base, map_internal.page_idx), vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
+            self.ptes_get_map(page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
             vma.set_refd(map_internal.page_idx);
         } else {
-            self.ptes_map(Self::page(&base, map_internal.page_idx), vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
+            self.ptes_map(page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
             //ptes map
         }
         vma.set_mapped(true);
@@ -2041,7 +2040,6 @@ impl VmmInner {
         self.unmap_region(vma);
         Ok(())
     }
-
 }
 
 pub(crate) struct VmmMapInternal<'a> {
