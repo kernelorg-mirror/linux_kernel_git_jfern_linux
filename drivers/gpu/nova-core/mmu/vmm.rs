@@ -1740,7 +1740,7 @@ impl VmmInner {
         Ok(())
     }
 
-    fn join(&mut self, instobj: &mut InstObj) -> Result<()> {
+    fn join(&self, instobj: &mut InstObj) -> Result<()> {
         let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
 
         let pd = self.pd.pt[0].as_ref().unwrap();
@@ -1784,7 +1784,7 @@ impl VmmInner {
         Ok(())
     }
 
-    fn part(&mut self, instobj: &mut InstObj) -> Result<()> {
+    fn part(&self, instobj: &mut InstObj) -> Result<()> {
         instobj.fill64(0x200, 0x0, 0x2)
     }
 
@@ -1849,7 +1849,7 @@ impl VmmInner {
         Ok(())
     }
 
-    pub(crate) fn getpd0_addr(&mut self) -> Result<u64> {
+    pub(crate) fn getpd0_addr(&self) -> Result<u64> {
         Ok(self.pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr)
     }
 
@@ -2237,17 +2237,17 @@ impl Vmm {
         })
     }
 
-    pub(crate) fn ptes_get(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+    pub(crate) fn ptes_get(&self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
         let mut locked_inner = self.inner.lock();
         locked_inner.ptes_get(page, addr, size)
     }
 
-    pub(crate) fn getpd0_addr(&mut self) -> Result<u64> {
+    pub(crate) fn getpd0_addr(&self) -> Result<u64> {
         let mut locked_inner = self.inner.lock();
         locked_inner.getpd0_addr()
     }
 
-    pub(crate) fn bar2_pdb_set(&mut self, addr: u64) -> Result<()> {
+    pub(crate) fn bar2_pdb_set(&self, addr: u64) -> Result<()> {
         let mut locked_inner = self.inner.lock();
         locked_inner.rm_bar2_pdb = addr;
         Ok(())
@@ -2258,7 +2258,7 @@ impl Vmm {
         locked_inner.map_locked(vma, map)
     }
 
-    pub(crate) fn part(&mut self, inst: &mut InstObj) -> Result<()> {
+    pub(crate) fn part(&self, inst: &mut InstObj) -> Result<()> {
         let mut locked_inner = self.inner.lock();
         locked_inner.part(inst)
     }
@@ -2268,7 +2268,7 @@ impl Vmm {
         locked_inner.join(inst)
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&self) -> Result<()> {
         let mut locked_inner = self.inner.lock();
         locked_inner.flush()
     }
