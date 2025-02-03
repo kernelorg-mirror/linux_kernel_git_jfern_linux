@@ -87,3 +87,18 @@ EXPORT_SYMBOL_GPL(nova_core_chan_unregister_killed);
 
 extern int nova_core_chan_init_gr;
 EXPORT_SYMBOL_GPL(nova_core_chan_init_gr);
+
+extern int nova_core_vmm_raw_sparse;
+EXPORT_SYMBOL_GPL(nova_core_vmm_raw_sparse);
+
+extern int nova_core_vmm_raw_get;
+EXPORT_SYMBOL_GPL(nova_core_vmm_raw_get);
+
+extern int nova_core_vmm_raw_put;
+EXPORT_SYMBOL_GPL(nova_core_vmm_raw_put);
+
+extern int nova_core_vmm_raw_map;
+EXPORT_SYMBOL_GPL(nova_core_vmm_raw_map);
+
+extern int nova_core_vmm_raw_unmap;
+EXPORT_SYMBOL_GPL(nova_core_vmm_raw_unmap);

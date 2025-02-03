@@ -85,50 +85,41 @@ static int
 nouveau_uvmm_vmm_sparse_ref(struct nouveau_uvmm *uvmm,
 			    u64 addr, u64 range)
 {
-  return -EINVAL;
-  //	struct nvif_vmm *vmm = &uvmm->vmm.vmm;
-
-  //	return nvif_vmm_raw_sparse(vmm, addr, range, true);
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	return nova_core_vmm_raw_sparse(vmm, addr, range, true);
 }
 
 static int
 nouveau_uvmm_vmm_sparse_unref(struct nouveau_uvmm *uvmm,
 			      u64 addr, u64 range)
 {
-  //	struct nvif_vmm *vmm = &uvmm->vmm.vmm;
 
-  //	return nvif_vmm_raw_sparse(vmm, addr, range, false);
-  return -EINVAL;
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	return nova_core_vmm_raw_sparse(vmm, addr, range, false);
 }
 
 static int
 nouveau_uvmm_vmm_get(struct nouveau_uvmm *uvmm,
 		     u64 addr, u64 range)
 {
-  return -EINVAL;
-  //	struct nvif_vmm *vmm = &uvmm->vmm.vmm;
-
-  //	return nvif_vmm_raw_get(vmm, addr, range, PAGE_SHIFT);
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	return nova_core_vmm_raw_get(vmm, PAGE_SHIFT, addr, range);
 }
 
 static int
 nouveau_uvmm_vmm_put(struct nouveau_uvmm *uvmm,
 		     u64 addr, u64 range)
 {
-  return -EINVAL;
-  //	struct nvif_vmm *vmm = &uvmm->vmm.vmm;
-
-  //	return nvif_vmm_raw_put(vmm, addr, range, PAGE_SHIFT);
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	return nova_core_vmm_raw_put(vmm, PAGE_SHIFT, addr, range);
 }
 
 static int
 nouveau_uvmm_vmm_unmap(struct nouveau_uvmm *uvmm,
 		       u64 addr, u64 range, bool sparse)
 {
-	return -EINVAL;  
-	//	struct nvif_vmm *vmm = &uvmm->vmm.vmm;
-
-	///	return nvif_vmm_raw_unmap(vmm, addr, range, PAGE_SHIFT, sparse);
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	return nova_core_vmm_raw_unmap(vmm, PAGE_SHIFT, addr, range, sparse);
 }
 
 static int
@@ -137,37 +128,16 @@ nouveau_uvmm_vmm_map(struct nouveau_uvmm *uvmm,
 		     u64 bo_offset, u8 kind,
 		     struct nouveau_mem *mem)
 {
-#if 0
-  struct nvif_vmm *vmm = &uvmm->vmm.vmm;
-	union {
-		struct gf100_vmm_map_v0 gf100;
-	} args;
-	u32 argc = 0;
+	struct nova_core_vmm *vmm = &uvmm->vmm.vmm;
+	struct nova_core_map_args args = {};
 
-	switch (vmm->object.oclass) {
-	case NVIF_CLASS_VMM_GF100:
-	case NVIF_CLASS_VMM_GM200:
-	case NVIF_CLASS_VMM_GP100:
-		args.gf100.version = 0;
-		if (mem->mem.type & NVIF_MEM_VRAM)
-			args.gf100.vol = 0;
-		else
-			args.gf100.vol = 1;
-		args.gf100.ro = 0;
-		args.gf100.priv = 0;
-		args.gf100.kind = kind;
-		argc = sizeof(args.gf100);
-		break;
-	default:
-		WARN_ON(1);
-		return -ENOSYS;
-	}
+	args.kind = kind;
+	args.addr = addr;
+	args.size = range;
+	args.offset = bo_offset;
+	args.vol = !(mem->mem.mem_type & NVIF_MEM_VRAM);
 
-	return nvif_vmm_raw_map(vmm, addr, range, PAGE_SHIFT,
-				&args, argc,
-				&mem->mem, bo_offset);
-#endif
-	return -EINVAL;
+	return nova_core_vmm_raw_map(vmm, PAGE_SHIFT, &args, &mem->mem);
 }
 
 static int

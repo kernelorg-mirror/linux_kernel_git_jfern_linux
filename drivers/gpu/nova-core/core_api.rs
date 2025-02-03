@@ -489,7 +489,108 @@ pub unsafe extern "C" fn nova_core_vmm_unmap(vmm_ptr: *mut bindings::nova_core_v
     let _ = (*vmm).vmm.unmap_addr(addr);
 }
 
+#[no_mangle]
+#[allow(dead_code)]
+/// Raw sparse accessor
+pub unsafe extern "C" fn nova_core_vmm_raw_sparse(vmm_ptr: *mut bindings::nova_core_vmm,
+                                                  addr: u64,
+                                                  size: u64,
+                                                  sparse_ref: bool) -> i32 {
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    return match (*vmm).vmm.raw_sparse(addr, size, sparse_ref) {
+        Err(x) => { x.to_errno() }
+        _ => 0
+    }
+}
 
+#[no_mangle]
+#[allow(dead_code)]
+/// Raw sparse accessor
+pub unsafe extern "C" fn nova_core_vmm_raw_get(vmm_ptr: *mut bindings::nova_core_vmm,
+                                               shift: u8,
+                                               addr: u64,
+                                               size: u64) -> i32 {
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+
+    return match (*vmm).vmm.raw_get(shift, addr, size) {
+        Err(x) => { x.to_errno() }
+        _ => 0
+    }
+}
+
+
+#[no_mangle]
+#[allow(dead_code)]
+/// Raw sparse accessor
+pub unsafe extern "C" fn nova_core_vmm_raw_put(vmm_ptr: *mut bindings::nova_core_vmm,
+                                               shift: u8,
+                                               addr: u64,
+                                               size: u64) -> i32 {
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    return match (*vmm).vmm.raw_put(shift, addr, size) {
+        Err(x) => { x.to_errno() }
+        _ => 0
+    }
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+/// Raw sparse accessor
+pub unsafe extern "C" fn nova_core_vmm_raw_map(vmm_ptr: *mut bindings::nova_core_vmm,
+                                               shift: u8,
+                                               args: *mut bindings::nova_core_map_args,
+                                               obj_ptr: *mut bindings::nova_core_memory_obj) -> i32 {
+    let memobj = unsafe { &(*obj_ptr) };
+    let ncargs = unsafe { &(*args) };
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+
+    let obj: &dyn Memory;
+
+    match memobj.obj_type {
+        bindings::NVIF_MEM_OBJ_VRAM => {
+            let vramobj : &VramObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = vramobj as &dyn Memory;
+        },
+        bindings::NVIF_MEM_OBJ_DMA => {
+            let dmaobj : &DmaMemObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = dmaobj as &dyn Memory;
+        },
+        bindings::NVIF_MEM_OBJ_SGL => {
+            let sglobj : &SglMemObj = unsafe { KBox::borrow(memobj.obj) };
+            obj = sglobj as &dyn Memory;
+        },
+        _ => { return EINVAL.to_errno(); }
+    }
+
+    let mut vmmmap = VmmMap {
+        memory: obj,
+        offset: ncargs.offset,
+        kind: ncargs.kind,
+        ro: ncargs.ro,
+        private: ncargs.private,
+        vol: ncargs.vol,
+    };
+
+    return match (*vmm).vmm.raw_map(shift, ncargs.addr, ncargs.size, &mut vmmmap) {
+        Err(x) => { x.to_errno() }
+        _ => 0
+    }
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+/// Raw sparse accessor
+pub unsafe extern "C" fn nova_core_vmm_raw_unmap(vmm_ptr: *mut bindings::nova_core_vmm,
+                                                 shift: u8,
+                                                 addr: u64,
+                                                 size: u64,
+                                                 sparse: bool) -> i32 {
+    let vmm: ArcBorrow<'_, GpuDeviceVmm> = unsafe { Arc::borrow((*vmm_ptr).arc) };
+    return match (*vmm).vmm.raw_unmap(shift, addr, size, sparse) {
+        Err(x) => { x.to_errno() }
+        _ => 0
+    }
+}
 
 #[no_mangle]
 #[allow(dead_code)]

@@ -843,6 +843,11 @@ impl Vma {
         Self::new_internal(addr, size, true, false, NVKM_VMA_PAGE_NONE, NVKM_VMA_PAGE_NONE,
                            true, false, false, false, false)
     }
+
+    fn new_raw(addr: u64, size: u64, refd: u8) -> Result<ListArc<Self>> {
+        Self::new_internal(addr, size, false, false, refd, refd,
+                           true, false, false, false, true)
+    }
 }
 
 const NVKM_VMM_LEVELS_MAX: usize = 5;
@@ -2322,6 +2327,82 @@ impl Vmm {
             level1_phys_addr: addr1,
             level2_phys_addr: addr2,
         })
+    }
+
+    fn raw_page_index(&self, size: u64, shift: u8) -> Result<u8> {
+        if shift == 0 {
+            return Err(EINVAL);
+        }
+
+        for p in 0..Self::num_pages(&self.sinfo.instmem.base) {
+            if shift == Self::page(&self.sinfo.instmem.base, p).shift {
+                return Ok(p);
+            }
+        }
+
+        pr_err!("failed to find vmm page {}\n", shift);
+        return Err(EINVAL);
+    }
+
+    pub(crate) fn raw_sparse(&self, addr: u64, size: u64, sparse_ref: bool) -> Result<()> {
+        if !self.in_managed_range(addr, size) {
+            return Err(EINVAL);
+        }
+
+        pr_info!("RAW SPASRSE TODO\n");
+        Ok(())
+
+    }
+
+    pub(crate) fn raw_get(&self, shift: u8, addr: u64, size: u64) -> Result<()> {
+        if !self.in_managed_range(addr, size) {
+            return Err(EINVAL);
+        }
+
+        let page_idx = self.raw_page_index(size, shift)?;
+
+        let page = Self::page(&self.sinfo.instmem.base, page_idx);
+
+        let mut locked_pd = self.pd.lock();
+        Self::ptes_get(&mut locked_pd, &self.sinfo, page, addr, size)
+    }
+
+    pub(crate) fn raw_put(&self, shift: u8, addr: u64, size: u64) -> Result<()> {
+
+        if !self.in_managed_range(addr, size) {
+            return Err(EINVAL);
+        }
+        let page_idx = self.raw_page_index(size, shift)?;
+
+        let page = Self::page(&self.sinfo.instmem.base, page_idx);
+
+        let mut locked_pd = self.pd.lock();
+        Self::ptes_put(&mut locked_pd, &self.sinfo, page, addr, size)
+    }
+
+    pub(crate) fn raw_map(&self, shift: u8, addr: u64, size: u64, map: &mut VmmMap<'_>) -> Result<()> {
+
+        if !self.in_managed_range(addr, size) {
+            return Err(EINVAL);
+        }
+        let page_idx = self.raw_page_index(size, shift)?;
+        let page = Self::page(&self.sinfo.instmem.base, page_idx);
+
+        let vma = Vma::new_raw(addr, size, page_idx)?;
+
+        self.map(vma.clone_arc(), map)?;
+        Ok(())
+    }
+
+    pub(crate) fn raw_unmap(&self, shift: u8, addr: u64, size: u64, sparse: bool) -> Result<()> {
+        if !self.in_managed_range(addr, size) {
+            return Err(EINVAL);
+        }
+        let page_idx = self.raw_page_index(size, shift)?;
+        let page = Self::page(&self.sinfo.instmem.base, page_idx);
+        let mut locked_pd = self.pd.lock();
+        Self::ptes_unmap(&mut locked_pd, &self.sinfo, page, addr, size);
+        Ok(())
     }
 }
 

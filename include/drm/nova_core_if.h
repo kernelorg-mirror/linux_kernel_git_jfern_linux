@@ -197,18 +197,20 @@ struct nova_core_map_args {
 int nova_core_vmm_map(struct nova_core_vmm *vmm,
 		      const struct nova_core_map_args *args,
 		      struct nova_core_memory_obj *obj);
+int nova_core_vmm_unmap(struct nova_core_vmm *vmm, u64 addr);
 
 //VMM accessors
 int nova_core_vmm_get(struct nova_core_vmm *vmm, u8 get_type,
 		      bool sparse, u8 page, u8 align, u64 size, u64 *addr);
 int nova_core_vmm_put(struct nova_core_vmm *vmm, u64 addr);
 
-//int nova_core_vmm_map(struct nova_core_vmm *vmm, u64 addr, u64 size, u64 offset);
-int nova_core_vmm_unmap(struct nova_core_vmm *vmm, u64 addr);
-
+int nova_core_vmm_raw_sparse(struct nova_core_vmm *vmm, u64 addr, u64 size, bool ref);
 int nova_core_vmm_raw_get(struct nova_core_vmm *vmm, u8 shift, u64 addr, u64 size);
 int nova_core_vmm_raw_put(struct nova_core_vmm *vmm, u8 shift, u64 addr, u64 size);
-int nova_core_vmm_raw_map(struct nova_core_vmm *vmm, u8 shift, u64 addr, u64 size, u64 offset);
+int nova_core_vmm_raw_map(struct nova_core_vmm *vmm,
+			  u8 shift,
+			  struct nova_core_map_args *args,
+			  struct nova_core_memory_obj *obj);
 int nova_core_vmm_raw_unmap(struct nova_core_vmm *vmm, u8 shift, u64 addr, u64 size, bool sparse);
 
 
