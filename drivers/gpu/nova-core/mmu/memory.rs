@@ -15,7 +15,7 @@ use crate::gpu::GpuBase;
 use crate::mmu::mmu::{NVKM_MEM_COHERENT, NVKM_MEM_UNCACHED};
 use crate::mmu::mm::MemRangeNode;
 use crate::mmu::mm::MemRange;
-use crate::mmu::vmm::{Vmm,Vma,VmmMap,VmmInner};
+use crate::mmu::vmm::{Vmm,Vma,VmmMap,VmmInner,VmmStaticInfo,VmmPt};
 use crate::align;
 use core::cell::UnsafeCell;
 use crate::bar::Bar;
@@ -46,7 +46,9 @@ pub(crate) trait Memory {
     fn addr(&self) -> Result<u64>;
     fn map(&mut self, offset: u64);
     fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()>;
-    fn kmap_locked(&mut self, vmm: &mut VmmInner) -> Result<()>;
+    fn kmap_locked(&mut self, vmm_info: &VmmStaticInfo, vmm: &mut VmmInner, pd: &mut VmmPt) -> Result<()> {
+        return Err(ENOSPC);
+    }
     fn kunmap(&mut self);
     fn target(&self) -> MemTarget;
     fn page(&self) -> u8;
@@ -108,11 +110,6 @@ impl Memory for VramObj {
     fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
         Err(ENOSPC)
     }
-
-    fn kmap_locked(&mut self, vmm: &mut VmmInner) -> Result<()> {
-        Err(ENOSPC)
-    }
-
 
     fn kunmap(&mut self) {
     }
@@ -215,7 +212,7 @@ impl VramObj {
         Ok(())
     }
 
-    pub(crate) fn vram_map_locked(&mut self, offset: u64, vmm: &mut VmmInner, vma: Arc<Vma>) -> Result<()> {
+    pub(crate) fn vram_map_locked(&mut self, offset: u64, pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>) -> Result<()> {
         let mut vmmmap = VmmMap {
             memory: self,
             offset,
@@ -225,7 +222,7 @@ impl VramObj {
             vol: 0,
         };
 
-        vmm.map_locked(vma, &mut vmmmap)?;
+        Vmm::map_internal(pd, sinfo, vma, &mut vmmmap)?;
         Ok(())
     }
 }
@@ -308,7 +305,7 @@ impl Memory for InstObj {
         Ok(())
     }
 
-    fn kmap_locked(&mut self, vmm: &mut VmmInner) -> Result<()> {
+    fn kmap_locked(&mut self, vmm_info: &VmmStaticInfo, inner: &mut VmmInner, pd: &mut VmmPt) -> Result<()> {
         // LOCKING RECURSION??
         let size = self.size()?;
 
@@ -317,18 +314,18 @@ impl Memory for InstObj {
         }
 
         loop {
-            let bar = match vmm.get(false, true, false, 12, 0, size) {
+            let bar = match Vmm::get_internal(inner, pd, vmm_info, false, true, false, 12, 0, size) {
                 Err(ENOMEM) => { continue; }
                 Err(x) => { return Err(x); }
                 Ok(x) => { x }
             };
 
-            self.vram.vram_map_locked(0, vmm, bar.clone())?;
+            self.vram.vram_map_locked(0, pd, vmm_info, bar.clone())?;
             // map memory to bar
             // do ioremap
             self.bar2_vma_addr = Some(bar.addr());
             pr_info!("kmap inst {:#x} {:#x}\n", bar.clone().addr(), bar.clone().size());
-            self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((vmm.instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
+            self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((vmm_info.instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
             self.bar2_map = Some(unsafe { self.bar2_io.as_ref().unwrap().remap(bar.size() as usize) });
             break;
         }
@@ -510,8 +507,8 @@ impl InstObj {
         self.use_fast = Some(self.old_fast);
     }
 
-    pub(crate) fn boot(&mut self, vmm: &mut VmmInner) -> Result<()> {
-        self.kmap_locked(vmm)
+    pub(crate) fn boot(&mut self, vmm_info: &VmmStaticInfo, inner: &mut VmmInner, pd: &mut VmmPt) -> Result<()> {
+        self.kmap_locked(vmm_info, inner, pd)
     }
 
     pub(crate) fn release(&mut self) {
@@ -631,10 +628,6 @@ impl Memory for DmaMemObj {
         Err(ENOSPC)
     }
 
-    fn kmap_locked(&mut self, vmm: &mut VmmInner) -> Result<()> {
-        Err(ENOSPC)
-    }
-
     fn kunmap(&mut self) {
     }
 
@@ -701,14 +694,9 @@ impl Memory for SglMemObj {
     fn page(&self) -> u8 {
         PAGE_SHIFT as u8
     }
-
     fn map(&mut self, offset: u64) {
     }
     fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
-        Err(ENOSPC)
-    }
-
-    fn kmap_locked(&mut self, vmm: &mut VmmInner) -> Result<()> {
         Err(ENOSPC)
     }
 

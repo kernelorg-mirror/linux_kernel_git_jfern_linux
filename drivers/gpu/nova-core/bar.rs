@@ -54,11 +54,9 @@ impl Bar {
                 let mut bar2 = BarN::new(InstObj::new(instmem.clone(), 0x1000, 0, false, true)?, true)?;
 
                 pr_info!("BAR 2 INIT VMM {:#x}\n", bar2_size / 2);
-                let mut bar2_vmm = Vmm::new(instmem.clone(), 0, bar2_size / 2, NVKM_VMM_TYPE_UNMANAGED, true, true, None, Some(&mut bar2.inst), false, "bar2")?;
+                let mut bar2_vmm = Vmm::new(instmem.clone(), 0, bar2_size / 2, NVKM_VMM_TYPE_UNMANAGED, true, true, None, Some(&mut bar2.inst), false, gsp.get_bar_pdb(2), "bar2")?;
 
                 gsp.update_bar_pde(1, bar2_vmm.getpd0_addr()?, 47)?;
-
-                bar2_vmm.bar2_pdb_set(gsp.get_bar_pdb(2))?;
 
                 let obj = VramObj::wrap(0, PAGE_SIZE)?;
 
@@ -78,7 +76,7 @@ impl Bar {
 
         pr_info!("BAR 1 INIT VMM {:#x}\n", bar1_size);
         let vramobj = InstObj::wrap(instmem.clone(), VramObj::wrap(gsp.get_bar_pdb(1) as usize, 0x1000)?)?;
-        let bar1_vmm = Vmm::new(instmem.clone(), 0, bar1_size, NVKM_VMM_TYPE_UNMANAGED, true, false, Some(vramobj), Some(&mut bar1.inst), false, "bar1")?;
+        let bar1_vmm = Vmm::new(instmem.clone(), 0, bar1_size, NVKM_VMM_TYPE_UNMANAGED, true, false, Some(vramobj), Some(&mut bar1.inst), false, 0, "bar1")?;
 
         let bar2_flush_phys_mode = unsafe { Io::<PAGE_SIZE>::new(bar2_phys_addr as usize, PAGE_SIZE)? };
 

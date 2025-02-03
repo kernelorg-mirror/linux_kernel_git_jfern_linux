@@ -122,7 +122,7 @@ impl GrCtx {
         let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
 
         let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
-                                false, None, None, true, "grGoldenVmm")?;
+                                false, None, None, true, 0, "grGoldenVmm")?;
 
         let gold_va = gsp.alloc_vaspace(&internal_device.gsp, &gold_vmm, NVKM_VMM_TYPE_UNMANAGED)?;
 

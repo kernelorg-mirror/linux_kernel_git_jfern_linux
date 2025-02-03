@@ -683,6 +683,7 @@ pub(crate) struct VmaMutable {
     part: bool,
     memory: Option<InstObj>,
 }
+
 #[pin_data]
 #[repr(C)]
 pub(crate) struct Vma {
@@ -847,7 +848,9 @@ impl Vma {
 const NVKM_VMM_LEVELS_MAX: usize = 5;
 
 struct VmmIter<'a> {
-    vmm: &'a mut VmmInner,
+    vmm_info: &'a VmmStaticInfo,
+    pd: &'a mut VmmPt,
+    boot_inner: Option<&'a mut VmmInner>,
     page: &'a VmmPage,
     cnt: u64,
     max: u16,
@@ -902,7 +905,7 @@ impl<'a> VmmIter<'a> {
             pr_info!("ref_hwpt: {}: {:#x}\n", pg_type, size);
         }
 
-        let mut pt = MmuPtC::get(self.vmm.instmem.clone(), size as usize, (*desc).align() as usize, true)?;
+        let mut pt = MmuPtC::get(self.vmm_info.instmem.clone(), size as usize, (*desc).align() as usize, true)?;
 
         pgt.pt[pg_type] = Some(pt);
 
@@ -968,7 +971,7 @@ impl<'a> VmmIter<'a> {
 
         //call pde function?
         if VMM_TRACE {
-            pr_info!("{}: {} PDE write {}\n", &self.vmm.name, self.trace_str()?, desc.tname());
+            pr_info!("{}: {} PDE write {}\n", &self.vmm_info.name, self.trace_str()?, desc.tname());
         }
         self.page.get_desc(self.lvl as usize).pde(pgd, pdei)?;
 
@@ -996,16 +999,18 @@ impl<'a> VmmIter<'a> {
     fn flush(&mut self) -> Result<()> {
         if self.flush != NVKM_VMM_LEVELS_MAX {
             if VMM_TRACE {
-                pr_info!("{} {:?} flush: {}\n", &self.vmm.name,
+                pr_info!("{} {:?} flush: {}\n", &self.vmm_info.name,
                          self.trace_str()?, self.flush);
             }
-            let _ = self.vmm.flush();
+            let _ = Vmm::gp100_flush_internal(&self.vmm_info, self.pd.pt[0].as_ref().unwrap().addr)?;
             self.flush = NVKM_VMM_LEVELS_MAX;
         }
         Ok(())
     }
 
-    fn iter<'b>(vmm: &'b mut VmmInner, page: &'b VmmPage, addr: u64, size: u64,
+    fn iter<'b>(pd: &'b mut VmmPt, vmm_info: &'b VmmStaticInfo,
+                boot_inner: Option<&'b mut VmmInner>,
+                page: &'b VmmPage, addr: u64, size: u64,
                 name: &'static str, pgref: bool, pfn: bool,
                 reffn: Option<RefFn>, mapfn: Option<MapFn>, map: Option<&'b VmmMap<'_>>,
                 mut map_internal: Option<&'b mut VmmMapInternal<'_>>,
@@ -1019,8 +1024,10 @@ impl<'a> VmmIter<'a> {
             pr_info!("iter: {:#x} {:#x} {}\n", addr, size, page.shift);
         }
         let mut it = VmmIter {
+            vmm_info,
             page,
-            vmm,
+            pd,
+            boot_inner,
             cnt: size >> page.shift,
             flush: NVKM_VMM_LEVELS_MAX,
             max: 0,
@@ -1047,11 +1054,11 @@ impl<'a> VmmIter<'a> {
         }
         it.lvl -= 1;
         it.max = it.lvl;
-        it.pt[it.max as usize] = &mut it.vmm.pd as *mut VmmPt;
+        it.pt[it.max as usize] = it.pd as *mut VmmPt;
 
         it.lvl = 0;
         if VMM_TRACE {
-            pr_info!("{}: {} {} {:016x} {:016x} {} {} PTEs\n", it.vmm.name, it.trace_str()?,
+            pr_info!("{}: {} {} {:016x} {:016x} {} {} PTEs\n", it.vmm_info.name, it.trace_str()?,
                      name, addr, size, page.shift, it.cnt);
         }
         it.lvl = it.max;
@@ -1199,7 +1206,7 @@ impl<'a> VmmIter<'a> {
                  * as INVALID.  We need to reverse that here.
                  */
                 if VMM_TRACE {
-                    pr_info!("{}: {:?} LPTE {:05x}: I -> U {} PTEs\n", &iter.vmm.name, iter.trace_str()?, pteb, ptes);
+                    pr_info!("{}: {:?} LPTE {:05x}: I -> U {} PTEs\n", &iter.vmm_info.name, iter.trace_str()?, pteb, ptes);
                 }
                 pair.unmap(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             }
@@ -1290,7 +1297,7 @@ impl<'a> VmmIter<'a> {
                  * trying to fetch the corresponding SPTEs.
                  */
                 if VMM_TRACE {
-                    pr_info!("{} {:?} LPTE {:05x} U -> I {} PTEs\n", &iter.vmm.name, iter.trace_str()?, pteb, ptes);
+                    pr_info!("{} {:?} LPTE {:05x} U -> I {} PTEs\n", &iter.vmm_info.name, iter.trace_str()?, pteb, ptes);
                 }
                 pair.invalid(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             }
@@ -1317,7 +1324,7 @@ impl<'a> VmmIter<'a> {
         if pgd.refs[0] != 0 {
             let desc = iter.page.get_desc((iter.lvl) as usize);
             if VMM_TRACE {
-                pr_info!("{} {:?} PDE unmap {}\n", &iter.vmm.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
+                pr_info!("{} {:?} PDE unmap {}\n", &iter.vmm_info.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
             }
             pgt.pt[pg_type] = None;
 
@@ -1343,7 +1350,7 @@ impl<'a> VmmIter<'a> {
             Self::unref_pdes(iter)?;
         }
         if VMM_TRACE {
-            pr_info!("{} {} {:?} PDE free {}\n", iter.lvl, &iter.vmm.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
+            pr_info!("{} {} {:?} PDE free {}\n", iter.lvl, &iter.vmm_info.name, iter.trace_str()?, iter.page.get_desc((iter.lvl - 1) as usize).tname());
         }
         if pgt.refs[(!pg_type) & 0x1] == 0 {
             // delete vmmpt somehow?
@@ -1370,7 +1377,7 @@ impl<'a> VmmIter<'a> {
             // unref pdees
             iter.lvl += 1;
             if VMM_TRACE {
-                pr_info!("{}: {:?} {} empty\n", &iter.vmm.name, iter.trace_str()?, iter.page.get_desc(0).tname());
+                pr_info!("{}: {:?} {} empty\n", &iter.vmm_info.name, iter.trace_str()?, iter.page.get_desc(0).tname());
             }
             iter.lvl -= 1;
             Self::unref_pdes(iter);
@@ -1396,88 +1403,31 @@ impl<'a> VmmIter<'a> {
         let reftype = iter.refs_idx(0);
         let pgt = unsafe { &mut (*iter.pt[0]) };
 
-        pgt.pt[reftype].as_mut().unwrap().memory.boot(iter.vmm)?;
+        pgt.pt[reftype].as_mut().unwrap().memory.boot(iter.vmm_info, iter.boot_inner.as_mut().unwrap(), iter.pd)?;
         Ok(false)
     }
 
 }
 
+pub(crate) struct VmmStaticInfo {
+    pub(crate) instmem: Arc<InstMem>,
+    is_bar: bool,
+    rm_bar2_pdb: u64,
+    name: &'static str,
+    bootstrapped: bool,
+}
+
 #[pin_data]
 #[repr(C)]
 pub(crate) struct VmmInner {
-    pub(crate) instmem: Arc<InstMem>,
-    start: u64,
-    limit: u64,
-    managed: Option<VmmManaged>,
-    bootstrapped: bool,
-    is_bar: bool,
-    rm_bar2_pdb: u64,
     free: RBTree<SizeAddr, Arc<Vma>>,
     root: RBTree<u64, Arc<Vma>>,
     #[pin]
     list: List<Vma>,
-    pd: VmmPt,
-    name: &'static str,
 }
 
 impl VmmInner {
-
-    pub(crate) fn dump(&self) {
-        pr_info!("VMM {}: {:#x} {:#x} bar: {}\n", self.name, self.start, self.limit, self.is_bar);
-
-//        pr_info!("VMM PT {:?}\n", self.pd);
-        for vma in &self.list {
-            pr_info!("{:?}\n", *vma);
-        }
-    }
-
-    pub(crate) fn page(base: &GpuBase, page_idx: u8) -> &VmmPage {
-        // eventually match on gpu family if this changes.
-        &VMM_TU102[page_idx as usize]
-    }
-
-    pub(crate) fn num_pages(base: &GpuBase) -> u8 {
-        // eventually match on gpu family if this changes.
-        VMM_TU102.len() as u8
-    }
-
-    pub(crate) fn smallest_page_idx(base: &GpuBase) -> u8 {
-        // eventually match on gpu family if this changes.
-        (VMM_TU102.len() - 2) as u8
-    }
-
-    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
-        let mgd = match &self.managed {
-            None => { return false; }
-            Some(m) => m
-        };
-
-        let p_start = mgd.p.addr;
-        let p_end = p_start + mgd.p.size;
-        let n_start = mgd.n.addr;
-        let n_end = n_start + mgd.n.size;
-        let end = start + size;
-
-        if start >= p_start && end <= p_end {
-            return true;
-        }
-
-        if start >= n_start && end <= n_end {
-            return true;
-        }
-        return false;
-    }
-
-    pub(crate) fn aper(target: MemTarget) -> Result<u32> {
-        match target {
-            MemTarget::Vram => { Ok(0) }
-            MemTarget::Host => { Ok(2) }
-            MemTarget::Ncoh => { Ok(3) }
-            _ => Err(EINVAL)
-        }
-    }
-
-    pub(crate) fn node_prev(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
+    fn node_prev(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
         let cursor = list.cursor_front();
 
         let mut cursor = match cursor {
@@ -1503,7 +1453,7 @@ impl VmmInner {
         }
     }
 
-    pub(crate) fn node_next(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
+    fn node_next(list: &mut List<Vma>, vma: Arc<Vma>) -> Option<Arc<Vma>> {
         let cursor = list.cursor_front();
 
         let mut cursor = match cursor {
@@ -1619,427 +1569,6 @@ impl VmmInner {
         self.free_insert(vma.clone())?;
         Ok(())
     }
-
-    pub(crate) fn get(&mut self, getref: bool, mapref: bool, sparse: bool,
-                      shift: u8, align_val: u8, size: u64) -> Result<Arc<Vma>> {
-        let int_align;
-
-        if getref && shift == 0 {
-            pr_err!("got invalid getref with no shift\n");
-            return Err(EINVAL);
-        }
-
-        let mut page_idx : Option<u8> = None;
-        if shift != 0 {
-            for p in 0..Self::num_pages(&self.instmem.base) {
-                if shift == Self::page(&self.instmem.base, p).shift {
-                    page_idx = Some(p);
-                    break;
-                }
-            }
-
-            if page_idx.is_none() {
-                pr_err!("failed to find vmm page {}\n", shift);
-                return Err(EINVAL);
-            }
-            int_align = core::cmp::max::<u8>(align_val, shift);
-        } else {
-            int_align = core::cmp::max::<u8>(align_val, 12);
-        }
-
-        /* Locate smallest block that can possibly satisfy the allocation. */
-        let mut free: &mut RBTree<SizeAddr, Arc<Vma>> = &mut self.free;
-        let mut curs = match free.cursor_lower_bound(&SizeAddr { size: size, addr: 0 }) {
-            None => { return Err(ENOSPC); }
-            Some(x) => { x }
-        };
-
-        let curr = curs.current().1;
-
-        let mut addr;
-        let mut curr = curr.clone();
-
-        loop {
-            addr = curr.addr();
-
-            addr = align64(addr, 1_u64 << int_align);
-
-            let tail = curr.addr() + curr.size();
-
-            if addr <= tail && tail - addr >= size {
-                let node;
-                (_, node) = curs.remove_current();
-                (_, curr) = node.to_key_value();
-                break;
-            }
-            curs = match curs.move_next() {
-                None => { return Err(ENOSPC); }
-                Some(x) => x
-            }
-        }
-
-        if addr != curr.addr() {
-            let tmp = self.tail(curr.as_ref(), curr.size() + curr.addr() - addr, false)?;
-            self.free_insert(curr.clone())?;
-            curr = tmp;
-        }
-        if size != curr.size() {
-            let tmp = self.tail(curr.as_ref(), curr.size() - size, false)?;
-            self.free_insert(tmp)?;
-        }
-
-        if getref {
-            let base = self.instmem.base.clone();
-            let page = Self::page(&base, page_idx.unwrap());
-            self.ptes_get(page, curr.addr(), curr.size())?;
-        }
-
-        curr.set_mapref(mapref && !getref);
-        curr.set_used(true);
-        if getref {
-            curr.set_refd(page_idx.unwrap());
-        } else {
-            curr.set_refd(NVKM_VMA_PAGE_NONE);
-        }
-        if page_idx.is_some() {
-            curr.set_page(page_idx.unwrap());
-        }
-        self.node_insert(curr.clone())?;
-
-        Ok(curr.clone())
-    }
-
-    pub(crate) fn put(&mut self, vma: Arc<Vma>) -> Result<()> {
-
-        if vma.mapref() || !vma.sparse {
-            let base = self.instmem.base.clone();
-            if vma.mapped() {
-                let page = Self::page(&base, vma.refd());
-                self.ptes_unmap_put(page, vma.addr(), vma.size());
-            } else {
-                if vma.refd() != NVKM_VMA_PAGE_NONE {
-                    let page = Self::page(&base, vma.refd());
-                    self.ptes_put(page, vma.addr(), vma.size());
-                }
-            }
-        }
-
-        if vma.mapped() {
-            self.unmap_region(vma.clone());
-        }
-        // Remove VMA from the list of allocated nodes.
-        self.node_remove(&vma);
-
-        // Merge VMA back into the free list.
-
-        vma.set_page(NVKM_VMA_PAGE_NONE);
-        vma.set_refd(NVKM_VMA_PAGE_NONE);
-        vma.set_used(false);
-
-        self.put_region(vma)?;
-        Ok(())
-    }
-
-    fn join(&self, instobj: &mut InstObj) -> Result<()> {
-        let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
-
-        let pd = self.pd.pt[0].as_ref().unwrap();
-        // replay TODO
-        match pd.memory.target() {
-            MemTarget::Vram => { base |= 0_u64 << 0; }
-            MemTarget::Host => { base |= 2_u64 << 0;
-                                 base |= bit_u64!(2); // VOL
-            }
-            MemTarget::Ncoh => { base |= 3_u64 << 0; }
-            (x) => { pr_err!("Unknown mem target {:?}\n", x); return Err(EINVAL); }
-        }
-
-        base |= pd.addr;
-
-        instobj.acquire()?;
-        instobj.wr64(0x200_u64, base)?;
-        instobj.wr64(0x208_u64, self.limit - 1)?;
-        instobj.release();
-
-        instobj.acquire();
-        let mask: u64 = bit_u64!(0);
-
-        instobj.wr32(0x21c_u64, 0)?;
-
-        for i in 0_u64..64_u64 {
-            if mask & (1_u64.wrapping_shl(i as u32)) != 0 {
-                instobj.wr32(0x2a4_u64 + (i * 0x10), (base >> 32) as u32)?;
-                instobj.wr32(0x2a0_u64 + (i * 0x10), (base & 0xffffffff) as u32)?;
-            } else {
-                instobj.wr32(0x2a4_u64 + (i * 0x10), 1)?;
-                instobj.wr32(0x2a0_u64 + (i * 0x10), 1)?;
-            }
-            instobj.wr32(0x2a8_u64 + (i * 0x10), 0)?;
-        }
-
-        instobj.wr32(0x298_u64, (mask & 0xffffffff) as u32)?;
-        instobj.wr32(0x29c_u64, (mask >> 32) as u32)?;
-
-        instobj.release();
-        Ok(())
-    }
-
-    fn part(&self, instobj: &mut InstObj) -> Result<()> {
-        instobj.fill64(0x200, 0x0, 0x2)
-    }
-
-
-    fn ptes_get(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "ref", true, false, Some(VmmIter::ref_ptes), None, None, None, None)?;
-        Ok(())
-    }
-
-    fn ptes_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "map", false, false, None, mapfn, Some(map), Some(map_internal), None)?;
-        Ok(())
-    }
-
-    fn ptes_get_map(&mut self, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "ref + map", true, false, Some(VmmIter::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
-        Ok(())
-    }
-
-    fn ptes_unmap(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let desc = page.get_desc(0);
-        let mut clrfn = desc.invalidfn();
-
-        if clrfn.is_none() {
-            clrfn = desc.unmapfn();
-        }
-
-        let iter = VmmIter::iter(self, page, addr, size, "unmap", false, false, None, None, None, None, clrfn)?;
-        Ok(())
-    }
-
-    fn ptes_unmap_put(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let desc = page.get_desc(0);
-        let mut clrfn = desc.invalidfn();
-
-        if clrfn.is_none() {
-            clrfn = desc.unmapfn();
-        }
-
-        let iter = VmmIter::iter(self, page, addr, size, "unmap + unref", false, false, Some(VmmIter::unref_ptes), None, None, None, clrfn)?;
-        Ok(())
-    }
-
-    fn ptes_put(&mut self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let iter = VmmIter::iter(self, page, addr, size, "unref", false, false, Some(VmmIter::unref_ptes), None, None, None, None)?;
-        Ok(())
-    }
-
-    pub(crate) fn boot(&mut self) -> Result<()> {
-
-        let limit = self.limit - self.start;
-        let page_idx = Self::smallest_page_idx(&self.instmem.base);
-
-        let base = self.instmem.base.clone();
-        let pg = Self::page(&base, page_idx);
-
-        self.ptes_get(pg, self.start, limit)?;
-
-        let iter = VmmIter::iter(self, pg, self.start, limit, "boot", false, false,
-                                 Some(VmmIter::boot_ptes), None, None, None, None);
-        self.bootstrapped = true;
-        Ok(())
-    }
-
-    pub(crate) fn getpd0_addr(&self) -> Result<u64> {
-        Ok(self.pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr)
-    }
-
-    pub(crate) fn flush(&mut self) -> Result<()> {
-        let mut flush_type: u32 = 0;
-
-        flush_type |= 0x1;  /* PAGE_ALL */
-
-        if self.is_bar {
-            flush_type |= 0x6;
-        }
-
-        let bar = self.instmem.base.bar.try_access().ok_or(ENXIO)?;
-
-        let mut addr: u32 = 0;
-        if self.rm_bar2_pdb == 0 {
-            addr = (self.pd.pt[0].as_ref().unwrap().addr >> 8) as u32;
-        } else {
-            addr = (self.rm_bar2_pdb >> 8) as u32;
-        }
-        bar.try_writel(addr, 0xb830a0)?;
-
-        bar.try_writel(0x0, 0xb830a4)?;
-        bar.try_writel(0x80000000 | flush_type, 0xb830b0)?;
-
-        timer_msec!({
-            if bar.try_readl(0xb830b0)? != 0x80000000 {
-                break;
-            }
-        }, 2000, &self.instmem.base.timer);
-
-        Ok(())
-    }
-
-    pub(crate) fn gp100_valid(page: &VmmPage, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
-        map_internal.next = (1_u64 << page.shift) >> 4;
-        map_internal.map_type = 0;
-
-        map_internal.map_type |= bit_u64!(0);
-        map_internal.map_type |= (Self::aper(map.memory.target())? as u64) << 1;
-        map_internal.map_type |= (map.vol as u64) << 3;
-        map_internal.map_type |= (map.private as u64) << 5;
-        map_internal.map_type |= (map.ro as u64) << 6;
-        map_internal.map_type |= (map.kind as u64) << 56;
-        Ok(())
-    }
-
-    pub(crate) fn map_valid(base: &GpuBase, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
-        // validate targets
-        let page = Self::page(base, map_internal.page_idx);
-
-        match map.memory.target() {
-            MemTarget::Vram => {
-                if page.vmm_page_type & NVKM_VMM_PAGE_VRAM == 0 {
-                    return Err(EINVAL);
-                }
-            }
-            MemTarget::Host | MemTarget::Ncoh => {
-                if page.vmm_page_type & NVKM_VMM_PAGE_HOST == 0 {
-                    return Err(EINVAL);
-                }
-            }
-            x => { pr_err!("Illegal target {:?} in map_valid\n", x);
-                   return Err(EINVAL);
-            }
-        }
-
-        if (!is_aligned(vma.addr() as u64, 1_u64 << page.shift) ||
-            !is_aligned(vma.size() as u64, 1_u64 << page.shift) ||
-            !is_aligned(map.offset as u64, 1_u64 << page.shift) ||
-            map.memory.page() < page.shift) {
-            pr_err!("map valid: Illegal alignment {:#x} {:#x} {:#x} {} {}\n",
-                   vma.addr(), vma.size(), map.offset, page.shift,
-                   map.memory.page());
-            return Err(EINVAL);
-        }
-
-        Self::gp100_valid(page, vma, map, map_internal)
-    }
-
-    pub(crate) fn map_choose(base: &GpuBase, vma: &Vma, map: &mut VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
-
-        for mp in 0..Self::num_pages(base) {
-            map_internal.page_idx = mp;
-            match Self::map_valid(base, &vma, map, map_internal) {
-                Ok(()) => { return Ok(()); }
-                _ => {}
-            }
-        }
-        Err(EINVAL)
-    }
-
-    pub(crate) fn map_locked(&mut self, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
-        let mut map_internal = VmmMapInternal {
-            page_idx: 0,
-            pg_shift: 0,
-            next: 0,
-            off: 0,
-            map_type: 0,
-            ctag: 0,
-            mem: None,
-            midx: 0,
-            dma_base: core::ptr::null_mut(),
-        };
-        let base = &self.instmem.base.clone();
-
-        if vma.page() == NVKM_VMA_PAGE_NONE && vma.refd() == NVKM_VMA_PAGE_NONE {
-            Self::map_choose(base, &vma, map, &mut map_internal)?;
-        } else {
-            if vma.refd() != NVKM_VMA_PAGE_NONE {
-                map_internal.page_idx = vma.refd();
-            } else {
-                map_internal.page_idx = vma.page();
-            }
-
-            Self::map_valid(base, &vma, map, &mut map_internal)?;
-        }
-
-        let page = Self::page(base, map_internal.page_idx);
-        let desc = page.get_desc(0);
-
-        map_internal.pg_shift = page.shift;
-
-        map_internal.off = map.offset;
-
-        let mapfn;
-        match map.memory.obj_type() {
-            MemObjType::VRAM => {
-                let vram : *const VramObj = map.memory as *const dyn Memory as *const VramObj;
-                map_internal.mem = unsafe { Some(&(*vram).nodes) };
-
-                while map_internal.off != 0 {
-                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
-                    if size > map_internal.off {
-                        break;
-                    }
-                    map_internal.off -= size;
-                    map_internal.midx += 1;
-                }
-                mapfn = desc.memfn();
-            },
-            MemObjType::DMA => {
-                let dmamemobj : *const DmaMemObj = map.memory as *const dyn Memory as *const DmaMemObj;
-                map_internal.dma_base = unsafe { (*dmamemobj).addr_array.offset((map.offset >> PAGE_SHIFT) as isize) };
-                map_internal.off = map.offset & (PAGE_MASK as u64);
-                mapfn = desc.dmafn();
-            },
-            MemObjType::SGL => {
-                let sglmemobj : *const SglMemObj = map.memory as *const dyn Memory as *const SglMemObj;
-                mapfn = desc.sglfn();
-            }
-            MemObjType::INST => {
-                let instobj: *const InstObj = map.memory as *const dyn Memory as *const InstObj;
-                map_internal.mem = unsafe { Some(&(*instobj).vram.nodes) };
-                while map_internal.off != 0 {
-                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
-                    if size > map_internal.off {
-                        break;
-                    }
-                    map_internal.off -= size;
-                    map_internal.midx += 1;
-                }
-                mapfn = desc.memfn();
-            }
-        };
-
-        if vma.refd() == NVKM_VMA_PAGE_NONE {
-            self.ptes_get_map(page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
-            vma.set_refd(map_internal.page_idx);
-        } else {
-            self.ptes_map(page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
-            //ptes map
-        }
-        vma.set_mapped(true);
-        Ok(())
-    }
-
-    pub(crate) fn unmap_locked(&mut self, vma: Arc<Vma>) -> Result<()> {
-        let base = self.instmem.base.clone();
-        let page = Self::page(&base, vma.refd());
-        if vma.mapref() {
-            self.ptes_unmap_put(page, vma.addr(), vma.size());
-            vma.set_refd(NVKM_VMA_PAGE_NONE);
-        } else {
-            self.ptes_unmap(page, vma.addr(), vma.size());
-        }
-
-        self.unmap_region(vma);
-        Ok(())
-    }
 }
 
 pub(crate) struct VmmMapInternal<'a> {
@@ -2079,10 +1608,201 @@ pub(crate) struct VmmPromoteInfo {
 
 pub(crate) struct Vmm {
     inner: Pin<KBox<Mutex<VmmInner>>>,
+    pd: Pin<KBox<Mutex<VmmPt>>>,
+    sinfo: VmmStaticInfo,
     rsvd: Option<Arc<Vma>>,
+    start: u64,
+    limit: u64,
+    name: &'static str,
+    managed: Option<VmmManaged>,
 }
 
 impl Vmm {
+    fn page(base: &GpuBase, page_idx: u8) -> &VmmPage {
+        // eventually match on gpu family if this changes.
+        &VMM_TU102[page_idx as usize]
+    }
+
+    fn num_pages(base: &GpuBase) -> u8 {
+        // eventually match on gpu family if this changes.
+        VMM_TU102.len() as u8
+    }
+
+    fn smallest_page_idx(base: &GpuBase) -> u8 {
+        // eventually match on gpu family if this changes.
+        (VMM_TU102.len() - 2) as u8
+    }
+
+    fn aper(target: MemTarget) -> Result<u32> {
+        match target {
+            MemTarget::Vram => { Ok(0) }
+            MemTarget::Host => { Ok(2) }
+            MemTarget::Ncoh => { Ok(3) }
+            _ => Err(EINVAL)
+        }
+    }
+
+    fn gp100_valid(page: &VmmPage, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+        map_internal.next = (1_u64 << page.shift) >> 4;
+        map_internal.map_type = 0;
+
+        map_internal.map_type |= bit_u64!(0);
+        map_internal.map_type |= (Self::aper(map.memory.target())? as u64) << 1;
+        map_internal.map_type |= (map.vol as u64) << 3;
+        map_internal.map_type |= (map.private as u64) << 5;
+        map_internal.map_type |= (map.ro as u64) << 6;
+        map_internal.map_type |= (map.kind as u64) << 56;
+        Ok(())
+    }
+
+    fn map_valid(base: &GpuBase, vma: &Vma, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+        // validate targets
+        let page = Self::page(base, map_internal.page_idx);
+
+        match map.memory.target() {
+            MemTarget::Vram => {
+                if page.vmm_page_type & NVKM_VMM_PAGE_VRAM == 0 {
+                    return Err(EINVAL);
+                }
+            }
+            MemTarget::Host | MemTarget::Ncoh => {
+                if page.vmm_page_type & NVKM_VMM_PAGE_HOST == 0 {
+                    return Err(EINVAL);
+                }
+            }
+            x => { pr_err!("Illegal target {:?} in map_valid\n", x);
+                   return Err(EINVAL);
+            }
+        }
+
+        if (!is_aligned(vma.addr() as u64, 1_u64 << page.shift) ||
+            !is_aligned(vma.size() as u64, 1_u64 << page.shift) ||
+            !is_aligned(map.offset as u64, 1_u64 << page.shift) ||
+            map.memory.page() < page.shift) {
+            pr_err!("map valid: Illegal alignment {:#x} {:#x} {:#x} {} {}\n",
+                   vma.addr(), vma.size(), map.offset, page.shift,
+                   map.memory.page());
+            return Err(EINVAL);
+        }
+
+        Self::gp100_valid(page, vma, map, map_internal)
+    }
+
+    fn map_choose(base: &GpuBase, vma: &Vma, map: &mut VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>) -> Result<()> {
+
+        for mp in 0..Self::num_pages(base) {
+            map_internal.page_idx = mp;
+            match Self::map_valid(base, &vma, map, map_internal) {
+                Ok(()) => { return Ok(()); }
+                _ => {}
+            }
+        }
+        Err(EINVAL)
+    }
+
+    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
+        let mgd = match &self.managed {
+            None => { return false; }
+            Some(m) => m
+        };
+
+        let p_start = mgd.p.addr;
+        let p_end = p_start + mgd.p.size;
+        let n_start = mgd.n.addr;
+        let n_end = n_start + mgd.n.size;
+        let end = start + size;
+
+        if start >= p_start && end <= p_end {
+            return true;
+        }
+
+        if start >= n_start && end <= n_end {
+            return true;
+        }
+        return false;
+    }
+
+    fn ptes_unmap_put(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let desc = page.get_desc(0);
+        let mut clrfn = desc.invalidfn();
+
+        if clrfn.is_none() {
+            clrfn = desc.unmapfn();
+        }
+
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "unmap + unref", false, false, Some(VmmIter::unref_ptes), None, None, None, clrfn)?;
+        Ok(())
+    }
+
+    fn ptes_unmap(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let desc = page.get_desc(0);
+        let mut clrfn = desc.invalidfn();
+
+        if clrfn.is_none() {
+            clrfn = desc.unmapfn();
+        }
+
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "unmap", false, false, None, None, None, None, clrfn)?;
+        Ok(())
+    }
+
+    fn ptes_get(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "ref", true, false, Some(VmmIter::ref_ptes), None, None, None, None)?;
+        Ok(())
+    }
+
+    fn ptes_map(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "map", false, false, None, mapfn, Some(map), Some(map_internal), None)?;
+        Ok(())
+    }
+
+    fn ptes_get_map(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64, map: &VmmMap<'_>, map_internal: &mut VmmMapInternal<'_>, mapfn: Option<MapFn>) -> Result<()> {
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "ref + map", true, false, Some(VmmIter::ref_ptes), mapfn, Some(map), Some(map_internal), None)?;
+        Ok(())
+    }
+
+    fn ptes_put(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "unref", false, false, Some(VmmIter::unref_ptes), None, None, None, None)?;
+        Ok(())
+    }
+
+    fn put_internal(inner: &mut VmmInner, pt: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>) -> Result<()> {
+        if vma.mapref() || !vma.sparse {
+            let base = sinfo.instmem.base.clone();
+            if vma.mapped() {
+                let page = Self::page(&base, vma.refd());
+                Self::ptes_unmap_put(pt, sinfo, page, vma.addr(), vma.size());
+            } else {
+                if vma.refd() != NVKM_VMA_PAGE_NONE {
+                    let page = Self::page(&base, vma.refd());
+                    Self::ptes_put(pt, sinfo, page, vma.addr(), vma.size());
+                }
+            }
+        }
+
+        if vma.mapped() {
+            inner.unmap_region(vma.clone());
+        }
+        // Remove VMA from the list of allocated nodes.
+        inner.node_remove(&vma);
+
+        // Merge VMA back into the free list.
+
+        vma.set_page(NVKM_VMA_PAGE_NONE);
+        vma.set_refd(NVKM_VMA_PAGE_NONE);
+        vma.set_used(false);
+
+        inner.put_region(vma)?;
+        Ok(())
+    }
+
+    pub(crate) fn get(&self, getref: bool, mapref: bool, sparse: bool,
+                      shift: u8, align_val: u8, size: u64) -> Result<Arc<Vma>> {
+        let mut locked_inner = self.inner.lock();
+        let mut locked_pd = self.pd.lock();
+        Self::get_internal(&mut locked_inner, &mut locked_pd, &self.sinfo, getref, mapref, sparse,
+                           shift, align_val, size)
+    }
 
     pub(crate) fn get_addr(&self, addr: u64) -> Result<Arc<Vma>> {
         let mut locked_inner = self.inner.lock();
@@ -2091,19 +1811,120 @@ impl Vmm {
 
     pub(crate) fn put_addr(&self, addr: u64) -> Result<()> {
         let mut locked_inner = self.inner.lock();
+        let mut locked_pd = self.pd.lock();
         let vma = locked_inner.node_search(addr)?;
-        locked_inner.put(vma)
+        Self::put_internal(&mut locked_inner, &mut locked_pd, &self.sinfo, vma)
     }
 
     pub(crate) fn put(&self, vma: Arc<Vma>) -> Result<()> {
         let mut locked_inner = self.inner.lock();
-        locked_inner.put(vma)
+        let mut locked_pd = self.pd.lock();
+        Self::put_internal(&mut locked_inner, &mut locked_pd, &self.sinfo, vma)
     }
 
-    pub(crate) fn get(&self, getref: bool, mapref: bool, sparse: bool,
-                      shift: u8, align: u8, size: u64) -> Result<Arc<Vma>> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.get(getref, mapref, sparse, shift, align, size)
+    pub(crate) fn get_internal(inner: &mut VmmInner,
+                               pd: &mut VmmPt,
+                               sinfo: &VmmStaticInfo, getref: bool, mapref: bool, sparse: bool,
+                               shift: u8, align_val: u8, size: u64) -> Result<Arc<Vma>> {
+        let int_align;
+
+        if getref && shift == 0 {
+            pr_err!("got invalid getref with no shift\n");
+            return Err(EINVAL);
+        }
+
+        let mut page_idx : Option<u8> = None;
+        if shift != 0 {
+            for p in 0..Self::num_pages(&sinfo.instmem.base) {
+                if shift == Self::page(&sinfo.instmem.base, p).shift {
+                    page_idx = Some(p);
+                    break;
+                }
+            }
+
+            if page_idx.is_none() {
+                pr_err!("failed to find vmm page {}\n", shift);
+                return Err(EINVAL);
+            }
+            int_align = core::cmp::max::<u8>(align_val, shift);
+        } else {
+            int_align = core::cmp::max::<u8>(align_val, 12);
+        }
+
+        /* Locate smallest block that can possibly satisfy the allocation. */
+        let mut free: &mut RBTree<SizeAddr, Arc<Vma>> = &mut inner.free;
+        let mut curs = match free.cursor_lower_bound(&SizeAddr { size: size, addr: 0 }) {
+            None => { return Err(ENOSPC); }
+            Some(x) => { x }
+        };
+
+        let curr = curs.current().1;
+
+        let mut addr;
+        let mut curr = curr.clone();
+
+        loop {
+            addr = curr.addr();
+
+            addr = align64(addr, 1_u64 << int_align);
+
+            let tail = curr.addr() + curr.size();
+
+            if addr <= tail && tail - addr >= size {
+                let node;
+                (_, node) = curs.remove_current();
+                (_, curr) = node.to_key_value();
+                break;
+            }
+            curs = match curs.move_next() {
+                None => { return Err(ENOSPC); }
+                Some(x) => x
+            }
+        }
+
+        if addr != curr.addr() {
+            let tmp = inner.tail(curr.as_ref(), curr.size() + curr.addr() - addr, false)?;
+            inner.free_insert(curr.clone())?;
+            curr = tmp;
+        }
+        if size != curr.size() {
+            let tmp = inner.tail(curr.as_ref(), curr.size() - size, false)?;
+            inner.free_insert(tmp)?;
+        }
+
+        if getref {
+            let base = sinfo.instmem.base.clone();
+            let page = Self::page(&base, page_idx.unwrap());
+            Self::ptes_get(pd, sinfo, page, curr.addr(), curr.size())?;
+        }
+
+        curr.set_mapref(mapref && !getref);
+        curr.set_used(true);
+        if getref {
+            curr.set_refd(page_idx.unwrap());
+        } else {
+            curr.set_refd(NVKM_VMA_PAGE_NONE);
+        }
+        if page_idx.is_some() {
+            curr.set_page(page_idx.unwrap());
+        }
+        inner.node_insert(curr.clone())?;
+
+        Ok(curr)
+    }
+
+    pub(crate) fn boot(inner: &mut VmmInner, pd: &mut VmmPt, sinfo: &mut VmmStaticInfo, vmm_start: u64, vmm_limit: u64) -> Result<()> {
+        let base = sinfo.instmem.base.clone();
+        let limit = vmm_limit - vmm_start;
+        let page_idx = Self::smallest_page_idx(&base);
+        let pg = Self::page(&base, page_idx);
+
+        Self::ptes_get(pd, sinfo, pg, vmm_start, limit)?;
+
+        let iter = VmmIter::iter(pd, sinfo, Some(inner), pg, vmm_start, limit, "boot", false, false,
+                                 Some(VmmIter::boot_ptes), None, None, None, None);
+        sinfo.bootstrapped = true;
+        Ok(())
     }
 
     pub(crate) fn new(instmem: Arc<InstMem>,
@@ -2114,16 +1935,17 @@ impl Vmm {
                       override_pt0: Option<InstObj>,
                       join: Option<&mut InstObj>,
                       promote_vmm: bool,
+                      bar2_pdb: u64,
                       name: &'static str) -> Result<Self> {
         let limit: u64;
         let mut bits: usize = 0;
 
-        let page_idx = VmmInner::smallest_page_idx(&instmem.base);
+        let page_idx = Self::smallest_page_idx(&instmem.base);
 
         let mut levels = 0;
         let mut desc_idx : usize = 0;
         loop {
-            let desc_ref = VmmInner::page(&instmem.base, page_idx).get_desc(desc_idx);
+            let desc_ref = Self::page(&instmem.base, page_idx).get_desc(desc_idx);
             let dbits = desc_ref.bits() as usize;
             if dbits == 0 {
                 break;
@@ -2133,9 +1955,9 @@ impl Vmm {
             desc_idx += 1;
             levels += 1;
         }
-        bits += VmmInner::page(&instmem.base, page_idx).shift as usize;
+        bits += Self::page(&instmem.base, page_idx).shift as usize;
 
-        let desc_ref = VmmInner::page(&instmem.base, page_idx).get_desc(desc_idx - 1);
+        let desc_ref = Self::page(&instmem.base, page_idx).get_desc(desc_idx - 1);
 
         // allocate top-level page table
         //
@@ -2183,23 +2005,22 @@ impl Vmm {
                 1_u64 << bits
             };
         }
-        let mut inner = VmmInner {
+
+        let mut sinfo = VmmStaticInfo {
             instmem: instmem.clone(),
-            start: vmm_start,
-            limit: vmm_limit,
-            managed,
-            bootstrapped: false,
             is_bar,
-            rm_bar2_pdb: 0,
+            rm_bar2_pdb: bar2_pdb,
+            name,
+            bootstrapped: false,
+        };
+        let mut inner = VmmInner {
             free: RBTree::new(),
             root: RBTree::new(),
             list: List::new(),
-            pd,
-            name,
         };
 
-        if inner.managed.is_some() {
-            let managed = &inner.managed.as_ref().unwrap();
+        if managed.is_some() {
+            let managed = &managed.as_ref().unwrap();
             let pvma = Vma::new_managed(managed.p.addr, managed.p.size)?;
             let vma = Vma::new(managed.p.size, size)?;
             let nvma = Vma::new_managed(managed.n.addr, managed.n.size)?;
@@ -2213,79 +2034,257 @@ impl Vmm {
             inner.node_insert(nvma.clone_arc())?;
             inner.list.push_back(nvma);
         } else {
-            let vma = Vma::new(inner.start, inner.limit - inner.start)?;
+            let vma = Vma::new(vmm_start, vmm_limit - vmm_start)?;
             inner.free_insert(vma.clone_arc())?;
             inner.list.push_back(vma);
         }
 
         if needs_bootstrap {
-            let _ = inner.boot();
+            let _ = Self::boot(&mut inner, &mut pd, &mut sinfo, vmm_start, vmm_limit);
         }
 
         match join {
             None => {},
-            Some(join) => { let _ = inner.join(join); }
+            Some(join) => { let _ = Self::join_internal(&pd, join, vmm_limit); }
         }
 
         let mut rsvd = None;
         if promote_vmm {
-            rsvd = Some(inner.get(true, false, false, 0x1d, 32, 0x20000000)?);
+            rsvd = Some(Self::get_internal(&mut inner, &mut pd, &sinfo, true, false, false, 0x1d, 32, 0x20000000)?);
         }
         Ok(Self {
             inner: KBox::pin_init(new_mutex!(inner), GFP_KERNEL)?,
+            pd: KBox::pin_init(new_mutex!(pd), GFP_KERNEL)?,
+            sinfo,
+            managed,
             rsvd,
+            start: vmm_start,
+            limit: vmm_limit,
+            name,
         })
     }
 
-    pub(crate) fn ptes_get(&self, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.ptes_get(page, addr, size)
-    }
-
     pub(crate) fn getpd0_addr(&self) -> Result<u64> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.getpd0_addr()
-    }
-
-    pub(crate) fn bar2_pdb_set(&self, addr: u64) -> Result<()> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.rm_bar2_pdb = addr;
-        Ok(())
+        let pd = self.pd.lock();
+        Ok(pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr)
     }
 
     pub(crate) fn map(&self, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.map_locked(vma, map)
+        let mut locked_pd = self.pd.lock();
+        Self::map_internal(&mut locked_pd, &self.sinfo, vma, map)
+    }
+
+    pub(crate) fn map_internal(pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
+        let mut map_internal = VmmMapInternal {
+            page_idx: 0,
+            pg_shift: 0,
+            next: 0,
+            off: 0,
+            map_type: 0,
+            ctag: 0,
+            mem: None,
+            midx: 0,
+            dma_base: core::ptr::null_mut(),
+        };
+        let base = &sinfo.instmem.base.clone();
+
+        if vma.page() == NVKM_VMA_PAGE_NONE && vma.refd() == NVKM_VMA_PAGE_NONE {
+            Self::map_choose(base, &vma, map, &mut map_internal)?;
+        } else {
+            if vma.refd() != NVKM_VMA_PAGE_NONE {
+                map_internal.page_idx = vma.refd();
+            } else {
+                map_internal.page_idx = vma.page();
+            }
+
+            Self::map_valid(base, &vma, map, &mut map_internal)?;
+        }
+
+        let page = Self::page(base, map_internal.page_idx);
+        let desc = page.get_desc(0);
+
+        map_internal.pg_shift = page.shift;
+
+        pr_info!("mapping post valid {} {} {} {}\n", map_internal.page_idx, vma.refd(), vma.page(), map_internal.pg_shift);
+
+        map_internal.off = map.offset;
+
+        let mapfn;
+        match map.memory.obj_type() {
+            MemObjType::VRAM => {
+                let vram : *const VramObj = map.memory as *const dyn Memory as *const VramObj;
+                map_internal.mem = unsafe { Some(&(*vram).nodes) };
+
+                while map_internal.off != 0 {
+                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
+                    if size > map_internal.off {
+                        break;
+                    }
+                    map_internal.off -= size;
+                    map_internal.midx += 1;
+                }
+                mapfn = desc.memfn();
+            },
+            MemObjType::DMA => {
+                let dmamemobj : *const DmaMemObj = map.memory as *const dyn Memory as *const DmaMemObj;
+                map_internal.dma_base = unsafe { (*dmamemobj).addr_array.offset((map.offset >> PAGE_SHIFT) as isize) };
+                map_internal.off = map.offset & (PAGE_MASK as u64);
+                mapfn = desc.dmafn();
+            },
+            MemObjType::SGL => {
+                let sglmemobj : *const SglMemObj = map.memory as *const dyn Memory as *const SglMemObj;
+                mapfn = desc.sglfn();
+            }
+            MemObjType::INST => {
+                let instobj: *const InstObj = map.memory as *const dyn Memory as *const InstObj;
+                map_internal.mem = unsafe { Some(&(*instobj).vram.nodes) };
+                while map_internal.off != 0 {
+                    let size: u64 = map_internal.mem.unwrap()[map_internal.midx].size();
+                    if size > map_internal.off {
+                        break;
+                    }
+                    map_internal.off -= size;
+                    map_internal.midx += 1;
+                }
+                mapfn = desc.memfn();
+            }
+        };
+
+        if vma.refd() == NVKM_VMA_PAGE_NONE {
+            Self::ptes_get_map(pd, sinfo, page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
+            vma.set_refd(map_internal.page_idx);
+        } else {
+            Self::ptes_map(pd, sinfo, page, vma.addr(), vma.size(), map, &mut map_internal, mapfn)?;
+            //ptes map
+        }
+        vma.set_mapped(true);
+        Ok(())
     }
 
     pub(crate) fn part(&self, inst: &mut InstObj) -> Result<()> {
         let mut locked_inner = self.inner.lock();
-        locked_inner.part(inst)
+        inst.fill64(0x200, 0x0, 0x2)
+    }
+
+    fn gp100_join(instobj: &mut InstObj, addr: u64, target: MemTarget, vmm_limit: u64) -> Result<()> {
+        let mut base: u64 = bit_u64!(10) | bit_u64!(11); // VER2 | 64KiB
+
+        // replay TODO
+        match target {
+            MemTarget::Vram => { base |= 0_u64 << 0; }
+            MemTarget::Host => { base |= 2_u64 << 0;
+                                 base |= bit_u64!(2); // VOL
+            }
+            MemTarget::Ncoh => { base |= 3_u64 << 0; }
+            (x) => { pr_err!("Unknown mem target {:?}\n", x); return Err(EINVAL); }
+        }
+
+        base |= addr;
+
+        instobj.acquire()?;
+        instobj.wr64(0x200_u64, base)?;
+        instobj.wr64(0x208_u64, vmm_limit - 1)?;
+        instobj.release();
+
+        instobj.acquire();
+        let mask: u64 = bit_u64!(0);
+
+        instobj.wr32(0x21c_u64, 0)?;
+
+        for i in 0_u64..64_u64 {
+            if mask & (1_u64.wrapping_shl(i as u32)) != 0 {
+                instobj.wr32(0x2a4_u64 + (i * 0x10), (base >> 32) as u32)?;
+                instobj.wr32(0x2a0_u64 + (i * 0x10), (base & 0xffffffff) as u32)?;
+            } else {
+                instobj.wr32(0x2a4_u64 + (i * 0x10), 1)?;
+                instobj.wr32(0x2a0_u64 + (i * 0x10), 1)?;
+            }
+            instobj.wr32(0x2a8_u64 + (i * 0x10), 0)?;
+        }
+
+        instobj.wr32(0x298_u64, (mask & 0xffffffff) as u32)?;
+        instobj.wr32(0x29c_u64, (mask >> 32) as u32)?;
+
+        instobj.release();
+        Ok(())
+    }
+
+    fn gp100_flush_internal(sinfo: &VmmStaticInfo, base_addr: u64) -> Result<()> {
+        let mut flush_type: u32 = 0;
+
+        flush_type |= 0x1;  /* PAGE_ALL */
+
+        if sinfo.is_bar {
+            flush_type |= 0x6;
+        }
+
+        let addr: u32;
+        if sinfo.rm_bar2_pdb == 0 {
+            addr = (base_addr >> 8) as u32;
+        } else {
+            addr = (sinfo.rm_bar2_pdb >> 8) as u32;
+        }
+
+        let bar = sinfo.instmem.base.bar.try_access().ok_or(ENXIO)?;
+
+        bar.try_writel(addr, 0xb830a0)?;
+
+        bar.try_writel(0x0, 0xb830a4)?;
+        bar.try_writel(0x80000000 | flush_type, 0xb830b0)?;
+
+        timer_msec!({
+            if bar.try_readl(0xb830b0)? != 0x80000000 {
+                break;
+            }
+        }, 2000, &sinfo.instmem.base.timer);
+
+        Ok(())
+    }
+
+    fn join_internal(pd: &VmmPt, inst: &mut InstObj, limit: u64) -> Result<()> {
+        let pd = pd.pt[0].as_ref().unwrap();
+
+        Self::gp100_join(inst, pd.addr, pd.memory.target(), limit)
     }
 
     pub(crate) fn join(&self, inst: &mut InstObj) -> Result<()> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.join(inst)
+        let mut pd = self.pd.lock();
+        Self::join_internal(&mut pd, inst, self.limit)
     }
 
     fn flush(&self) -> Result<()> {
-        let mut locked_inner = self.inner.lock();
-        locked_inner.flush()
+        let pd = self.pd.lock();
+        Self::gp100_flush_internal(&self.sinfo, pd.pt[0].as_ref().unwrap().addr)
     }
 
     pub(crate) fn dump(&self) {
         let mut locked_inner = self.inner.lock();
-        locked_inner.dump()
+        pr_info!("VMM {}: {:#x} {:#x}\n", self.name, self.start, self.limit);
+        for vma in &locked_inner.list {
+            pr_info!("{:?}\n", *vma);
+        }
     }
 
     pub(crate) fn limit(&self) -> Result<u64> {
-        Ok(self.inner.lock().limit)
+        Ok(self.limit)
     }
 
     pub(crate) fn unmap_addr(&self, addr: u64) -> Result<()> {
         let mut locked_inner = self.inner.lock();
+        let mut pd = self.pd.lock();
         let vma = locked_inner.node_search(addr)?;
-        locked_inner.unmap_locked(vma)
+
+        let base = self.sinfo.instmem.base.clone();
+        let page = Self::page(&base, vma.refd());
+        if vma.mapref() {
+            Self::ptes_unmap_put(&mut pd, &self.sinfo, page, vma.addr(), vma.size());
+            vma.set_refd(NVKM_VMA_PAGE_NONE);
+        } else {
+            Self::ptes_unmap(&mut pd, &self.sinfo, page, vma.addr(), vma.size());
+        }
+
+        locked_inner.unmap_region(vma);
+        Ok(())
     }
 
     pub(crate) fn get_promote_info(&self) -> Result<VmmPromoteInfo> {
@@ -2295,24 +2294,24 @@ impl Vmm {
             Some(rsvd) => rsvd
         };
 
-        let mut locked_inner = self.inner.lock();
+        let mut locked_pd = self.pd.lock();
 
         let mut num_levels = 3;
 
-        if locked_inner.pd.pde[0].is_none() {
+        if locked_pd.pde[0].is_none() {
             pr_info!("got pde 0 is none FAIL\n");
             return Err(EINVAL);
         }
-        if locked_inner.pd.pde[0].as_ref().unwrap().pde[0].is_none() {
+        if locked_pd.pde[0].as_ref().unwrap().pde[0].is_none() {
             num_levels = 2;
         }
 
-        let addr0: u64 = locked_inner.pd.pt[0].as_ref().unwrap().addr;
-        let addr1: u64 = locked_inner.pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+        let addr0: u64 = locked_pd.pt[0].as_ref().unwrap().addr;
+        let addr1: u64 = locked_pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
 
         let mut addr2: u64 = 0;
         if num_levels == 3 {
-            addr2 = locked_inner.pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+            addr2 = locked_pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
         }
 
         Ok(VmmPromoteInfo {
