@@ -1998,7 +1998,7 @@ impl Vmm {
 
             managed = Some(VmmManaged {
                 p,
-                n: SizeAddr { size: 0, addr: 0 },
+                n: SizeAddr { addr: addr + size, size: vmm_limit - (addr + size)},
                 raw: vmm_type == NVKM_VMM_TYPE_RAW,
             });
 
