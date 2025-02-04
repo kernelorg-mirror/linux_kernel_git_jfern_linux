@@ -1,7 +1,7 @@
 
 use kernel::prelude::*;
 use kernel::sync::Arc;
-use crate::gpu::{Gpu, AllocId, GpuDevice};
+use crate::gpu::{Gpu, AllocId, GpuDevice, GpuDeviceVmm};
 use crate::gsp::GspManager;
 use crate::gsp::{GspDevice, GspChannel};
 use crate::mmu::memory::{InstMem, InstObj, Memory};
@@ -27,6 +27,7 @@ pub(crate) struct CtxBufInfo {
 
 pub(crate) struct GrCtx {
     bufs: KVec<Arc<InstObj>>,
+    vmm: Arc<GpuDeviceVmm>,
     vma_addrs: KVec<u64>,
 }
 
@@ -108,7 +109,6 @@ impl GrCtx {
                 ent.physattr = 4;
             }
 
-            vmm.dump();
             buf_ent_vec.push(ent, GFP_KERNEL)?;
         }
 
@@ -156,16 +156,26 @@ impl GrCtx {
 
     pub(crate) fn new_ctx(instmem: Arc<InstMem>, gsp: Arc<dyn GspManager>,
                           device: &GpuDevice, channel: &Channel,
-                          vmm: &Vmm, golden: &KVec<Arc<InstObj>>) -> Result<Arc<GrCtx>> {
+                          vmm: Arc<GpuDeviceVmm>, golden: &KVec<Arc<InstObj>>) -> Result<Arc<GrCtx>> {
         let ctxbufinfo = gsp.get_gr_ctx_info();
         let (alloced, mem_vec) = Self::alloc_ctx_bufs(instmem.clone(), Some(golden), ctxbufinfo)?;
 
-        let vma_addrs = Self::promote_ctx(gsp.clone(), vmm, &device.gsp,
+        let vma_addrs = Self::promote_ctx(gsp.clone(), &vmm.vmm, &device.gsp,
                                           &channel.gsp_chan, &alloced, &mem_vec, &ctxbufinfo)?;
 
         Ok(Arc::new(GrCtx {
             bufs: mem_vec,
+            vmm: vmm.clone(),
             vma_addrs,
         }, GFP_KERNEL)?)
+    }
+
+    pub(crate) fn free_ctx(&self) {
+        for addr in &self.vma_addrs {
+            if *addr != 0 {
+                self.vmm.vmm.unmap_addr(*addr);
+                self.vmm.vmm.put_addr(*addr);
+            }
+        }
     }
 }

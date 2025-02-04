@@ -535,10 +535,10 @@ impl Gpu {
     }
 
     pub(crate) fn gr_ctx(&self, device: &GpuDevice, chan: &Channel,
-                         vmm: &GpuDeviceVmm) -> Result<Arc<GrCtx>>{
+                         vmm: Arc<GpuDeviceVmm>) -> Result<Arc<GrCtx>>{
         GrCtx::new_ctx(self.instmem.clone(), self.gsp.clone(),
                        device, chan,
-                       &vmm.vmm, &self.gr_ctx_bufs)
+                       vmm, &self.gr_ctx_bufs)
     }
 
     pub(crate) fn int_alloc_client_device(alloc_id: Arc<AllocId>, gsp: Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {

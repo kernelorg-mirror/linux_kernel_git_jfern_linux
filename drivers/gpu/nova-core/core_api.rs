@@ -9,6 +9,7 @@ use kernel::{
 use kernel::types::ForeignOwnable;
 use crate::accel::fifo::EngineType;
 use crate::accel::fifo::ChannelNonStall;
+use crate::accel::gr::GrCtx;
 use crate::gpu::{Gpu, GpuDevice, GpuClient, Chipset, GpuDeviceVmm, GpuChanObject};
 use crate::mmu::memory::NVKM_MM_PAGE_SHIFT;
 use crate::mmu::mmu::Mmu;
@@ -636,12 +637,16 @@ pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_d
 /// Free a channel on the client
 pub unsafe extern "C" fn nova_core_free_chan(chan: *mut bindings::nova_core_chan) {
     unsafe {
-        if (*chan).arc == core::ptr::null_mut() {
-            return;
+        if (*chan).gr_ctx_arc != core::ptr::null_mut() {
+            let gr_ctx_arc : Arc<GrCtx> = Arc::from_foreign((*chan).gr_ctx_arc);
+            gr_ctx_arc.free_ctx();
+            (*chan).gr_ctx_arc = core::ptr::null_mut();
         }
-        let chan_arc : Arc<Channel> = Arc::from_foreign((*chan).arc);
-        chan_arc.free();
-        (*chan).arc = core::ptr::null_mut();
+        if (*chan).arc != core::ptr::null_mut() {
+            let chan_arc : Arc<Channel> = Arc::from_foreign((*chan).arc);
+            chan_arc.free();
+            (*chan).arc = core::ptr::null_mut();
+        }
     }
 }
 
@@ -795,7 +800,7 @@ pub unsafe extern "C" fn nova_core_chan_init_gr(auxdev: *mut bindings::auxiliary
     let dev_arc: Arc<GpuDevice> = Arc::<GpuDevice>::from(dev);
     let vmm_arc: Arc<GpuDeviceVmm> = Arc::<GpuDeviceVmm>::from(vmm);
 
-    let gr_ctx_arc = match gpu.gr_ctx(&dev_arc, &chan, &vmm_arc) {
+    let gr_ctx_arc = match gpu.gr_ctx(&dev_arc, &chan, vmm_arc) {
         Err(x) => { return x.to_errno(); },
         Ok(gr) => gr
     };
