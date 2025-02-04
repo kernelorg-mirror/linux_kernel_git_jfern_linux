@@ -1863,7 +1863,7 @@ impl Vmm {
             Some(x) => { x }
         };
 
-        let curr = curs.current().1;
+        let mut curr = curs.current().1;
 
         let mut addr;
         let mut curr = curr.clone();
@@ -1884,7 +1884,8 @@ impl Vmm {
             curs = match curs.move_next() {
                 None => { return Err(ENOSPC); }
                 Some(x) => x
-            }
+            };
+            curr = curs.current().1.clone();
         }
 
         if addr != curr.addr() {
