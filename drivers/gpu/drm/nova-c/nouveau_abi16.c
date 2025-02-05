@@ -568,11 +568,15 @@ nouveau_abi16_ioctl_new(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 		return -EINVAL;
 	}
 
-	if (!chan->chan->chan.nova.gr_ctx_arc) {
+	if (engine_type == NOVA_CORE_ENGINE_GR && !chan->chan->chan.nova.gr_ctx_arc) {
 		ret = nova_core_chan_init_gr(drm->auxdev,
 					     &chan->chan->cli->gsp,
 					     &chan->chan->vmm->vmm,
 					     &chan->chan->chan.nova);
+		if (ret) {
+			printk(KERN_ERR "Failed to allocate GR object\n");
+			return ret;
+		}
 	}
 	
 	obj->obj.class = args->oclass;
