@@ -8,6 +8,7 @@
 
 #include "nouveau_abi16.h"
 #include "nouveau_chan.h"
+#include "nouveau_debugfs.h"
 #include "nouveau_dma.h"
 #include "nouveau_fence.h"
 #include "nouveau_ioctl.h"
@@ -250,8 +251,6 @@ nouveau_accel_init(struct nouveau_drm *drm)
 
 	/* Initialise accelerated TTM buffer moves. */
 	nouveau_bo_move_init(drm);
-
-	nouveau_drm_test(drm);
 }
 
 static void
@@ -260,6 +259,8 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 	struct drm_device *dev = &drm->dev;
 	struct nouveau_cli *cli, *temp_cli;
 
+	nouveau_debugfs_fini(drm);
+	
 	nouveau_accel_fini(drm);
 	nouveau_ttm_fini(drm);
 
@@ -309,6 +310,8 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 		goto fail_ttm;	
 
 	nouveau_accel_init(drm);
+
+	nouveau_debugfs_init(drm);
 
 	ret = drm_dev_register(&drm->dev, 0);
 	if (ret) {
@@ -535,7 +538,9 @@ driver_stub = {
 			   DRIVER_SYNCOBJ | DRIVER_SYNCOBJ_TIMELINE |
 			   DRIVER_GEM_GPUVA |
 			   DRIVER_RENDER,
-
+#if defined(CONFIG_DEBUG_FS)
+	.debugfs_init = nouveau_drm_debugfs_init,
+#endif
 	.open = nouveau_drm_open,
 	.postclose = nouveau_drm_postclose,
 

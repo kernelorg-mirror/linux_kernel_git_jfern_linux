@@ -194,6 +194,8 @@ struct nouveau_drm {
 	struct nouveau_channel *channel;
 
 	struct nova_core_user_info user;
+
+	struct nouveau_debugfs *debugfs;
 };
 
 static inline struct nouveau_drm *
