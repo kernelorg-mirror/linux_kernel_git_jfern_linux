@@ -68,13 +68,11 @@ pub(crate) struct VmmPt {
     refs: [u32; 2],
     page: u8,
     sparse: bool,
-    pde_sparse: bool,
-    pde: KVVec<Option<VmmPt>>,
+    pde: KVVec<(bool, Option<VmmPt>)>,
     pte: KVec<u8>,
 }
 
 impl VmmPt {
-
     pub(crate) fn new(desc: &VmmDescType, sparse: bool, lvl: usize, page: Option<&VmmPage>) -> Result<Self> {
         let pten = 1_u32.wrapping_shl(desc.bits() as u32);
 
@@ -110,12 +108,11 @@ impl VmmPt {
 
         let mut pde_v = KVVec::with_capacity(pde as usize, GFP_KERNEL)?;
         for _i in 0..pde {
-            pde_v.push(None, GFP_KERNEL)?;
+            pde_v.push((false, None), GFP_KERNEL)?;
         }
 
         Ok(Self {
             sparse: sparse,
-            pde_sparse: false,
             pte: pte_v,
             pde: pde_v,
             page: pg,
@@ -130,8 +127,8 @@ impl Debug for VmmPt {
         writeln!(f, "page: {} pt {:?} {:?}", self.page, self.pt[0], self.pt[1])?;
         writeln!(f, "pte: {:x?}", self.pte)?;
         for i in 0..self.pde.len() {
-            if self.pde[i].is_some() {
-                writeln!(f, "pde: {} {:?}", i, self.pde[i].as_ref().unwrap())?;
+            if self.pde[i].1.is_some() {
+                writeln!(f, "pde: {} {:?}", i, self.pde[i].1.as_ref().unwrap())?;
             }
         }
         Ok(())
@@ -261,6 +258,24 @@ impl VmmDescType {
         }
     }
 
+    fn sparse(&self, pt: &mut MmuPt, ptei: u32, ptes: u32) -> Result<()> {
+        match self {
+            VmmDescType::Spt(x) => {
+                VmmDescSPT::sparse(pt, ptei, ptes)
+            }
+            VmmDescType::Lpt(x) => {
+                VmmDescLPT::sparse(pt, ptei, ptes)
+            }
+            VmmDescType::PgdPd0(x) => {
+                VmmDescPd0::sparse(pt, ptei, ptes)
+            }
+            VmmDescType::PgdPd1(x) => {
+                VmmDescPd1::sparse(pt, ptei, ptes)
+            }
+            _ => { Ok(()) }
+        }
+    }
+
     fn pde(&self, pgd: &mut VmmPt, pdei: u32) -> Result<()> {
         match self {
             VmmDescType::PgdPd0(x) => {
@@ -276,6 +291,17 @@ impl VmmDescType {
     fn invalidfn(&self) -> Option<ClrFn> {
         match self {
             VmmDescType::Lpt(x) => { Some(VmmDescLPT::invalid) }
+            _ => { None }
+        }
+    }
+
+    fn sparsefn(&self) -> Option<ClrFn> {
+        match self {
+            VmmDescType::Empty(_) => { None },
+            VmmDescType::PgdPd0(x) => { Some(VmmDescPd0::sparse) }
+            VmmDescType::PgdPd1(x) => { Some(VmmDescPd1::sparse) }
+            VmmDescType::Spt(x) => { Some(VmmDescSPT::sparse) }
+            VmmDescType::Lpt(x) => { Some(VmmDescLPT::sparse) }
             _ => { None }
         }
     }
@@ -540,7 +566,7 @@ impl VmmDescFunc for VmmDescPd0 {
     fn pde(pgd: &mut VmmPt, pdei: u32) -> Result<()> {
         let mut data: [u64; 2] = [ 0, 0 ];
 
-        let pgt = pgd.pde[pdei as usize].as_ref().unwrap();
+        let pgt = pgd.pde[pdei as usize].1.as_ref().unwrap();
         let pd: &mut MmuPt =  pgd.pt[0].as_mut().unwrap();
 
         if !pgt.pt[0].is_none() {
@@ -592,7 +618,7 @@ impl VmmDescFunc for VmmDescPd1 {
     fn pde(pgd: &mut VmmPt, pdei: u32) -> Result<()> {
         let mut data: u64 = 0;
 
-        let pgt = pgd.pde[pdei as usize].as_ref().unwrap();
+        let pgt = pgd.pde[pdei as usize].1.as_ref().unwrap();
         let pd: &mut MmuPt = pgd.pt[0].as_mut().unwrap();
 
         if pgt.pt[0].is_none() {
@@ -894,7 +920,7 @@ impl<'a> VmmIter<'a> {
     fn ref_hwpt(&mut self, pgd: &mut VmmPt, pdei: u32) -> Result<()> {
         let desc = self.page.get_desc((self.lvl - 1) as usize);
         let pg_type = self.refs_idx((self.lvl - 1) as usize);
-        let pgt = &mut pgd.pde[pdei as usize].as_mut().unwrap();
+        let pgt = &mut pgd.pde[pdei as usize].1.as_mut().unwrap();
 
         if VMM_TRACE {
             pr_info!("ref_hwpt: {}: {} {}\n", self.lvl, pg_type, desc.bits());
@@ -902,7 +928,7 @@ impl<'a> VmmIter<'a> {
         let pten = 1_u32.wrapping_shl(desc.bits() as u32);
         let size = desc.size() as usize * pten as usize;
 
-        let zero = !desc.has_invalid();
+        let zero = !pgt.sparse && !desc.has_invalid();
 
         pgd.refs[0] += 1;
 
@@ -915,7 +941,6 @@ impl<'a> VmmIter<'a> {
         pgt.pt[pg_type] = Some(pt);
 
         if (!zero) {
-            let mut pt = pgt.pt[pg_type].as_mut().unwrap();
             let overlap = match desc {
                 VmmDescType::Lpt(_) => {
                     pgt.refs[1] != 0
@@ -955,9 +980,13 @@ impl<'a> VmmIter<'a> {
                         ptei += 1;
                     }
 
+                    let mut pt = pgt.pt[pg_type].as_mut().unwrap();
                     if spte == 0 {
-                        // sparse
-                        desc.invalid(pt, pteb, ptes);
+                        if pgt.sparse {
+                            desc.sparse(pt, pteb, ptes);
+                        } else {
+                            desc.invalid(pt, pteb, ptes);
+                        }
                         for i in 0..ptes {
                             pgt.pte[(pteb + i) as usize] = 0;
                         }
@@ -970,7 +999,14 @@ impl<'a> VmmIter<'a> {
                     pteb = ptei;
                 }
             } else {
-                desc.invalid(pt, 0, pten);
+                if pgt.sparse {
+                    Self::sparse_ptes(desc, pgt, 0, pten);
+                    let mut pt = pgt.pt[pg_type].as_mut().unwrap();
+                    desc.sparse(pt, 0, pten);
+                } else {
+                    let mut pt = pgt.pt[pg_type].as_mut().unwrap();
+                    desc.invalid(pt, 0, pten);
+                }
             }
         }
 
@@ -991,9 +1027,10 @@ impl<'a> VmmIter<'a> {
         if VMM_TRACE {
             pr_info!("ref swpt {} {}\n", self.lvl - 1, pdei);
         }
-        let pgt = VmmPt::new(desc, false, self.lvl as usize, Some(self.page))?;
+        let is_sparse = pgd.pde[pdei as usize].0;
+        let pgt = VmmPt::new(desc, is_sparse, self.lvl as usize, Some(self.page))?;
 
-        pgd.pde[pdei as usize] = Some(pgt);
+        pgd.pde[pdei as usize] = (false, Some(pgt));
         Ok(())
     }
 
@@ -1085,11 +1122,11 @@ impl<'a> VmmIter<'a> {
                 if VMM_TRACE {
                     pr_info!("lvl: {} {}\n", it.lvl, pdei);
                 }
-                if pgref && pgd.pde[pdei as usize].is_none() {
+                if pgref && pgd.pde[pdei as usize].1.is_none() {
                     it.ref_swpt(pgd, pdei)?;
                 }
 
-                it.pt[(it.lvl - 1) as usize] = pgd.pde[pdei as usize].as_mut().unwrap() as *mut VmmPt;
+                it.pt[(it.lvl - 1) as usize] = pgd.pde[pdei as usize].1.as_mut().unwrap() as *mut VmmPt;
 
                 pgt_ref = unsafe { &mut (*it.pt[(it.lvl - 1) as usize]) };
 
@@ -1136,6 +1173,7 @@ impl<'a> VmmIter<'a> {
         let mut ptei = in_ptei;
         let pair = VmmPage::find_pair_desc(iter.page);
         let sptb = iter.page.get_desc_bits(0) - pair.bits();
+        let desc = iter.page.get_desc(0);
         let sptn = 1 << sptb;
         let mut spti = ptei & (sptn - 1);
 
@@ -1205,7 +1243,17 @@ impl<'a> VmmIter<'a> {
             }
 
             if pgt.pte[pteb as usize] & NVKM_VMM_PTE_SPARSE != 0 {
-                pr_err!("TODO SPARSE");
+
+                let spti = pteb * sptn;
+                let sptc = ptes * sptn;
+                if VMM_TRACE {
+                    pr_info!("{}: {:?} SPTE {:05x}: I -> S {} PTEs\n", &iter.vmm_info.name, iter.trace_str()?, spti, sptc);
+                }
+                desc.sparse(pgt.pt[1].as_mut().unwrap(), spti, sptc);
+                if VMM_TRACE {
+                    pr_info!("{}: {:?} LPTE {:05x}: S -> U {} PTEs\n", &iter.vmm_info.name, iter.trace_str()?, pteb, ptes);
+                }
+                pair.unmap(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             } else if pair.has_invalid() {
                 /* MMU supports blocking SPTEs by marking an LPTE
                  * as INVALID.  We need to reverse that here.
@@ -1295,7 +1343,10 @@ impl<'a> VmmIter<'a> {
             }
 
             if pgt.pte[pteb as usize] & NVKM_VMM_PTE_SPARSE != 0 {
-                pr_err!("TODO SPARSE");
+                if VMM_TRACE {
+                    pr_info!("{} {:?} LPTE {:05x} U -> S {} PTEs\n", &iter.vmm_info.name, iter.trace_str()?, pteb, ptes);
+                }
+                pair.sparse(pgt.pt[0].as_mut().unwrap(), pteb, ptes);
             } else if pair.has_invalid() {
                 /* If the MMU supports it, restore the LPTE to the
                  * INVALID state to tell the MMU there is no point
@@ -1336,12 +1387,17 @@ impl<'a> VmmIter<'a> {
             if pgt.refs[(!pg_type) & 0x1] == 0 {
                 /* PDE no longer required */
                 if pgt.pt[0].is_some() {
-                    //call unmap
-                    desc.unmap(pgt.pt[0].as_mut().unwrap(), pdei, 1);
-                    pgd.pde[pdei as usize] = None;
+                    if pgt.sparse {
+                        desc.sparse(pgd.pt[0].as_mut().unwrap(), pdei, 1);
+                        pgd.pde[pdei as usize] = (true, None);
+                    } else {
+                        //call unmap
+                        desc.unmap(pgt.pt[0].as_mut().unwrap(), pdei, 1);
+                        pgd.pde[pdei as usize] = (false, None);
+                    }
                 } else {
                     desc.pde(pgd, pdei);
-                    pgd.pde[pdei as usize] = None;
+                    pgd.pde[pdei as usize] = (false, None);
                 }
             } else {
                 /* PDE was pointing at dual-PTs and we're removing
@@ -1412,6 +1468,62 @@ impl<'a> VmmIter<'a> {
         Ok(false)
     }
 
+    fn sparse_unref_ptes(iter: &mut VmmIter<'_>, pfn: bool, in_ptei: u32, in_ptes: u32) -> Result<bool> {
+        let pgt = unsafe { &mut (*iter.pt[0]) };
+        let mut ptei = in_ptei;
+        let mut ptes = in_ptes;
+
+        match iter.page.get_desc(0) {
+            VmmDescType::PgdPd0(_) | VmmDescType::PgdPd1(_) => {
+                while ptes != 0 {
+                    pgt.pde[ptei as usize] = (false, None);
+                    ptei += 1;
+                    ptes -= 1;
+                }
+            },
+            VmmDescType::Lpt(_) => {
+                while ptes != 0 {
+                    pgt.pte[ptei as usize] = 0;
+                    ptei += 1;
+                    ptes -= 1;
+                }
+            },
+            _ => {}
+        }
+
+        Self::unref_ptes(iter, pfn, ptei, ptes)
+    }
+
+    fn sparse_ptes(desc: &VmmDescType, pgt: &mut VmmPt, in_ptei: u32, in_ptes: u32) -> Result<()> {
+        let mut ptei = in_ptei;
+        let mut ptes = in_ptes;
+
+        match desc {
+            VmmDescType::PgdPd0(_) | VmmDescType::PgdPd1(_) => {
+                while ptes != 0 {
+                    pgt.pde[ptei as usize] = (true, None);
+                    ptei += 1;
+                    ptes -= 1;
+                }
+            },
+            VmmDescType::Lpt(_) => {
+                while ptes != 0 {
+                    pgt.pte[ptei as usize] = NVKM_VMM_PTE_SPARSE;
+                    ptei += 1;
+                    ptes -= 1;
+                }
+            },
+            _ => {}
+        }
+        Ok(())
+    }
+    fn sparse_ref_ptes(iter: &mut VmmIter<'_>, pfn: bool, in_ptei: u32, in_ptes: u32) -> Result<bool> {
+        let pgt = unsafe { &mut (*iter.pt[0]) };
+
+        Self::sparse_ptes(iter.page.get_desc(0), pgt, in_ptei, in_ptes)?;
+
+        Self::ref_ptes(iter, pfn, in_ptei, in_ptes)
+    }
 }
 
 pub(crate) struct VmmStaticInfo {
@@ -1478,11 +1590,9 @@ impl VmmInner {
 
         }
 
-        pr_info!("cursor cur {:#x}\n", cursor.current().addr());
         match cursor.next() {
             None => None,
             Some(x) => {
-                pr_info!("cursor next {:#x}\n", x.current().addr());
                 Some(x.current().into())
             }
         }
@@ -1727,11 +1837,13 @@ impl Vmm {
         return false;
     }
 
-    fn ptes_unmap_put(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+    fn ptes_unmap_put(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64, sparse: bool) -> Result<()> {
         let desc = page.get_desc(0);
         let mut clrfn = desc.invalidfn();
 
-        if clrfn.is_none() {
+        if sparse {
+            clrfn = desc.sparsefn();
+        } else if clrfn.is_none() {
             clrfn = desc.unmapfn();
         }
 
@@ -1739,11 +1851,13 @@ impl Vmm {
         Ok(())
     }
 
-    fn ptes_unmap(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+    fn ptes_unmap(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64, sparse: bool) -> Result<()> {
         let desc = page.get_desc(0);
         let mut clrfn = desc.invalidfn();
 
-        if clrfn.is_none() {
+        if sparse {
+            clrfn = desc.sparsefn();
+        } else if clrfn.is_none() {
             clrfn = desc.unmapfn();
         }
 
@@ -1776,7 +1890,7 @@ impl Vmm {
             let base = sinfo.instmem.base.clone();
             if vma.mapped() {
                 let page = Self::page(&base, vma.refd());
-                Self::ptes_unmap_put(pt, sinfo, page, vma.addr(), vma.size());
+                Self::ptes_unmap_put(pt, sinfo, page, vma.addr(), vma.size(), vma.sparse);
             } else {
                 if vma.refd() != NVKM_VMA_PAGE_NONE {
                     let page = Self::page(&base, vma.refd());
@@ -2072,7 +2186,7 @@ impl Vmm {
 
     pub(crate) fn getpd0_addr(&self) -> Result<u64> {
         let pd = self.pd.lock();
-        Ok(pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr)
+        Ok(pd.pde[0].1.as_ref().unwrap().pt[0].as_ref().unwrap().addr)
     }
 
     pub(crate) fn map(&self, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
@@ -2283,10 +2397,10 @@ impl Vmm {
         let base = self.sinfo.instmem.base.clone();
         let page = Self::page(&base, vma.refd());
         if vma.mapref() {
-            Self::ptes_unmap_put(&mut pd, &self.sinfo, page, vma.addr(), vma.size());
+            Self::ptes_unmap_put(&mut pd, &self.sinfo, page, vma.addr(), vma.size(), vma.sparse);
             vma.set_refd(NVKM_VMA_PAGE_NONE);
         } else {
-            Self::ptes_unmap(&mut pd, &self.sinfo, page, vma.addr(), vma.size());
+            Self::ptes_unmap(&mut pd, &self.sinfo, page, vma.addr(), vma.size(), vma.sparse);
         }
 
         locked_inner.unmap_region(vma);
@@ -2304,20 +2418,20 @@ impl Vmm {
 
         let mut num_levels = 3;
 
-        if locked_pd.pde[0].is_none() {
+        if locked_pd.pde[0].1.is_none() {
             pr_info!("got pde 0 is none FAIL\n");
             return Err(EINVAL);
         }
-        if locked_pd.pde[0].as_ref().unwrap().pde[0].is_none() {
+        if locked_pd.pde[0].1.as_ref().unwrap().pde[0].1.is_none() {
             num_levels = 2;
         }
 
         let addr0: u64 = locked_pd.pt[0].as_ref().unwrap().addr;
-        let addr1: u64 = locked_pd.pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+        let addr1: u64 = locked_pd.pde[0].1.as_ref().unwrap().pt[0].as_ref().unwrap().addr;
 
         let mut addr2: u64 = 0;
         if num_levels == 3 {
-            addr2 = locked_pd.pde[0].as_ref().unwrap().pde[0].as_ref().unwrap().pt[0].as_ref().unwrap().addr;
+            addr2 = locked_pd.pde[0].1.as_ref().unwrap().pde[0].1.as_ref().unwrap().pt[0].as_ref().unwrap().addr;
         }
 
         Ok(VmmPromoteInfo {
@@ -2402,7 +2516,7 @@ impl Vmm {
         let page_idx = self.raw_page_index(size, shift)?;
         let page = Self::page(&self.sinfo.instmem.base, page_idx);
         let mut locked_pd = self.pd.lock();
-        Self::ptes_unmap(&mut locked_pd, &self.sinfo, page, addr, size);
+        Self::ptes_unmap(&mut locked_pd, &self.sinfo, page, addr, size, sparse);
         Ok(())
     }
 }
