@@ -3,6 +3,8 @@
 #![allow(dead_code)]
 
 use kernel::{
+    bindings,
+    c_str,
     device,
     device::Device,
     devres::Devres,
@@ -523,8 +525,8 @@ impl Gpu {
 
     pub(crate) fn alloc_vmm(&self, device: &GpuDevice,
                             addr: u64, size: u64, vmm_type: u8) -> Result<Arc<GpuDeviceVmm>> {
-        let vmm = Vmm::new(self.instmem.clone(), addr, size, vmm_type, false, false, None,
-                           None, true, 0, "uvmm")?;
+        let vmm = Vmm::new(self.instmem.clone(), None, addr, size, vmm_type, false, false, None,
+                           None, true, 0, c_str!("uvmm"))?;
         let va = self.gsp.alloc_vaspace(&device.gsp, &vmm, vmm_type)?;
 
         Ok(Arc::new(GpuDeviceVmm {

@@ -802,6 +802,8 @@ impl GspManager::ver {
             }
         }, 2000, &gpu_base.timer);
 
+        drop(bar);
+
         gsp_objs.queues.gsp_falcon.as_ref().unwrap().reset()?;
 
         // Boot fwsec into SB mode.
@@ -811,6 +813,7 @@ impl GspManager::ver {
 
         fwsec.boot()?;
 
+        let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
         let mut wpr2_hi = bar.readl(0x1fa828);
 
         if wpr2_hi != 0 {
@@ -907,13 +910,15 @@ impl GspManager::ver {
 
         let sysmem_flush = DmaObject::new_cleared(&gpu_base.dev, 0x1000, "sysmem flush page")?;
 
-        let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
+        {
+            let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
 
-        if chipsets_before!(&gpu_base.spec.chipset, GA102) {
-            bar.writel((sysmem_flush.dma.dma_handle() >> 8) as u32, 0x100c10);
-        } else {
-            bar.writel((sysmem_flush.dma.dma_handle() >> 8) as u32, 0x100c10);
-            bar.writel((sysmem_flush.dma.dma_handle() >> 40) as u32, 0x100c40);
+            if chipsets_before!(&gpu_base.spec.chipset, GA102) {
+                bar.writel((sysmem_flush.dma.dma_handle() >> 8) as u32, 0x100c10);
+            } else {
+                bar.writel((sysmem_flush.dma.dma_handle() >> 8) as u32, 0x100c10);
+                bar.writel((sysmem_flush.dma.dma_handle() >> 40) as u32, 0x100c40);
+            }
         }
 
         let mut fb_addr_info = boot_structs::Wpr::ver::fill_fb_addr_info(

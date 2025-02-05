@@ -1,6 +1,7 @@
 
 use kernel::prelude::*;
 use kernel::sync::Arc;
+use kernel::c_str;
 use crate::gpu::{Gpu, AllocId, GpuDevice, GpuDeviceVmm};
 use crate::gsp::GspManager;
 use crate::gsp::{GspDevice, GspChannel};
@@ -121,8 +122,8 @@ impl GrCtx {
         let (_internal_client, internal_device) = Gpu::int_alloc_client_device(id_allocator, gsp.clone())?;
         let gold_inst = InstObj::new(instmem.clone(), 0x12000, 0, true, false)?;
 
-        let gold_vmm = Vmm::new(instmem.clone(), 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
-                                false, None, None, true, 0, "grGoldenVmm")?;
+        let gold_vmm = Vmm::new(instmem.clone(), None, 0x1000, 0, NVKM_VMM_TYPE_UNMANAGED, false,
+                                false, None, None, true, 0, c_str!("grGoldenVmm"))?;
 
         let gold_va = gsp.alloc_vaspace(&internal_device.gsp, &gold_vmm, NVKM_VMM_TYPE_UNMANAGED)?;
 

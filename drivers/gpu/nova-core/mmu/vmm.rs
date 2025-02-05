@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
-use kernel::str::CString;
+use kernel::str::{CStr,CString};
 use kernel::c_str;
 use core::fmt::Debug;
 use core::fmt;
@@ -13,7 +13,8 @@ use kernel::bindings;
 use kernel::page::{PAGE_SIZE, PAGE_SHIFT, PAGE_MASK};
 use kernel::new_mutex;
 use kernel::rbtree::RBTree;
-use kernel::sync::{Arc, Mutex, UniqueArc};
+use kernel::sync::{Arc, Mutex, UniqueArc, LockClassKey};
+use kernel::static_lock_class;
 use kernel::list::{
     List, ListArc, ListLinks,
 };
@@ -1530,7 +1531,7 @@ pub(crate) struct VmmStaticInfo {
     pub(crate) instmem: Arc<InstMem>,
     is_bar: bool,
     rm_bar2_pdb: u64,
-    name: &'static str,
+    name: &'static CStr,
     bootstrapped: bool,
 }
 
@@ -1728,7 +1729,7 @@ pub(crate) struct Vmm {
     rsvd: Option<Arc<Vma>>,
     start: u64,
     limit: u64,
-    name: &'static str,
+    name: &'static CStr,
     managed: Option<VmmManaged>,
 }
 
@@ -2048,6 +2049,7 @@ impl Vmm {
     }
 
     pub(crate) fn new(instmem: Arc<InstMem>,
+                      lock_class: Option<(&'static LockClassKey, &'static LockClassKey)>,
                       addr: u64, size: u64,
                       vmm_type: u8,
                       is_bar: bool,
@@ -2056,7 +2058,7 @@ impl Vmm {
                       join: Option<&mut InstObj>,
                       promote_vmm: bool,
                       bar2_pdb: u64,
-                      name: &'static str) -> Result<Self> {
+                      name: &'static CStr) -> Result<Self> {
         let limit: u64;
         let mut bits: usize = 0;
 
@@ -2172,9 +2174,15 @@ impl Vmm {
         if promote_vmm {
             rsvd = Some(Self::get_internal(&mut inner, &mut pd, &sinfo, true, false, false, 0x1d, 32, 0x20000000)?);
         }
+
+        let (inner_lock_key, pd_lock_key) = match lock_class {
+            Some((x, y)) => (x, y),
+            None => (static_lock_class!(), static_lock_class!())
+        };
+
         Ok(Self {
-            inner: KBox::pin_init(new_mutex!(inner), GFP_KERNEL)?,
-            pd: KBox::pin_init(new_mutex!(pd), GFP_KERNEL)?,
+            inner: KBox::pin_init(Mutex::new(inner, name, inner_lock_key), GFP_KERNEL)?,
+            pd: KBox::pin_init(Mutex::new(pd, name, pd_lock_key), GFP_KERNEL)?,
             sinfo,
             managed,
             rsvd,
