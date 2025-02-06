@@ -57,6 +57,8 @@ impl irq::Handler for Vfn {
             Err(_) => { let _ = vfn.rearm(); return irq::Return::None; }
             Ok(x) => { x }
         };
+
+        let mut handled = false;
         match pending {
             Some(x) => {
                 let mut res = 0;
@@ -71,9 +73,12 @@ impl irq::Handler for Vfn {
                             Err(_) => { let _ = vfn.rearm(); return irq::Return::None; }
                             Ok(x) => { x }
                         };
+                        if res != 0 {
+                            handled = true;
+                        }
                     }
                 }
-                if res == 0 {
+                if handled == false {
                     for i in 0..VFN_NUM_MASKS {
                         if x[i as usize] != 0 {
                             let _ = vfn.block(i as u32, x[i]);

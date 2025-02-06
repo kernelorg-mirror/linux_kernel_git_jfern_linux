@@ -323,7 +323,7 @@ impl VfnHandler for ChannelNonStall {
     fn handle_vfn(&self) -> Result<u32> {
         pr_info!("nonstall handler\n");
         unsafe { (self.cb.cb.unwrap())(self.cb.data) };
-        Ok(0)
+        Ok(1)
     }
 }
 

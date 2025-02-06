@@ -125,8 +125,7 @@ impl VfnHandler for GSPSharedMemObjectsOuter::ver {
 
         let gsp_objs = self.inner.lock();
 
-        gsp_objs.handle_vfn()?;
-        Ok(0)
+        gsp_objs.handle_vfn()
     }
 }
 
