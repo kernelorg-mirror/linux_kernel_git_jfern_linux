@@ -504,6 +504,7 @@ impl GSPSharedQueues::ver {
                 fw::ver::gen::NV_VGPU_MSG_EVENT_MMU_FAULT_QUEUED => {
                     notifiers::Notifiers::ver::mmu_fault_queued(&mut msg);
                 }
+                fw::ver::gen::NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES => {}
                 unk => { pr_info!("Unhandled {:#x}\n", unk); },
             }
 
