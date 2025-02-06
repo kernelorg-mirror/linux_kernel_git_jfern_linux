@@ -103,7 +103,6 @@ impl VfnHandler for GSPSharedMemObjects::ver {
 
         if stat & 0x00000040 != 0 {
             flcn.wr32(0x4, 0x40)?;
-            pr_info!("GSP WORK");
             self.queues.msg_irq_work();
             stat &= !0x00000040;
         }

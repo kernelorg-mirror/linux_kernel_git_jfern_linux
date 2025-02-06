@@ -51,7 +51,7 @@ impl irq::Handler for Vfn {
 
         let pending = vfn.pending();
 
-        pr_info!("thread irq: pending {:?}\n", pending);
+//        pr_info!("thread irq: pending {:?}\n", pending);
 
         let pending = match pending {
             Err(_) => { let _ = vfn.rearm(); return irq::Return::None; }

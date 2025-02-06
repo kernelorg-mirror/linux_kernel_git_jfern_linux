@@ -344,7 +344,6 @@ impl Falcon {
 	let bar = self.base.bar.try_access().ok_or(ENXIO)?;
 	let temp = bar.try_readl((self.addr + offset) as usize)?;
 	bar.try_writel((temp & !mask) | val, (self.addr + offset) as usize)?;
-	pr_info!("falcon mask {:#x} {:#x} {:#x} {:#x} {:#x} ", self.addr, offset, mask, val, temp);
 	Ok(temp)
     }
     

@@ -48,7 +48,6 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 let regwrite = cmd.new_S_payload_regWrite();
                 let addr = regwrite.get_addr() as usize;
                 let val = regwrite.get_val();
-                pr_info!("GSP reg write {:#x} {:#x}", addr, val);
                 bar.try_writel(val, addr)?;
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_WRITE::str_size() / 4;
             },
@@ -62,8 +61,6 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 let temp = bar.try_readl(addr)?;
                 bar.try_writel((temp & !mask) | val, addr)?;
 
-                pr_info!("GSP reg modify {:#x} {:#x} {:#x}",
-                         addr, mask, val);
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_MODIFY::str_size() / 4;
             },
             2 => { // GSP REG POLL
@@ -73,10 +70,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 let mask = regpoll.get_mask();
                 let val = regpoll.get_val();
                 let mut timeout = regpoll.get_timeout() as u64;
-                let error = regpoll.get_error();
-
-                pr_info!("GSP reg poll {:#x} {:#x} {:#x} {} {}",
-                         addr, mask, val, timeout, error);
+                let _error = regpoll.get_error();
 
                 if timeout == 0 {
                     timeout = 4000000;
@@ -94,8 +88,6 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 let delay = cmd.new_S_payload_delayUs();
                 let delay_val : u32 = delay.get_val();
 
-                pr_info!("GSP delay us {}", delay_val);
-
                 sleep(Duration::from_micros(delay_val as u64));
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_DELAY_US::str_size() / 4;
             }
@@ -107,13 +99,11 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_STORE::str_size() / 4;
             },
             5 => { // GSP Core Reset
-                pr_info!("GSP CORE RESET");
                 let _ = gsp_falcon.falcon.reset();
                 gsp_falcon.falcon.mask(0x624, 0x80, 0x80)?;
                 gsp_falcon.falcon.wr32(0x10c, 0)?;
             },
             6 => { // GSP Core Start
-                pr_info!("GSP CORE START");
                 if (gsp_falcon.falcon.rd32(0x100)? & 0x00000040) != 0 {
                     gsp_falcon.falcon.wr32(0x130, 0x2)?;
                 } else {
@@ -121,13 +111,9 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 }
             },
             7 => { // GSP Core Wait for Halt
-                pr_info!("GSP CORE WAIT FOR HALT");
-
                 let _ = gsp_falcon.falcon.wait_for_reg_bits_set(0x100, 0x10, 2000000);
             },
             8 => { // GSP Core Resume
-                pr_info!("GSP CORE RESUME");
-
                 let _ = gsp_falcon.reset();
 
                 gsp_falcon.write_libos_addr()?;

@@ -469,8 +469,6 @@ impl GSPSharedQueues::ver {
 
             let (recv_rpc_fn, rpc_result) = RpcMsg::ver::get_rpc_result(&mut msg);
 
-            pr_info!("RPC GOT {} {} {}", recv_rpc_fn, rpc_result, rpc_fn);
-
             if rpc_result != 0 {
                 pr_info!("MESSAGE INVALID {}\n", rpc_result);
                 return Err(EINVAL);
@@ -484,7 +482,6 @@ impl GSPSharedQueues::ver {
                 return Ok(None);
             }
 
-            pr_info!("DO NOTIFY {}", recv_rpc_fn);
             match recv_rpc_fn {
                 fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
                     if !self.gsp_falcon.is_none() &&
