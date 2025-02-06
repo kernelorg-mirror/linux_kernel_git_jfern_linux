@@ -32,6 +32,7 @@ const BAR0_SIZE: usize = 8 * 1024 * 1024;
 pub(crate) type Bar0 = pci::Bar<BAR0_SIZE>;
 
 impl NovaCoreDriver {
+    #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
     pub(crate) fn data(&self) -> Arc<NovaCoreData> {
         self.0.clone()
     }

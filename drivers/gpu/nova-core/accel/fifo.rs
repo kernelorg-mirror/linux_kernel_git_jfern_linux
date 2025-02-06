@@ -1,6 +1,5 @@
 
 use kernel::prelude::*;
-use kernel::c_str;
 use kernel::bindings;
 use kernel::sync::{Arc, SpinLock, Mutex};
 use kernel::new_spinlock;
@@ -20,7 +19,6 @@ pub(crate) enum EngineType {
     NVDEC,
     NVENC,
     SW,
-    SEC2,
     NVJPG,
     OFA,
     GSP,
@@ -97,6 +95,7 @@ impl BitVec {
 
 }
 
+#[allow(dead_code)]
 pub(crate) struct ChidInner {
     bits: BitVec,
     resv_bits: BitVec
@@ -111,6 +110,7 @@ pub(crate) struct ChId {
     inner: SpinLock<ChidInner>,
 }
 
+#[allow(dead_code)]
 impl ChId {
     pub(crate) fn new(nr: u32, first: u32, count: u32) -> Result<Pin<KBox<ChId>>> {
 
@@ -181,6 +181,7 @@ pub(crate) struct FifoDeviceInfoTable {
     pub table: KVec<FifoDeviceEntry>
 }
 
+#[allow(dead_code)]
 pub(crate) struct RunListEngine {
     pub eng_type: EngineType,
     pub inst: u32,
@@ -196,7 +197,6 @@ pub(crate) struct RunListEntry {
 
 pub(crate) struct FifoRunList {
     pub chids: Pin<KBox<ChId>>,
-    pub cgids: Pin<KBox<ChId>>,
     pub entries: KVec<RunListEntry>
 }
 
@@ -220,8 +220,7 @@ impl FifoRunList {
     pub(crate) fn create_runlist_from_table(table: &FifoDeviceInfoTable) -> Result<FifoRunList> {
         let mut entries: KVec<RunListEntry> = KVec::new();
 
-        let cgids = ChId::new(2048, 0, 2048)?;
-        let mut chids = ChId::new(2048, 0, 2048)?;
+        let chids = ChId::new(2048, 0, 2048)?;
 
         #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
         chids.reserve(512, 1536);
@@ -264,7 +263,6 @@ impl FifoRunList {
         }
         Ok(FifoRunList {
             chids,
-            cgids,
             entries
         })
     }
@@ -299,13 +297,11 @@ impl ChannelKilled {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) struct Channel {
-    name: &'static CStr,
     pub id: u32,
     pub runl_id: u32,
     pub doorbell: u32,
-//  userd: &'dyn Memory,
-    //  obj: GspObject,
     instbuf: InstObj,
     mthdbuf: DmaObject,
 
@@ -358,7 +354,6 @@ impl Channel {
         gpu.gsp.schedule_fifo(&gsp_chan, true)?;
 
         Ok(Arc::new(Self {
-            name: c_str!("chan"),
             id: chid,
             runl_id,
             doorbell,

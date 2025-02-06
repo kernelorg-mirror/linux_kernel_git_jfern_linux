@@ -61,7 +61,7 @@ impl irq::Handler for Vfn {
         let mut handled = false;
         match pending {
             Some(x) => {
-                let mut res = 0;
+                let mut res;
                 let handlers = vfn.handlers.lock();
                 for inth in handlers.iter() {
                     if inth.handler.is_none() {

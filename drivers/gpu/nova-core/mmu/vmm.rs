@@ -360,6 +360,7 @@ impl VmmDescType {
     }
 }
 
+/// macro to shift a 64-bit bit field
 #[macro_export]
 macro_rules! bit_u64 {
     ($bit: expr) => {

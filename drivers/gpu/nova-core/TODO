@@ -4,7 +4,6 @@ GL userspace:
 
 Vulkan userspace:
 - sparse
-- raw vmm handling
 
 General:
 - instmem - LRU not implemented

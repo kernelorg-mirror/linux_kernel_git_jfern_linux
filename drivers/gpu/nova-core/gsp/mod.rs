@@ -674,6 +674,7 @@ struct CtxBufTable {
 
 const NUM_CTX_BUFS: usize = 8;
 
+#[allow(non_upper_case_globals)]
 #[versions(GSP)]
 const CTX_BUF_MAP: [CtxBufTable; NUM_CTX_BUFS] = [
     CtxBufTable { id0: fw::ver::gen::NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS,

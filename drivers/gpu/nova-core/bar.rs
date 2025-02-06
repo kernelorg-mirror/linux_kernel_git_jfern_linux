@@ -61,7 +61,7 @@ impl Bar {
                 let mut bar2 = BarN::new(InstObj::new(instmem.clone(), 0x1000, 0, false, true)?, true)?;
 
                 pr_info!("BAR 2 INIT VMM {:#x}\n", bar2_size / 2);
-                let mut bar2_vmm = Vmm::new(instmem.clone(), Some((bar2_inner_lock_class, bar2_pd_lock_class)), 0, bar2_size / 2, NVKM_VMM_TYPE_UNMANAGED, true, true, None, Some(&mut bar2.inst), false, gsp.get_bar_pdb(2), c_str!("bar2"))?;
+                let bar2_vmm = Vmm::new(instmem.clone(), Some((bar2_inner_lock_class, bar2_pd_lock_class)), 0, bar2_size / 2, NVKM_VMM_TYPE_UNMANAGED, true, true, None, Some(&mut bar2.inst), false, gsp.get_bar_pdb(2), c_str!("bar2"))?;
 
                 gsp.update_bar_pde(1, bar2_vmm.getpd0_addr()?, 47)?;
 

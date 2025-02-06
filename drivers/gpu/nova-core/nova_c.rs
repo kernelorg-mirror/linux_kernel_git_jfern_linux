@@ -19,6 +19,7 @@ mod sec2;
 mod timer;
 mod vfn;
 
+/// Core API to nova-c
 pub mod core_api;
 
 /// VGPU MGR interface

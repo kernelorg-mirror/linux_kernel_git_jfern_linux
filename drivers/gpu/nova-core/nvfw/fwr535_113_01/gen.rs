@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(unused)]
+#![allow(non_upper_case_globals)]
 
 pub(crate) const NV_VGPU_MSG_FUNCTION_UPDATE_BAR_PDE: u32 = 70;
 pub(crate) const NV_VGPU_MSG_FUNCTION_ALLOC_MEMORY: u32 = 4;

@@ -9,6 +9,7 @@ use crate::mmu::memory::{InstMem, InstObj, Memory};
 use crate::mmu::vmm::{Vmm, VmmMap, NVKM_VMM_TYPE_UNMANAGED};
 use crate::accel::fifo::{Channel, GpuPromoteBufferEntry};
 
+#[allow(dead_code)]
 pub(crate) struct CtxBufSize {
     pub size: u32,
     pub align: u8,
@@ -26,6 +27,7 @@ pub(crate) struct CtxBufInfo {
     pub unrestricted_priv_access_map: bool,
 }
 
+#[allow(dead_code)]
 pub(crate) struct GrCtx {
     bufs: KVec<Arc<InstObj>>,
     vmm: Arc<GpuDeviceVmm>,
@@ -174,8 +176,8 @@ impl GrCtx {
     pub(crate) fn free_ctx(&self) {
         for addr in &self.vma_addrs {
             if *addr != 0 {
-                self.vmm.vmm.unmap_addr(*addr);
-                self.vmm.vmm.put_addr(*addr);
+                let _ = self.vmm.vmm.unmap_addr(*addr);
+                let _ = self.vmm.vmm.put_addr(*addr);
             }
         }
     }

@@ -3,7 +3,6 @@
 #![allow(dead_code)]
 
 use kernel::{
-    bindings,
     c_str,
     device,
     device::Device,
