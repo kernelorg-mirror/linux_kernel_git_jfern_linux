@@ -217,8 +217,6 @@ static void
 nouveau_abi16_chan_fini(struct nouveau_abi16 *abi16,
 			struct nouveau_abi16_chan *chan)
 {
-	struct nouveau_abi16_ntfy *ntfy, *temp;
-
 	/* Cancel all jobs from the entity's queue. */
 	if (chan->sched)
 		drm_sched_entity_fini(&chan->sched->entity);
@@ -508,12 +506,10 @@ static int
 nouveau_abi16_ioctl_del(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl, u32 argc)
 {
 	struct nouveau_abi16_obj *obj;
-	struct nouveau_cli *cli = abi16->cli;
-	struct nouveau_drm *drm;
+
 	if (ioctl->route || argc)
 		return -EINVAL;
 
-	drm = cli->drm;
 	obj = nouveau_abi16_obj_find(abi16, ioctl->object);
 	if (obj) {
 		if (obj->type == ENGOBJ)

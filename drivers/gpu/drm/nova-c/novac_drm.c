@@ -256,7 +256,6 @@ nouveau_accel_init(struct nouveau_drm *drm)
 static void
 nouveau_drm_device_fini(struct nouveau_drm *drm)
 {
-	struct drm_device *dev = &drm->dev;
 	struct nouveau_cli *cli, *temp_cli;
 
 	nouveau_debugfs_fini(drm);
@@ -290,7 +289,6 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 static int
 nouveau_drm_device_init(struct nouveau_drm *drm)
 {
-	struct drm_device *dev = &drm->dev;
 	int ret;
 
 	drm->sched_wq = alloc_workqueue("nouveau_sched_wq_shared", 0,
@@ -326,12 +324,6 @@ fail_wq:
 	return ret;
 }
 
-static void
-nouveau_drm_device_del(struct nouveau_drm *drm)
-{
-	kfree(drm);
-}
-
 static struct nouveau_drm *
 nouveau_drm_device_new(const struct drm_driver *drm_driver,
 		       struct auxiliary_device *parent)
@@ -349,30 +341,6 @@ nouveau_drm_device_new(const struct drm_driver *drm_driver,
 		       
 static struct drm_driver driver_stub;
 
-static void
-dump_core_info(struct nova_core_info *info) {
-	int i, e;
-	printk(KERN_ERR "boot0 is %016llx\n", info->boot0);
-
-	printk(KERN_ERR "class 0x%x 0x%x\n", info->fifo_class, info->ce_class);
-
-	printk(KERN_ERR "engine: %d\n", info->engine_nr);	
-	for (i = 0; i < info->engine_nr; i++) {	
-		printk(KERN_ERR "engine %d: %d\n", i,
-		       info->engine[i].eng_type);
-	}
-	printk(KERN_ERR "runlists: %d\n", info->runl_nr);
-	for (i = 0; i < info->runl_nr; i++) {
-		printk(KERN_ERR "runlist %d: %02x %d %d %d\n",
-		       i, info->runl[i].id, info->runl[i].chan_nr,
-		       info->runl[i].runq_nr, info->runl[i].engn_nr);
-
-		for (e = 0; e < info->runl[i].engn_nr; e++) {
-			printk(KERN_ERR "    engn: %d: %d %d\n", e,
-			       info->runl[i].engn[e].engine, info->runl[i].engn[e].inst);
-		}
-	}
-}
 static int
 nouveau_drm_probe(struct auxiliary_device *auxdev, const struct auxiliary_device_id *id)
 {
@@ -395,8 +363,6 @@ nouveau_drm_probe(struct auxiliary_device *auxdev, const struct auxiliary_device
 		return ret;
 
 	return 0;
-fail_drm:
-	nouveau_drm_device_del(drm);	
 fail_nvkm:
 	return ret;
 }
@@ -501,7 +467,6 @@ long
 nouveau_drm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct drm_file *filp = file->private_data;
-	struct drm_device *dev = filp->minor->dev;
 	long ret;
 
 	switch (_IOC_NR(cmd) - DRM_COMMAND_BASE) {

@@ -133,7 +133,6 @@ static int
 nouveau_channel_prep(struct nouveau_cli *cli,
 		     u32 size, struct nouveau_channel **pchan)
 {
-	struct nouveau_drm *drm = cli->drm;
 	struct nouveau_channel *chan;
 	u32 target;
 	int ret;
@@ -205,7 +204,6 @@ nouveau_channel_ctor(struct nouveau_cli *cli, bool priv, u64 runm,
 	struct nova_core_vmm *vmm = NULL;
 	struct nova_core_memory_obj *userd = NULL;
 	u64 offset, length = 0;
-	u16 userd_offset = 0;
 
 	switch (oclass) {
 	case  AMPERE_CHANNEL_GPFIFO_B:
