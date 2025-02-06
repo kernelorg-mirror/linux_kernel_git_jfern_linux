@@ -19,6 +19,17 @@ use kernel::list::{
     List, ListArc, ListLinks,
 };
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! runtime_optional_name {
+    ($name:expr) => {
+	match $name {
+            None => c_str!(::core::concat!(::core::file!(), ":", ::core::line!())),
+	    Some(x) => x,
+	}
+    };
+}
+
 use crate::gpu::GpuBase;
 use crate::mmu::memory::{VramNode, VramObj, InstObj, MemObjType, DmaMemObj, SglMemObj};
 use crate::mmu::memory::{Memory, InstMem, MemTarget};
@@ -2175,14 +2186,19 @@ impl Vmm {
             rsvd = Some(Self::get_internal(&mut inner, &mut pd, &sinfo, true, false, false, 0x1d, 32, 0x20000000)?);
         }
 
+        let lock_name;
         let (inner_lock_key, pd_lock_key) = match lock_class {
-            Some((x, y)) => (x, y),
-            None => (static_lock_class!(), static_lock_class!())
+            Some((x, y)) => { lock_name = Some(name); (x, y) },
+            None => { lock_name = None ; (static_lock_class!(), static_lock_class!()) }
         };
 
         Ok(Self {
-            inner: KBox::pin_init(Mutex::new(inner, name, inner_lock_key), GFP_KERNEL)?,
-            pd: KBox::pin_init(Mutex::new(pd, name, pd_lock_key), GFP_KERNEL)?,
+            inner: KBox::pin_init(Mutex::new(inner,
+					     runtime_optional_name!(lock_name),
+					     inner_lock_key), GFP_KERNEL)?,
+            pd: KBox::pin_init(Mutex::new(pd,
+					  runtime_optional_name!(lock_name),
+					  pd_lock_key), GFP_KERNEL)?,
             sinfo,
             managed,
             rsvd,
