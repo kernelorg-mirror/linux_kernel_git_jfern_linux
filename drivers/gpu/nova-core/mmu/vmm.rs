@@ -1898,6 +1898,78 @@ impl Vmm {
         Ok(())
     }
 
+    fn ptes_sparse_get(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        if (page.vmm_page_type & NVKM_VMM_PAGE_SPARSE) == 0 {
+            return Err(EINVAL);
+        }
+        let desc = page.get_desc(0);
+        let mut clrfn = desc.sparsefn();
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "sparse ref", true, false,
+                                 Some(VmmIter::sparse_ref_ptes), None, None, None, clrfn)?;
+        Ok(())
+    }
+
+    fn ptes_sparse_put(pd: &mut VmmPt, sinfo: &VmmStaticInfo, page: &VmmPage, addr: u64, size: u64) -> Result<()> {
+        let desc = page.get_desc(0);
+        let mut clrfn = desc.invalidfn();
+
+        if clrfn.is_none() {
+            clrfn = desc.unmapfn();
+        }
+
+        let iter = VmmIter::iter(pd, sinfo, None, page, addr, size, "sparse unref", false, false,
+                                 Some(VmmIter::sparse_unref_ptes), None, None, None, clrfn)?;
+        Ok(())
+    }
+
+    fn ptes_sparse(pd: &mut VmmPt, sinfo: &VmmStaticInfo, in_addr: u64, in_size: u64, sparse_ref: bool) -> Result<()> {
+        let mut start = in_addr;
+        let mut m = 0;
+        let mut size = in_size;
+        let mut addr = in_addr;
+        let base = &sinfo.instmem.base.clone();
+
+        while size != 0 {
+            /* Limit maximum page size based on remaining size. */
+            while size < bit_u64!(Self::page(base, m).shift as usize) {
+                m += 1;
+            }
+            let mut i = m;
+
+            /* Find largest page size suitable for alignment. */
+            while !is_aligned(addr, bit_u64!(Self::page(base, i).shift as usize)) {
+                i += 1;
+            }
+
+            let block;
+            let i_shift = Self::page(base, i).shift;
+
+            /* Determine number of PTEs at this page size. */
+            if (i != m) {
+                /* Limited to alignment boundary of next page size. */
+                let next = bit_u64!(Self::page(base, i - 1).shift);
+                let part = align64(addr, next) - addr;
+                if size - part >= next {
+                    block = (part >> i_shift) << i_shift;
+                } else {
+                    block = (size >> i_shift) << i_shift;
+                }
+            } else {
+                block = (size >> i_shift) << i_shift;
+            }
+
+            if sparse_ref {
+                Self::ptes_sparse_get(pd, sinfo, Self::page(base, i), addr, block)?;
+            } else {
+                Self::ptes_sparse_put(pd, sinfo, Self::page(base, i), addr, block)?;
+            }
+
+            size -= block;
+            addr += block;
+        }
+        Ok(())
+    }
+
     fn put_internal(inner: &mut VmmInner, pt: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>) -> Result<()> {
         if vma.mapref() || !vma.sparse {
             let base = sinfo.instmem.base.clone();
@@ -2489,9 +2561,8 @@ impl Vmm {
             return Err(EINVAL);
         }
 
-        pr_info!("RAW SPASRSE TODO\n");
-        Ok(())
-
+        let mut locked_pd = self.pd.lock();
+        Self::ptes_sparse(&mut locked_pd, &self.sinfo, addr, size, sparse_ref)
     }
 
     pub(crate) fn raw_get(&self, shift: u8, addr: u64, size: u64) -> Result<()> {

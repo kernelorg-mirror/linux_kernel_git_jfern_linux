@@ -3,7 +3,6 @@ GL userspace:
 - SGL handling?
 
 Vulkan userspace:
-- sparse
 
 General:
 - instmem - LRU not implemented
