@@ -326,13 +326,12 @@ impl VfnHandler for ChannelNonStall {
 }
 
 impl ChannelNonStall {
-    pub(crate) fn unregister(&self) {
-        pr_info!("nonstall unregistered {:#x}\n", self.nonstall);
-        let _ = self.vfn.intr_block(self.nonstall);
-        let _ = self.vfn.remove_handler(self.nonstall);
+    pub(crate) fn unregister(cns: &Arc<ChannelNonStall>) {
+        pr_info!("nonstall unregistered {:#x}\n", cns.nonstall);
+        let _ = cns.vfn.intr_block(cns.nonstall);
+        let _ = cns.vfn.remove_handler(cns.clone() as Arc<dyn VfnHandler>);
     }
 }
-
 
 impl Channel {
     pub(crate) fn new(gpu: &Gpu, device: &GpuDevice,

@@ -747,7 +747,7 @@ pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::n
             return;
         }
         let cns : Arc<ChannelNonStall> = Arc::from_foreign(cns_info.arc);
-        cns.unregister();
+        ChannelNonStall::unregister(&cns);
         cns_info.arc = core::ptr::null_mut();
     }
 }
