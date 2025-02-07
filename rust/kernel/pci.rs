@@ -501,6 +501,19 @@ impl Device {
 	}
     }
 
+    /// Read a 8-bit value from configuration space
+    pub fn read_config_byte(&self, offset: u32) -> Result<u8> {
+	let pdev = self.as_raw();
+	let mut val: u8 = 0;
+	let ret = unsafe { bindings::pci_read_config_byte(pdev, offset as i32, &mut val) };
+
+	if ret < 0 {
+            Err(Error::from_errno(ret))
+	} else {
+	    Ok(val)
+	}
+    }
+
     /// Find a PCI extended capability
     pub fn find_ext_capability(&self, cap: i32) -> Result<u16> {
 	let pdev = self.as_raw();
