@@ -37,7 +37,10 @@ impl InternalIntrGetKernelTableParams::ver {
             r @ fw::ver::gen::MC_ENGINE_IDX_CE0..=fw::ver::gen::MC_ENGINE_IDX_CE9 => Ok((EngineType::CE, r - fw::ver::gen::MC_ENGINE_IDX_CE0)),
             r @ fw::ver::gen::MC_ENGINE_IDX_NVDEC0..=fw::ver::gen::MC_ENGINE_IDX_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::MC_ENGINE_IDX_NVDEC0)),
             r @ fw::ver::gen::MC_ENGINE_IDX_NVJPEG0..=fw::ver::gen::MC_ENGINE_IDX_NVJPEG7 => Ok((EngineType::NVJPG, r - fw::ver::gen::MC_ENGINE_IDX_NVJPEG0)),
+            #[ver(r == r535_113_01)]
             r @ fw::ver::gen::MC_ENGINE_IDX_MSENC..=fw::ver::gen::MC_ENGINE_IDX_MSENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::MC_ENGINE_IDX_MSENC)),
+            #[ver(r == r570_86_16)]
+            r @ fw::ver::gen::MC_ENGINE_IDX_NVENC..=fw::ver::gen::MC_ENGINE_IDX_NVENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::MC_ENGINE_IDX_NVENC)),
             r @ fw::ver::gen::MC_ENGINE_IDX_OFA0 => Ok((EngineType::OFA, 0)),
 
             other => Err(EINVAL)
@@ -130,7 +133,10 @@ impl FifoGetDeviceInfoTable::ver {
             r @ fw::ver::gen::RM_ENGINE_TYPE_NVDEC0..=fw::ver::gen::RM_ENGINE_TYPE_NVDEC7 => Ok((EngineType::NVDEC, r - fw::ver::gen::RM_ENGINE_TYPE_NVDEC0)),
             r @ fw::ver::gen::RM_ENGINE_TYPE_NVENC0..=fw::ver::gen::RM_ENGINE_TYPE_NVENC2 => Ok((EngineType::NVENC, r - fw::ver::gen::RM_ENGINE_TYPE_NVENC0)),
             r @ fw::ver::gen::RM_ENGINE_TYPE_NVJPEG0..=fw::ver::gen::RM_ENGINE_TYPE_NVJPEG7 => Ok((EngineType::NVJPG, r - fw::ver::gen::RM_ENGINE_TYPE_NVJPEG0)),
+            #[ver(r == r535_113_01)]
             fw::ver::gen::RM_ENGINE_TYPE_OFA => { Ok((EngineType::OFA, 0)) },
+            #[ver(r == r570_86_16)]
+            fw::ver::gen::RM_ENGINE_TYPE_OFA0 => { Ok((EngineType::OFA, 0)) },
             other => Err(EINVAL)
         }
     }
@@ -206,10 +212,15 @@ pub(crate) struct GetConstructedFalconInfo {
 #[versions(GSP)]
 impl GetConstructedFalconInfo::ver {
     pub(crate) fn new(device: &GspDevice) -> Result<Self> {
+        #[ver(r == r535_113_01)]
         let msg_size = fw::ver::gen::s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS::str_size();
+        #[ver(r == r570_86_16)]
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS::str_size();
 
+        #[ver(r == r535_113_01)]
         let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_INTERNAL_GET_CONSTRUCTED_FALCON_INFO, msg_size, true)?;
-
+        #[ver(r == r570_86_16)]
+        let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO, msg_size, true)?;
         Ok(Self {
             ctrl
         })
@@ -220,7 +231,10 @@ impl GetConstructedFalconInfo::ver {
     }
 
     pub(crate) fn fill_sizes(&mut self, table: &mut FifoDeviceInfoTable) {
+        #[ver(r == r535_113_01)]
         let mut msg = fw::ver::gen::s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS::new(self.ctrl.get_data_ptr());
+        #[ver(r == r570_86_16)]
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS::new(self.ctrl.get_data_ptr());
 
         for i in 0..msg.get_numConstructedFalcons() {
             let tbl = msg.new_S_constructedFalconsTable(i as isize);
@@ -329,12 +343,11 @@ impl BootloadVgpuPluginTask::ver {
             fb_phys_addr_list[0] = (*args).fbmem_heap_addr;
             fb_length_list[0] = (*args).fbmem_heap_size;
 
-            let msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS::new(ctrl.get_data_ptr())
+            let mut msg = fw::ver::gen::s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS::new(ctrl.get_data_ptr())
                 .dbdf((*args).dbdf)
                 .gfid((*args).gfid)
                 .numChannels((*args).num_channels)
                 .numGuestFbSegments(1)
-                .chidOffset((*args).chid_offset)
                 .guestFbPhysAddrList(fb_phys_addr_list)
                 .guestFbLengthList(fb_length_list)
                 .pluginHeapMemoryPhysAddr((*args).heap_mem_addr)
@@ -343,6 +356,15 @@ impl BootloadVgpuPluginTask::ver {
                 .initTaskLogBuffSize((*args).init_task_log_buf_size)
                 .vgpuTaskLogBuffOffset((*args).vgpu_task_log_buf_offset)
                 .vgpuTaskLogBuffSize((*args).vgpu_task_log_buf_size);
+
+            #[ver(r == r535_113_01)]
+            {
+                let chidoffset: [u32; 62] = [ 0; 62 ];
+                msg.chidOffset(chidoffset);
+            }
+            #[ver(r == r570_86_16)]
+            msg.chidOffset((*args).chid_offset);
+
         }
         Ok(Self {
             ctrl
@@ -594,5 +616,56 @@ impl InternalStaticKGRGetContextBuffersInfo::ver {
             pr_info!("engine {}: {}/{}\n", e, props.get_size(), props.get_alignment());
         }
         Ok(ctxvec)
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct TpcInfo {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl TpcInfo::ver {
+    pub(crate) fn new(device: &GspDevice, gpc_id: u32) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_GET_FERMI_TPC_INFO_PARAMS::str_size();
+
+        let mut ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_GET_FERMI_TPC_INFO, msg_size, true)?;
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_FERMI_TPC_INFO_PARAMS::new(ctrl.get_data_ptr())
+            .gpcId(gpc_id);
+
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<u32> {
+        self.ctrl.push(queues)?;
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_FERMI_TPC_INFO_PARAMS::new(self.ctrl.get_data_ptr());
+        Ok(msg.get_tpcMask())
+    }
+}
+
+#[versions(GSP)]
+pub(crate) struct GpcInfo {
+    pub ctrl: ControlMsg::ver,
+}
+
+#[versions(GSP)]
+impl GpcInfo::ver {
+    pub(crate) fn new(device: &GspDevice) -> Result<Self> {
+        let msg_size = fw::ver::gen::s_NV2080_CTRL_GPU_GET_FERMI_GPC_INFO_PARAMS::str_size();
+
+        let ctrl = ControlMsg::ver::get(&device.subdevice, fw::ver::gen::NV2080_CTRL_CMD_GPU_GET_FERMI_GPC_INFO, msg_size, true)?;
+        Ok(Self {
+            ctrl
+        })
+    }
+
+    pub(crate) fn push(&mut self, queues: &mut GSPSharedQueues::ver) -> Result<u32> {
+        self.ctrl.push(queues)?;
+
+        let mut msg = fw::ver::gen::s_NV2080_CTRL_GPU_GET_FERMI_GPC_INFO_PARAMS::new(self.ctrl.get_data_ptr());
+        Ok(msg.get_gpcMask())
     }
 }

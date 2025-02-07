@@ -25,16 +25,26 @@ pub(crate) const NV_VGPU_MSG_EVENT_OS_ERROR_LOG: u32 = 4102;
 pub(crate) const NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES: u32 = 4104;
 pub(crate) const NV_VGPU_MSG_EVENT_PERF_BRIDGELESS_INFO_UPDATE: u32 = 4111;
 pub(crate) const NV_VGPU_MSG_EVENT_UCODE_LIBOS_PRINT: u32 = 4108;
-pub(crate) const NV_VGPU_MSG_EVENT_GSP_SEND_USER_SHARED_DATA: u32 = 4123;
-pub(crate) const MC_ENGINE_IDX_ACCESS_CNTR: u32 = 59;
+pub(crate) const NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD: u32 = 4128;
+pub(crate) const MC_ENGINE_IDX_ACCESS_CNTR: u32 = 60;
 pub(crate) const MC_ENGINE_IDX_BIF: u32 = 11;
-pub(crate) const MC_ENGINE_IDX_BLG: u32 = 75;
-pub(crate) const MC_ENGINE_IDX_BSP: u32 = 64;
-pub(crate) const MC_ENGINE_IDX_BUF_RESET: u32 = 77;
+pub(crate) const MC_ENGINE_IDX_BLG: u32 = 76;
+pub(crate) const MC_ENGINE_IDX_BSP: u32 = 65;
+pub(crate) const MC_ENGINE_IDX_BUF_RESET: u32 = 78;
 pub(crate) const MC_ENGINE_IDX_BUS: u32 = 7;
-pub(crate) const MC_ENGINE_IDX_C2C: u32 = 41;
+pub(crate) const MC_ENGINE_IDX_C2C: u32 = 42;
 pub(crate) const MC_ENGINE_IDX_CE0: u32 = 15;
 pub(crate) const MC_ENGINE_IDX_CE1: u32 = 16;
+pub(crate) const MC_ENGINE_IDX_CE10: u32 = 25;
+pub(crate) const MC_ENGINE_IDX_CE11: u32 = 26;
+pub(crate) const MC_ENGINE_IDX_CE12: u32 = 27;
+pub(crate) const MC_ENGINE_IDX_CE13: u32 = 28;
+pub(crate) const MC_ENGINE_IDX_CE14: u32 = 29;
+pub(crate) const MC_ENGINE_IDX_CE15: u32 = 30;
+pub(crate) const MC_ENGINE_IDX_CE16: u32 = 31;
+pub(crate) const MC_ENGINE_IDX_CE17: u32 = 32;
+pub(crate) const MC_ENGINE_IDX_CE18: u32 = 33;
+pub(crate) const MC_ENGINE_IDX_CE19: u32 = 34;
 pub(crate) const MC_ENGINE_IDX_CE2: u32 = 17;
 pub(crate) const MC_ENGINE_IDX_CE3: u32 = 18;
 pub(crate) const MC_ENGINE_IDX_CE4: u32 = 19;
@@ -43,93 +53,104 @@ pub(crate) const MC_ENGINE_IDX_CE6: u32 = 21;
 pub(crate) const MC_ENGINE_IDX_CE7: u32 = 22;
 pub(crate) const MC_ENGINE_IDX_CE8: u32 = 23;
 pub(crate) const MC_ENGINE_IDX_CE9: u32 = 24;
-pub(crate) const MC_ENGINE_IDX_CE_MAX: u32 = MC_ENGINE_IDX_CE9;
+pub(crate) const MC_ENGINE_IDX_CE_MAX: u32 = MC_ENGINE_IDX_CE19;
 pub(crate) const MC_ENGINE_IDX_CIPHER: u32 = 10;
-pub(crate) const MC_ENGINE_IDX_CPU_DOORBELL: u32 = 72;
+pub(crate) const MC_ENGINE_IDX_CPU_DOORBELL: u32 = 73;
 pub(crate) const MC_ENGINE_IDX_DISP: u32 = 2;
-pub(crate) const MC_ENGINE_IDX_DISP_GSP: u32 = 163;
-pub(crate) const MC_ENGINE_IDX_ESCHED: u32 = 90;
+pub(crate) const MC_ENGINE_IDX_DISP_GSP: u32 = 165;
+pub(crate) const MC_ENGINE_IDX_DISP_LOW: u32 = 176;
+pub(crate) const MC_ENGINE_IDX_DPAUX: u32 = 175;
+pub(crate) const MC_ENGINE_IDX_ESCHED: u32 = 92;
 pub(crate) const MC_ENGINE_IDX_ESCHED__SIZE: u32 = 64;
 pub(crate) const MC_ENGINE_IDX_FB: u32 = 3;
-pub(crate) const MC_ENGINE_IDX_FBHUB: u32 = 43;
+pub(crate) const MC_ENGINE_IDX_FBHUB: u32 = 44;
 pub(crate) const MC_ENGINE_IDX_FIFO: u32 = 4;
-pub(crate) const MC_ENGINE_IDX_FSP: u32 = 47;
-pub(crate) const MC_ENGINE_IDX_GMMU: u32 = 45;
-pub(crate) const MC_ENGINE_IDX_GR: u32 = 82;
+pub(crate) const MC_ENGINE_IDX_FSP: u32 = 48;
+pub(crate) const MC_ENGINE_IDX_GMMU: u32 = 46;
+pub(crate) const MC_ENGINE_IDX_GR: u32 = 84;
 pub(crate) const MC_ENGINE_IDX_GR0: u32 = MC_ENGINE_IDX_GR;
 pub(crate) const MC_ENGINE_IDX_GR0_FECS_LOG: u32 = MC_ENGINE_IDX_GR_FECS_LOG;
-pub(crate) const MC_ENGINE_IDX_GR1: u32 = 83;
-pub(crate) const MC_ENGINE_IDX_GR1_FECS_LOG: u32 = 155;
-pub(crate) const MC_ENGINE_IDX_GR2: u32 = 84;
-pub(crate) const MC_ENGINE_IDX_GR2_FECS_LOG: u32 = 156;
-pub(crate) const MC_ENGINE_IDX_GR3: u32 = 85;
-pub(crate) const MC_ENGINE_IDX_GR3_FECS_LOG: u32 = 157;
-pub(crate) const MC_ENGINE_IDX_GR4: u32 = 86;
-pub(crate) const MC_ENGINE_IDX_GR4_FECS_LOG: u32 = 158;
-pub(crate) const MC_ENGINE_IDX_GR5: u32 = 87;
-pub(crate) const MC_ENGINE_IDX_GR5_FECS_LOG: u32 = 159;
-pub(crate) const MC_ENGINE_IDX_GR6: u32 = 88;
-pub(crate) const MC_ENGINE_IDX_GR6_FECS_LOG: u32 = 160;
-pub(crate) const MC_ENGINE_IDX_GR7: u32 = 89;
-pub(crate) const MC_ENGINE_IDX_GR7_FECS_LOG: u32 = 161;
-pub(crate) const MC_ENGINE_IDX_GR_FECS_LOG: u32 = 154;
-pub(crate) const MC_ENGINE_IDX_GSP: u32 = 49;
-pub(crate) const MC_ENGINE_IDX_HDACODEC: u32 = 44;
-pub(crate) const MC_ENGINE_IDX_INFO_FAULT: u32 = 63;
-pub(crate) const MC_ENGINE_IDX_INVALID: u32 = 0xFFFFFFFF;
+pub(crate) const MC_ENGINE_IDX_GR1: u32 = 85;
+pub(crate) const MC_ENGINE_IDX_GR1_FECS_LOG: u32 = 157;
+pub(crate) const MC_ENGINE_IDX_GR2: u32 = 86;
+pub(crate) const MC_ENGINE_IDX_GR2_FECS_LOG: u32 = 158;
+pub(crate) const MC_ENGINE_IDX_GR3: u32 = 87;
+pub(crate) const MC_ENGINE_IDX_GR3_FECS_LOG: u32 = 159;
+pub(crate) const MC_ENGINE_IDX_GR4: u32 = 88;
+pub(crate) const MC_ENGINE_IDX_GR4_FECS_LOG: u32 = 160;
+pub(crate) const MC_ENGINE_IDX_GR5: u32 = 89;
+pub(crate) const MC_ENGINE_IDX_GR5_FECS_LOG: u32 = 161;
+pub(crate) const MC_ENGINE_IDX_GR6: u32 = 90;
+pub(crate) const MC_ENGINE_IDX_GR6_FECS_LOG: u32 = 162;
+pub(crate) const MC_ENGINE_IDX_GR7: u32 = 91;
+pub(crate) const MC_ENGINE_IDX_GR7_FECS_LOG: u32 = 163;
+pub(crate) const MC_ENGINE_IDX_GR_FECS_LOG: u32 = 156;
+pub(crate) const MC_ENGINE_IDX_GSP: u32 = 50;
+pub(crate) const MC_ENGINE_IDX_GSPLITE: u32 = 171;
+pub(crate) const MC_ENGINE_IDX_GSPLITE0: u32 = MC_ENGINE_IDX_GSPLITE;
+pub(crate) const MC_ENGINE_IDX_GSPLITE1: u32 = 172;
+pub(crate) const MC_ENGINE_IDX_GSPLITE2: u32 = 173;
+pub(crate) const MC_ENGINE_IDX_GSPLITE3: u32 = 174;
+pub(crate) const MC_ENGINE_IDX_GSPLITE_MAX: u32 = MC_ENGINE_IDX_GSPLITE3;
+pub(crate) const MC_ENGINE_IDX_HDACODEC: u32 = 45;
+pub(crate) const MC_ENGINE_IDX_INFO_FAULT: u32 = 64;
 pub(crate) const MC_ENGINE_IDX_ISOHUB: u32 = 36;
-pub(crate) const MC_ENGINE_IDX_LTC: u32 = 42;
-pub(crate) const MC_ENGINE_IDX_MAX: u32 = 167;
+pub(crate) const MC_ENGINE_IDX_LRCC: u32 = 170;
+pub(crate) const MC_ENGINE_IDX_LTC: u32 = 43;
+pub(crate) const MC_ENGINE_IDX_MAX: u32 = 177;
 pub(crate) const MC_ENGINE_IDX_MD: u32 = 6;
-pub(crate) const MC_ENGINE_IDX_MMU_ECC_ERROR: u32 = 74;
-pub(crate) const MC_ENGINE_IDX_MSENC: u32 = 38;
-pub(crate) const MC_ENGINE_IDX_MSENC1: u32 = 39;
-pub(crate) const MC_ENGINE_IDX_MSENC2: u32 = 40;
-pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT: u32 = 60;
-pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT_CPU: u32 = 165;
-pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT_ERROR: u32 = 62;
+pub(crate) const MC_ENGINE_IDX_MMU_ECC_ERROR: u32 = 75;
+pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT: u32 = 61;
+pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT_CPU: u32 = 167;
+pub(crate) const MC_ENGINE_IDX_NON_REPLAYABLE_FAULT_ERROR: u32 = 63;
 pub(crate) const MC_ENGINE_IDX_NULL: u32 = 0;
 pub(crate) const MC_ENGINE_IDX_NVDEC: u32 = MC_ENGINE_IDX_BSP;
 pub(crate) const MC_ENGINE_IDX_NVDEC0: u32 = MC_ENGINE_IDX_NVDEC;
-pub(crate) const MC_ENGINE_IDX_NVDEC1: u32 = 65;
-pub(crate) const MC_ENGINE_IDX_NVDEC2: u32 = 66;
-pub(crate) const MC_ENGINE_IDX_NVDEC3: u32 = 67;
-pub(crate) const MC_ENGINE_IDX_NVDEC4: u32 = 68;
-pub(crate) const MC_ENGINE_IDX_NVDEC5: u32 = 69;
-pub(crate) const MC_ENGINE_IDX_NVDEC6: u32 = 70;
-pub(crate) const MC_ENGINE_IDX_NVDEC7: u32 = 71;
+pub(crate) const MC_ENGINE_IDX_NVDEC1: u32 = 66;
+pub(crate) const MC_ENGINE_IDX_NVDEC2: u32 = 67;
+pub(crate) const MC_ENGINE_IDX_NVDEC3: u32 = 68;
+pub(crate) const MC_ENGINE_IDX_NVDEC4: u32 = 69;
+pub(crate) const MC_ENGINE_IDX_NVDEC5: u32 = 70;
+pub(crate) const MC_ENGINE_IDX_NVDEC6: u32 = 71;
+pub(crate) const MC_ENGINE_IDX_NVDEC7: u32 = 72;
+pub(crate) const MC_ENGINE_IDX_NVENC: u32 = 38;
+pub(crate) const MC_ENGINE_IDX_NVENC1: u32 = 39;
+pub(crate) const MC_ENGINE_IDX_NVENC2: u32 = 40;
+pub(crate) const MC_ENGINE_IDX_NVENC3: u32 = 41;
 pub(crate) const MC_ENGINE_IDX_NVJPEG: u32 = MC_ENGINE_IDX_NVJPG;
 pub(crate) const MC_ENGINE_IDX_NVJPEG0: u32 = MC_ENGINE_IDX_NVJPEG;
-pub(crate) const MC_ENGINE_IDX_NVJPEG1: u32 = 51;
-pub(crate) const MC_ENGINE_IDX_NVJPEG2: u32 = 52;
-pub(crate) const MC_ENGINE_IDX_NVJPEG3: u32 = 53;
-pub(crate) const MC_ENGINE_IDX_NVJPEG4: u32 = 54;
-pub(crate) const MC_ENGINE_IDX_NVJPEG5: u32 = 55;
-pub(crate) const MC_ENGINE_IDX_NVJPEG6: u32 = 56;
-pub(crate) const MC_ENGINE_IDX_NVJPEG7: u32 = 57;
-pub(crate) const MC_ENGINE_IDX_NVJPG: u32 = 50;
-pub(crate) const MC_ENGINE_IDX_NVLINK: u32 = 48;
-pub(crate) const MC_ENGINE_IDX_OFA0: u32 = 80;
-pub(crate) const MC_ENGINE_IDX_PERFMON: u32 = 76;
+pub(crate) const MC_ENGINE_IDX_NVJPEG1: u32 = 52;
+pub(crate) const MC_ENGINE_IDX_NVJPEG2: u32 = 53;
+pub(crate) const MC_ENGINE_IDX_NVJPEG3: u32 = 54;
+pub(crate) const MC_ENGINE_IDX_NVJPEG4: u32 = 55;
+pub(crate) const MC_ENGINE_IDX_NVJPEG5: u32 = 56;
+pub(crate) const MC_ENGINE_IDX_NVJPEG6: u32 = 57;
+pub(crate) const MC_ENGINE_IDX_NVJPEG7: u32 = 58;
+pub(crate) const MC_ENGINE_IDX_NVJPG: u32 = 51;
+pub(crate) const MC_ENGINE_IDX_NVLINK: u32 = 49;
+pub(crate) const MC_ENGINE_IDX_OFA0: u32 = 81;
+pub(crate) const MC_ENGINE_IDX_OFA1: u32 = 82;
+pub(crate) const MC_ENGINE_IDX_PERFMON: u32 = 77;
 pub(crate) const MC_ENGINE_IDX_PMGR: u32 = 8;
 pub(crate) const MC_ENGINE_IDX_PMU: u32 = 14;
 pub(crate) const MC_ENGINE_IDX_PPP: u32 = 12;
 pub(crate) const MC_ENGINE_IDX_PRIVRING: u32 = 13;
-pub(crate) const MC_ENGINE_IDX_PRIV_DOORBELL: u32 = 73;
-pub(crate) const MC_ENGINE_IDX_PXUC: u32 = 166;
-pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT: u32 = 58;
-pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT_CPU: u32 = 164;
-pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT_ERROR: u32 = 61;
-pub(crate) const MC_ENGINE_IDX_SEC2: u32 = 46;
-pub(crate) const MC_ENGINE_IDX_TEGRA: u32 = 81;
+pub(crate) const MC_ENGINE_IDX_PRIV_DOORBELL: u32 = 74;
+pub(crate) const MC_ENGINE_IDX_PXUC: u32 = 168;
+pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT: u32 = 59;
+pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT_CPU: u32 = 166;
+pub(crate) const MC_ENGINE_IDX_REPLAYABLE_FAULT_ERROR: u32 = 62;
+pub(crate) const MC_ENGINE_IDX_SEC2: u32 = 47;
+pub(crate) const MC_ENGINE_IDX_SYSLTC: u32 = 169;
+pub(crate) const MC_ENGINE_IDX_TEGRA: u32 = 83;
 pub(crate) const MC_ENGINE_IDX_TMR: u32 = 1;
-pub(crate) const MC_ENGINE_IDX_TMR_SWRL: u32 = 162;
+pub(crate) const MC_ENGINE_IDX_TMR_SWRL: u32 = 164;
 pub(crate) const MC_ENGINE_IDX_VGPU: u32 = 37;
 pub(crate) const MC_ENGINE_IDX_VIC: u32 = 35;
 pub(crate) const MC_ENGINE_IDX_VIDEO: u32 = 5;
 pub(crate) const MC_ENGINE_IDX_VP2: u32 = 9;
-pub(crate) const MC_ENGINE_IDX_XBAR: u32 = 78;
-pub(crate) const MC_ENGINE_IDX_ZPW: u32 = 79;
+pub(crate) const MC_ENGINE_IDX_XBAR: u32 = 79;
+pub(crate) const MC_ENGINE_IDX_ZPW: u32 = 80;
 pub(crate) const ENGINE_INFO_TYPE_DEV_TYPE_ENUM: u32 = 9;
 pub(crate) const ENGINE_INFO_TYPE_RM_ENGINE_TYPE: u32 = 2;
 pub(crate) const ENGINE_INFO_TYPE_RUNLIST: u32 = 3;
@@ -154,14 +175,14 @@ pub(crate) const GSP_FW_HEAP_PARAM_CLIENT_ALLOC_SIZE: u32 = (48<<10) * 2048;
 pub(crate) const GSP_FW_HEAP_PARAM_BASE_RM_SIZE_TU10X: u32 = 8<<20;
 pub(crate) const GSP_FW_HEAP_PARAM_BASE_RM_SIZE_GH100: u32 = 14<<20;
 pub(crate) const GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS2: u32 = 0<<20;
-pub(crate) const GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS3: u32 = 20<<20;
+pub(crate) const GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS3_BAREMETAL: u32 = 22<<20;
 pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS2_MIN_MB: u32 = 64;
 pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS2_MAX_MB: u32 = 256;
-pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS3_BAREMETAL_MIN_MB: u32 = 84;
-pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS3_BAREMETAL_MAX_MB: u32 = 276;
-pub(crate) const LOGIDX_SIZE: u32 = 3;
+pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS3_BAREMETAL_MIN_MB: u32 = 88;
+pub(crate) const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS3_BAREMETAL_MAX_MB: u32 = 280;
+pub(crate) const LOGIDX_SIZE: u32 = 5;
 pub(crate) const NV01_ROOT: u32 = 0x0;
-pub(crate) const NV01_DEVICE_0: u32 = 0x00000080;
+pub(crate) const NV01_DEVICE_0: u32 = 0x80;
 pub(crate) const NV01_EVENT_KERNEL_CALLBACK_EX: u32 = 0x0000007E;
 pub(crate) const NV01_EVENT_CLIENT_RM: u32 = 0x04000000;
 pub(crate) const NV20_SUBDEVICE_0: u32 = 0x2080;
@@ -187,7 +208,7 @@ pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_A: u32
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_B: u32 = 0;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_CAPTURE: u32 = 0x00000004;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_COMPUTE_PREEMPT: u32 = 0x0000000a;
-pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_COUNT: u32 = 0x00000019;
+pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_COUNT: u32 = 0x0000001a;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_DISPLAY: u32 = 0x00000005;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_ENCRYPTION: u32 = 0x00000006;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS: u32 = 0x00000000;
@@ -205,6 +226,7 @@ pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHI
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_PRIV_ACCESS_MAP: u32 = 0x00000018;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_RTV: u32 = 0x0000000f;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_RTV_CB_GLOBAL: u32 = 0x00000014;
+pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_SETUP: u32 = 0x00000019;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_SPILL: u32 = 0x0000000c;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_GRAPHICS_ZCULL: u32 = 0x00000008;
 pub(crate) const NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_MPEG: u32 = 0x00000003;
@@ -215,8 +237,38 @@ pub(crate) const NV2080_CTRL_INTERNAL_GR_MAX_ENGINES: u32 = 8;
 pub(crate) const NV2080_ENGINE_TYPE_ALLENGINES: u32 = 0xffffffff;
 pub(crate) const NV2080_ENGINE_TYPE_BSP: u32 = 0x00000013;
 pub(crate) const NV2080_ENGINE_TYPE_CIPHER: u32 = 0x00000023;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY0: u32 = 0x00000040;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY1: u32 = 0x00000041;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY10: u32 = 0x0000004a;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY11: u32 = 0x0000004b;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY12: u32 = 0x0000004c;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY13: u32 = 0x0000004d;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY14: u32 = 0x0000004e;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY15: u32 = 0x0000004f;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY16: u32 = 0x00000050;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY17: u32 = 0x00000051;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY18: u32 = 0x00000052;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY19: u32 = 0x00000053;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY2: u32 = 0x00000042;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY3: u32 = 0x00000043;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY4: u32 = 0x00000044;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY5: u32 = 0x00000045;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY6: u32 = 0x00000046;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY7: u32 = 0x00000047;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY8: u32 = 0x00000048;
+pub(crate) const NV2080_ENGINE_TYPE_COMP_DECOMP_COPY9: u32 = 0x00000049;
 pub(crate) const NV2080_ENGINE_TYPE_COPY0: u32 = 0x00000009;
 pub(crate) const NV2080_ENGINE_TYPE_COPY1: u32 = 0x0000000a;
+pub(crate) const NV2080_ENGINE_TYPE_COPY10: u32 = 0x00000034;
+pub(crate) const NV2080_ENGINE_TYPE_COPY11: u32 = 0x00000035;
+pub(crate) const NV2080_ENGINE_TYPE_COPY12: u32 = 0x00000036;
+pub(crate) const NV2080_ENGINE_TYPE_COPY13: u32 = 0x00000037;
+pub(crate) const NV2080_ENGINE_TYPE_COPY14: u32 = 0x00000038;
+pub(crate) const NV2080_ENGINE_TYPE_COPY15: u32 = 0x00000039;
+pub(crate) const NV2080_ENGINE_TYPE_COPY16: u32 = 0x0000003a;
+pub(crate) const NV2080_ENGINE_TYPE_COPY17: u32 = 0x0000003b;
+pub(crate) const NV2080_ENGINE_TYPE_COPY18: u32 = 0x0000003c;
+pub(crate) const NV2080_ENGINE_TYPE_COPY19: u32 = 0x0000003d;
 pub(crate) const NV2080_ENGINE_TYPE_COPY2: u32 = 0x0000000b;
 pub(crate) const NV2080_ENGINE_TYPE_COPY3: u32 = 0x0000000c;
 pub(crate) const NV2080_ENGINE_TYPE_COPY4: u32 = 0x0000000d;
@@ -225,9 +277,10 @@ pub(crate) const NV2080_ENGINE_TYPE_COPY6: u32 = 0x0000000f;
 pub(crate) const NV2080_ENGINE_TYPE_COPY7: u32 = 0x00000010;
 pub(crate) const NV2080_ENGINE_TYPE_COPY8: u32 = 0x00000011;
 pub(crate) const NV2080_ENGINE_TYPE_COPY9: u32 = 0x00000012;
-pub(crate) const NV2080_ENGINE_TYPE_COPY_SIZE: u32 = 10;
+pub(crate) const NV2080_ENGINE_TYPE_COPY_SIZE: u32 = 64;
 pub(crate) const NV2080_ENGINE_TYPE_COPY_SIZE_v1A_0D: u32 = 10;
 pub(crate) const NV2080_ENGINE_TYPE_COPY_SIZE_v22_00: u32 = 10;
+pub(crate) const NV2080_ENGINE_TYPE_COPY_SIZE_v24_09: u32 = 64;
 pub(crate) const NV2080_ENGINE_TYPE_DPU: u32 = 0x00000028;
 pub(crate) const NV2080_ENGINE_TYPE_FBFLCN: u32 = 0x0000002a;
 pub(crate) const NV2080_ENGINE_TYPE_GR0: u32 = NV2080_ENGINE_TYPE_GRAPHICS;
@@ -241,10 +294,11 @@ pub(crate) const NV2080_ENGINE_TYPE_GR7: u32 = 0x00000008;
 pub(crate) const NV2080_ENGINE_TYPE_GRAPHICS: u32 = 0x00000001;
 pub(crate) const NV2080_ENGINE_TYPE_GR_SIZE: u32 = 8;
 pub(crate) const NV2080_ENGINE_TYPE_HOST: u32 = 0x00000027;
-pub(crate) const NV2080_ENGINE_TYPE_LAST: u32 = 0x0000003e;
+pub(crate) const NV2080_ENGINE_TYPE_LAST: u32 = 0x00000054;
 pub(crate) const NV2080_ENGINE_TYPE_LAST_v18_01: u32 = 0x0000002a;
 pub(crate) const NV2080_ENGINE_TYPE_LAST_v1A_00: u32 = 0x2a;
 pub(crate) const NV2080_ENGINE_TYPE_LAST_v1C_09: u32 = 0x00000034;
+pub(crate) const NV2080_ENGINE_TYPE_LAST_v27_02: u32 = 0x00000054;
 pub(crate) const NV2080_ENGINE_TYPE_ME: u32 = 0x0000001f;
 pub(crate) const NV2080_ENGINE_TYPE_MP: u32 = 0x00000025;
 pub(crate) const NV2080_ENGINE_TYPE_MPEG: u32 = 0x00000021;
@@ -262,7 +316,8 @@ pub(crate) const NV2080_ENGINE_TYPE_NVDEC_SIZE: u32 = 8;
 pub(crate) const NV2080_ENGINE_TYPE_NVENC0: u32 = NV2080_ENGINE_TYPE_MSENC;
 pub(crate) const NV2080_ENGINE_TYPE_NVENC1: u32 = 0x0000001c;
 pub(crate) const NV2080_ENGINE_TYPE_NVENC2: u32 = 0x0000001d;
-pub(crate) const NV2080_ENGINE_TYPE_NVENC_SIZE: u32 = 3;
+pub(crate) const NV2080_ENGINE_TYPE_NVENC3: u32 = 0x0000003f;
+pub(crate) const NV2080_ENGINE_TYPE_NVENC_SIZE: u32 = 4;
 pub(crate) const NV2080_ENGINE_TYPE_NVJPEG0: u32 = NV2080_ENGINE_TYPE_NVJPG;
 pub(crate) const NV2080_ENGINE_TYPE_NVJPEG1: u32 = 0x0000002c;
 pub(crate) const NV2080_ENGINE_TYPE_NVJPEG2: u32 = 0x0000002d;
@@ -274,6 +329,9 @@ pub(crate) const NV2080_ENGINE_TYPE_NVJPEG7: u32 = 0x00000032;
 pub(crate) const NV2080_ENGINE_TYPE_NVJPEG_SIZE: u32 = 8;
 pub(crate) const NV2080_ENGINE_TYPE_NVJPG: u32 = 0x0000002b;
 pub(crate) const NV2080_ENGINE_TYPE_OFA: u32 = 0x00000033;
+pub(crate) const NV2080_ENGINE_TYPE_OFA0: u32 = NV2080_ENGINE_TYPE_OFA;
+pub(crate) const NV2080_ENGINE_TYPE_OFA1: u32 = 0x0000003e;
+pub(crate) const NV2080_ENGINE_TYPE_OFA_SIZE: u32 = 2;
 pub(crate) const NV2080_ENGINE_TYPE_PMU: u32 = 0x00000029;
 pub(crate) const NV2080_ENGINE_TYPE_PPP: u32 = 0x00000020;
 pub(crate) const NV2080_ENGINE_TYPE_SEC2: u32 = 0x00000026;
@@ -285,6 +343,16 @@ pub(crate) const RM_ENGINE_TYPE_BSP: u32 = RM_ENGINE_TYPE_NVDEC0;
 pub(crate) const RM_ENGINE_TYPE_CIPHER: u32 = RM_ENGINE_TYPE_TSEC;
 pub(crate) const RM_ENGINE_TYPE_COPY0: u32 = 9;
 pub(crate) const RM_ENGINE_TYPE_COPY1: u32 = 10;
+pub(crate) const RM_ENGINE_TYPE_COPY10: u32 = 19;
+pub(crate) const RM_ENGINE_TYPE_COPY11: u32 = 20;
+pub(crate) const RM_ENGINE_TYPE_COPY12: u32 = 21;
+pub(crate) const RM_ENGINE_TYPE_COPY13: u32 = 22;
+pub(crate) const RM_ENGINE_TYPE_COPY14: u32 = 23;
+pub(crate) const RM_ENGINE_TYPE_COPY15: u32 = 24;
+pub(crate) const RM_ENGINE_TYPE_COPY16: u32 = 25;
+pub(crate) const RM_ENGINE_TYPE_COPY17: u32 = 26;
+pub(crate) const RM_ENGINE_TYPE_COPY18: u32 = 27;
+pub(crate) const RM_ENGINE_TYPE_COPY19: u32 = 28;
 pub(crate) const RM_ENGINE_TYPE_COPY2: u32 = 11;
 pub(crate) const RM_ENGINE_TYPE_COPY3: u32 = 12;
 pub(crate) const RM_ENGINE_TYPE_COPY4: u32 = 13;
@@ -293,9 +361,9 @@ pub(crate) const RM_ENGINE_TYPE_COPY6: u32 = 15;
 pub(crate) const RM_ENGINE_TYPE_COPY7: u32 = 16;
 pub(crate) const RM_ENGINE_TYPE_COPY8: u32 = 17;
 pub(crate) const RM_ENGINE_TYPE_COPY9: u32 = 18;
-pub(crate) const RM_ENGINE_TYPE_COPY_SIZE: u32 = 10;
-pub(crate) const RM_ENGINE_TYPE_DPU: u32 = 50;
-pub(crate) const RM_ENGINE_TYPE_FBFLCN: u32 = 52;
+pub(crate) const RM_ENGINE_TYPE_COPY_SIZE: u32 = 20;
+pub(crate) const RM_ENGINE_TYPE_DPU: u32 = 51;
+pub(crate) const RM_ENGINE_TYPE_FBFLCN: u32 = 53;
 pub(crate) const RM_ENGINE_TYPE_GR0: u32 = 1;
 pub(crate) const RM_ENGINE_TYPE_GR1: u32 = 2;
 pub(crate) const RM_ENGINE_TYPE_GR2: u32 = 3;
@@ -306,11 +374,11 @@ pub(crate) const RM_ENGINE_TYPE_GR6: u32 = 7;
 pub(crate) const RM_ENGINE_TYPE_GR7: u32 = 8;
 pub(crate) const RM_ENGINE_TYPE_GRAPHICS: u32 = RM_ENGINE_TYPE_GR0;
 pub(crate) const RM_ENGINE_TYPE_GR_SIZE: u32 = 8;
-pub(crate) const RM_ENGINE_TYPE_HOST: u32 = 49;
-pub(crate) const RM_ENGINE_TYPE_LAST: u32 = 62;
-pub(crate) const RM_ENGINE_TYPE_ME: u32 = 41;
-pub(crate) const RM_ENGINE_TYPE_MP: u32 = 47;
-pub(crate) const RM_ENGINE_TYPE_MPEG: u32 = 43;
+pub(crate) const RM_ENGINE_TYPE_HOST: u32 = 50;
+pub(crate) const RM_ENGINE_TYPE_LAST: u32 = 84;
+pub(crate) const RM_ENGINE_TYPE_ME: u32 = 42;
+pub(crate) const RM_ENGINE_TYPE_MP: u32 = 48;
+pub(crate) const RM_ENGINE_TYPE_MPEG: u32 = 44;
 pub(crate) const RM_ENGINE_TYPE_MSENC: u32 = RM_ENGINE_TYPE_NVENC0;
 pub(crate) const RM_ENGINE_TYPE_NULL: u32 = 0;
 pub(crate) const RM_ENGINE_TYPE_NVDEC0: u32 = 29;
@@ -325,26 +393,48 @@ pub(crate) const RM_ENGINE_TYPE_NVDEC_SIZE: u32 = 8;
 pub(crate) const RM_ENGINE_TYPE_NVENC0: u32 = 37;
 pub(crate) const RM_ENGINE_TYPE_NVENC1: u32 = 38;
 pub(crate) const RM_ENGINE_TYPE_NVENC2: u32 = 39;
-pub(crate) const RM_ENGINE_TYPE_NVENC_SIZE: u32 = 3;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG0: u32 = 53;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG1: u32 = 54;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG2: u32 = 55;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG3: u32 = 56;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG4: u32 = 57;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG5: u32 = 58;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG6: u32 = 59;
-pub(crate) const RM_ENGINE_TYPE_NVJPEG7: u32 = 60;
+pub(crate) const RM_ENGINE_TYPE_NVENC3: u32 = 40;
+pub(crate) const RM_ENGINE_TYPE_NVENC_SIZE: u32 = 4;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG0: u32 = 54;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG1: u32 = 55;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG2: u32 = 56;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG3: u32 = 57;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG4: u32 = 58;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG5: u32 = 59;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG6: u32 = 60;
+pub(crate) const RM_ENGINE_TYPE_NVJPEG7: u32 = 61;
 pub(crate) const RM_ENGINE_TYPE_NVJPEG_SIZE: u32 = 8;
 pub(crate) const RM_ENGINE_TYPE_NVJPG: u32 = RM_ENGINE_TYPE_NVJPEG0;
-pub(crate) const RM_ENGINE_TYPE_OFA: u32 = 61;
-pub(crate) const RM_ENGINE_TYPE_OFA_SIZE: u32 = 1;
-pub(crate) const RM_ENGINE_TYPE_PMU: u32 = 51;
-pub(crate) const RM_ENGINE_TYPE_PPP: u32 = 42;
-pub(crate) const RM_ENGINE_TYPE_SEC2: u32 = 48;
-pub(crate) const RM_ENGINE_TYPE_SW: u32 = 44;
-pub(crate) const RM_ENGINE_TYPE_TSEC: u32 = 45;
-pub(crate) const RM_ENGINE_TYPE_VIC: u32 = 46;
-pub(crate) const RM_ENGINE_TYPE_VP: u32 = 40;
+pub(crate) const RM_ENGINE_TYPE_OFA0: u32 = 62;
+pub(crate) const RM_ENGINE_TYPE_OFA1: u32 = 63;
+pub(crate) const RM_ENGINE_TYPE_OFA_SIZE: u32 = 2;
+pub(crate) const RM_ENGINE_TYPE_PMU: u32 = 52;
+pub(crate) const RM_ENGINE_TYPE_PPP: u32 = 43;
+pub(crate) const RM_ENGINE_TYPE_RESERVED40: u32 = 64;
+pub(crate) const RM_ENGINE_TYPE_RESERVED41: u32 = 65;
+pub(crate) const RM_ENGINE_TYPE_RESERVED42: u32 = 66;
+pub(crate) const RM_ENGINE_TYPE_RESERVED43: u32 = 67;
+pub(crate) const RM_ENGINE_TYPE_RESERVED44: u32 = 68;
+pub(crate) const RM_ENGINE_TYPE_RESERVED45: u32 = 69;
+pub(crate) const RM_ENGINE_TYPE_RESERVED46: u32 = 70;
+pub(crate) const RM_ENGINE_TYPE_RESERVED47: u32 = 71;
+pub(crate) const RM_ENGINE_TYPE_RESERVED48: u32 = 72;
+pub(crate) const RM_ENGINE_TYPE_RESERVED49: u32 = 73;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4a: u32 = 74;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4b: u32 = 75;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4c: u32 = 76;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4d: u32 = 77;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4e: u32 = 78;
+pub(crate) const RM_ENGINE_TYPE_RESERVED4f: u32 = 79;
+pub(crate) const RM_ENGINE_TYPE_RESERVED50: u32 = 80;
+pub(crate) const RM_ENGINE_TYPE_RESERVED51: u32 = 81;
+pub(crate) const RM_ENGINE_TYPE_RESERVED52: u32 = 82;
+pub(crate) const RM_ENGINE_TYPE_RESERVED53: u32 = 83;
+pub(crate) const RM_ENGINE_TYPE_SEC2: u32 = 49;
+pub(crate) const RM_ENGINE_TYPE_SW: u32 = 45;
+pub(crate) const RM_ENGINE_TYPE_TSEC: u32 = 46;
+pub(crate) const RM_ENGINE_TYPE_VIC: u32 = 47;
+pub(crate) const RM_ENGINE_TYPE_VP: u32 = 41;
 
 pub(crate) struct s_rpc_message_rpc_union_field_v03_00<'s> {
     ptr: *mut u8,
@@ -1000,28 +1090,48 @@ impl<'s> s_GspFwWprMeta<'s> {
     pub(crate) fn set_gspFwHeapVfPartitionCount(&mut self, fld: u8) {
         self.store[240..241].copy_from_slice(&u8::to_le_bytes(fld));
     }
-    pub(crate) fn padding(self, fld: [u8; 7]) -> Self {
-        let mut byte_data = [0u8; 7];
-        for i in 0..7 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[241..248].copy_from_slice(&byte_data);
+    pub(crate) fn flags(self, fld: u8) -> Self {
+        self.store[241..242].copy_from_slice(&u8::to_le_bytes(fld));
     self }
-    pub(crate) fn set_padding(&mut self, fld: [u8; 7]) {
-        let mut byte_data = [0u8; 7];
-        for i in 0..7 {
+
+    pub(crate) fn get_flags(&self) -> u8 {
+        u8::from_le_bytes(self.store[241..242].try_into().unwrap())
+    }
+    pub(crate) fn set_flags(&mut self, fld: u8) {
+        self.store[241..242].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn padding(self, fld: [u8; 2]) -> Self {
+        let mut byte_data = [0u8; 2];
+        for i in 0..2 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[241..248].copy_from_slice(&byte_data);
+        self.store[242..244].copy_from_slice(&byte_data);
+    self }
+    pub(crate) fn set_padding(&mut self, fld: [u8; 2]) {
+        let mut byte_data = [0u8; 2];
+        for i in 0..2 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
+        }
+        self.store[242..244].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_padding(&mut self) -> [u8; 7] {
-        let mut array = [0u8; 7];
-        for (i, chunk) in self.store[241..248].chunks_exact(1).enumerate() {
+    pub(crate) fn get_padding(&mut self) -> [u8; 2] {
+        let mut array = [0u8; 2];
+        for (i, chunk) in self.store[242..244].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
+    }
+    pub(crate) fn pmuReservedSize(self, fld: u32) -> Self {
+        self.store[244..248].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_pmuReservedSize(&self) -> u32 {
+        u32::from_le_bytes(self.store[244..248].try_into().unwrap())
+    }
+    pub(crate) fn set_pmuReservedSize(&mut self, fld: u32) {
+        self.store[244..248].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn verified(self, fld: u64) -> Self {
         self.store[248..256].copy_from_slice(&u64::to_le_bytes(fld));
@@ -1089,117 +1199,68 @@ impl<'s> s_GspFwSRMeta<'s> {
     pub(crate) fn set_sizeOfSuspendResumeData(&mut self, fld: u64) {
         self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
     }
-    pub(crate) fn hmac(self, fld: [u8; 32]) -> Self {
-        let mut byte_data = [0u8; 32];
+    pub(crate) fn internal(self, fld: [u32; 32]) -> Self {
+        let mut byte_data = [0u8; 128];
         for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[32..64].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_hmac(&mut self, fld: [u8; 32]) {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[32..64].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_hmac(&mut self) -> [u8; 32] {
-        let mut array = [0u8; 32];
-        for (i, chunk) in self.store[32..64].chunks_exact(1).enumerate() {
-            array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
-    }
-    pub(crate) fn wprMetaHash(self, fld: [u8; 32]) -> Self {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[64..96].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_wprMetaHash(&mut self, fld: [u8; 32]) {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[64..96].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_wprMetaHash(&mut self) -> [u8; 32] {
-        let mut array = [0u8; 32];
-        for (i, chunk) in self.store[64..96].chunks_exact(1).enumerate() {
-            array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
-    }
-    pub(crate) fn heapFreeListHash(self, fld: [u8; 32]) -> Self {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[96..128].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_heapFreeListHash(&mut self, fld: [u8; 32]) {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[96..128].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_heapFreeListHash(&mut self) -> [u8; 32] {
-        let mut array = [0u8; 32];
-        for (i, chunk) in self.store[96..128].chunks_exact(1).enumerate() {
-            array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
-    }
-    pub(crate) fn dataHash(self, fld: [u8; 32]) -> Self {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[128..160].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_dataHash(&mut self, fld: [u8; 32]) {
-        let mut byte_data = [0u8; 32];
-        for i in 0..32 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
-        }
-        self.store[128..160].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_dataHash(&mut self) -> [u8; 32] {
-        let mut array = [0u8; 32];
-        for (i, chunk) in self.store[128..160].chunks_exact(1).enumerate() {
-            array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
-    }
-    pub(crate) fn padding(self, fld: [u32; 24]) -> Self {
-        let mut byte_data = [0u8; 96];
-        for i in 0..24 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[160..256].copy_from_slice(&byte_data);
+        self.store[32..160].copy_from_slice(&byte_data);
     self }
-    pub(crate) fn set_padding(&mut self, fld: [u32; 24]) {
-        let mut byte_data = [0u8; 96];
-        for i in 0..24 {
+    pub(crate) fn set_internal(&mut self, fld: [u32; 32]) {
+        let mut byte_data = [0u8; 128];
+        for i in 0..32 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[160..256].copy_from_slice(&byte_data);
+        self.store[32..160].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_padding(&mut self) -> [u32; 24] {
-        let mut array = [0u32; 24];
-        for (i, chunk) in self.store[160..256].chunks_exact(4).enumerate() {
+    pub(crate) fn get_internal(&mut self) -> [u32; 32] {
+        let mut array = [0u32; 32];
+        for (i, chunk) in self.store[32..160].chunks_exact(4).enumerate() {
+            array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        array
+    }
+    pub(crate) fn flags(self, fld: u32) -> Self {
+        self.store[160..164].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_flags(&self) -> u32 {
+        u32::from_le_bytes(self.store[160..164].try_into().unwrap())
+    }
+    pub(crate) fn set_flags(&mut self, fld: u32) {
+        self.store[160..164].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn subrevision(self, fld: u32) -> Self {
+        self.store[164..168].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_subrevision(&self) -> u32 {
+        u32::from_le_bytes(self.store[164..168].try_into().unwrap())
+    }
+    pub(crate) fn set_subrevision(&mut self, fld: u32) {
+        self.store[164..168].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn padding(self, fld: [u32; 22]) -> Self {
+        let mut byte_data = [0u8; 88];
+        for i in 0..22 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[168..256].copy_from_slice(&byte_data);
+    self }
+    pub(crate) fn set_padding(&mut self, fld: [u32; 22]) {
+        let mut byte_data = [0u8; 88];
+        for i in 0..22 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[168..256].copy_from_slice(&byte_data);
+    }
+    pub(crate) fn get_padding(&mut self) -> [u32; 22] {
+        let mut array = [0u32; 22];
+        for (i, chunk) in self.store[168..256].chunks_exact(4).enumerate() {
             array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -1213,11 +1274,11 @@ pub(crate) struct s_MESSAGE_QUEUE_INIT_ARGUMENTS<'s> {
 
 impl<'s> s_MESSAGE_QUEUE_INIT_ARGUMENTS<'s> {
     pub(crate) const fn str_size() -> usize {
-        48
+        32
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 48) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 32) },
     } }
 
     pub(crate) fn sharedMemPhysAddr(self, fld: u64) -> Self {
@@ -1259,26 +1320,6 @@ impl<'s> s_MESSAGE_QUEUE_INIT_ARGUMENTS<'s> {
     }
     pub(crate) fn set_statQueueOffset(&mut self, fld: u64) {
         self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
-    }
-    pub(crate) fn locklessCmdQueueOffset(self, fld: u64) -> Self {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_locklessCmdQueueOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[32..40].try_into().unwrap())
-    }
-    pub(crate) fn set_locklessCmdQueueOffset(&mut self, fld: u64) {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
-    }
-    pub(crate) fn locklessStatQueueOffset(self, fld: u64) -> Self {
-        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_locklessStatQueueOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[40..48].try_into().unwrap())
-    }
-    pub(crate) fn set_locklessStatQueueOffset(&mut self, fld: u64) {
-        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
     }
 }
 
@@ -1335,11 +1376,11 @@ pub(crate) struct s_GSP_ARGUMENTS_CACHED<'s> {
 
 impl<'s> s_GSP_ARGUMENTS_CACHED<'s> {
     pub(crate) const fn str_size() -> usize {
-        80
+        72
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 80) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 72) },
     } }
 
 
@@ -1349,38 +1390,48 @@ impl<'s> s_GSP_ARGUMENTS_CACHED<'s> {
 
 
     pub(crate) fn new_S_srInitArguments(&mut self) -> s_GSP_SR_INIT_ARGUMENTS<'s> {
-        s_GSP_SR_INIT_ARGUMENTS::new(unsafe { self.ptr.byte_offset(48) })
+        s_GSP_SR_INIT_ARGUMENTS::new(unsafe { self.ptr.byte_offset(32) })
     }
 
     pub(crate) fn gpuInstance(self, fld: u32) -> Self {
-        self.store[60..64].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_gpuInstance(&self) -> u32 {
-        u32::from_le_bytes(self.store[60..64].try_into().unwrap())
+        u32::from_le_bytes(self.store[44..48].try_into().unwrap())
     }
     pub(crate) fn set_gpuInstance(&mut self, fld: u32) {
-        self.store[60..64].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn bDmemStack(self, fld: u8) -> Self {
+        self.store[48..49].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bDmemStack(&self) -> u8 {
+        u8::from_le_bytes(self.store[48..49].try_into().unwrap())
+    }
+    pub(crate) fn set_bDmemStack(&mut self, fld: u8) {
+        self.store[48..49].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn profilerArgs_pa(self, fld: u64) -> Self {
-        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_profilerArgs_pa(&self) -> u64 {
-        u64::from_le_bytes(self.store[64..72].try_into().unwrap())
+        u64::from_le_bytes(self.store[56..64].try_into().unwrap())
     }
     pub(crate) fn set_profilerArgs_pa(&mut self, fld: u64) {
-        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn profilerArgs_size(self, fld: u64) -> Self {
-        self.store[72..80].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_profilerArgs_size(&self) -> u64 {
-        u64::from_le_bytes(self.store[72..80].try_into().unwrap())
+        u64::from_le_bytes(self.store[64..72].try_into().unwrap())
     }
     pub(crate) fn set_profilerArgs_size(&mut self, fld: u64) {
-        self.store[72..80].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
     }
 }
 
@@ -2294,6 +2345,32 @@ impl<'s> s_rpc_os_error_log_v17_00<'s> {
     }
 }
 
+pub(crate) struct s_rpc_gsp_post_nocat_record_v01_00<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_rpc_gsp_post_nocat_record_v01_00<'s> {
+    pub(crate) const fn str_size() -> usize {
+        4
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 4) },
+    } }
+
+    pub(crate) fn data(self, fld: u32) -> Self {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_data(&self) -> u32 {
+        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    }
+    pub(crate) fn set_data(&mut self, fld: u32) {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+}
+
 pub(crate) struct s_rpc_unloading_guest_driver_v1F_07<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -2347,11 +2424,11 @@ pub(crate) struct s_rpc_rc_triggered_v17_02<'s> {
 
 impl<'s> s_rpc_rc_triggered_v17_02<'s> {
     pub(crate) const fn str_size() -> usize {
-        20
+        48
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 20) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 48) },
     } }
 
     pub(crate) fn nv2080EngineType(self, fld: u32) -> Self {
@@ -2374,87 +2451,105 @@ impl<'s> s_rpc_rc_triggered_v17_02<'s> {
     pub(crate) fn set_chid(&mut self, fld: u32) {
         self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn exceptType(self, fld: u32) -> Self {
+    pub(crate) fn gfid(self, fld: u32) -> Self {
         self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_gfid(&self) -> u32 {
+        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+    }
+    pub(crate) fn set_gfid(&mut self, fld: u32) {
+        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn exceptLevel(self, fld: u32) -> Self {
+        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_exceptLevel(&self) -> u32 {
+        u32::from_le_bytes(self.store[12..16].try_into().unwrap())
+    }
+    pub(crate) fn set_exceptLevel(&mut self, fld: u32) {
+        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn exceptType(self, fld: u32) -> Self {
+        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_exceptType(&self) -> u32 {
-        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+        u32::from_le_bytes(self.store[16..20].try_into().unwrap())
     }
     pub(crate) fn set_exceptType(&mut self, fld: u32) {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn scope(self, fld: u32) -> Self {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_scope(&self) -> u32 {
-        u32::from_le_bytes(self.store[12..16].try_into().unwrap())
+        u32::from_le_bytes(self.store[20..24].try_into().unwrap())
     }
     pub(crate) fn set_scope(&mut self, fld: u32) {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn partitionAttributionId(self, fld: u16) -> Self {
-        self.store[16..18].copy_from_slice(&u16::to_le_bytes(fld));
+        self.store[24..26].copy_from_slice(&u16::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_partitionAttributionId(&self) -> u16 {
-        u16::from_le_bytes(self.store[16..18].try_into().unwrap())
+        u16::from_le_bytes(self.store[24..26].try_into().unwrap())
     }
     pub(crate) fn set_partitionAttributionId(&mut self, fld: u16) {
-        self.store[16..18].copy_from_slice(&u16::to_le_bytes(fld));
+        self.store[24..26].copy_from_slice(&u16::to_le_bytes(fld));
     }
-}
-
-pub(crate) struct s_rpc_gsp_send_user_shared_data_v17_00<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_rpc_gsp_send_user_shared_data_v17_00<'s> {
-    pub(crate) const fn str_size() -> usize {
-        4
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 4) },
-    } }
-
-    pub(crate) fn data(self, fld: u32) -> Self {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn mmuFaultAddrLo(self, fld: u32) -> Self {
+        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_data(&self) -> u32 {
-        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    pub(crate) fn get_mmuFaultAddrLo(&self) -> u32 {
+        u32::from_le_bytes(self.store[28..32].try_into().unwrap())
     }
-    pub(crate) fn set_data(&mut self, fld: u32) {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_mmuFaultAddrLo(&mut self, fld: u32) {
+        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
     }
-}
-
-pub(crate) struct s_GspUserSharedData<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_GspUserSharedData<'s> {
-    pub(crate) const fn str_size() -> usize {
-        4
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 4) },
-    } }
-
-    pub(crate) fn gspAssertCount(self, fld: u32) -> Self {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn mmuFaultAddrHi(self, fld: u32) -> Self {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_gspAssertCount(&self) -> u32 {
-        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    pub(crate) fn get_mmuFaultAddrHi(&self) -> u32 {
+        u32::from_le_bytes(self.store[32..36].try_into().unwrap())
     }
-    pub(crate) fn set_gspAssertCount(&mut self, fld: u32) {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_mmuFaultAddrHi(&mut self, fld: u32) {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn mmuFaultType(self, fld: u32) -> Self {
+        self.store[36..40].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_mmuFaultType(&self) -> u32 {
+        u32::from_le_bytes(self.store[36..40].try_into().unwrap())
+    }
+    pub(crate) fn set_mmuFaultType(&mut self, fld: u32) {
+        self.store[36..40].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn bCallbackNeeded(self, fld: u8) -> Self {
+        self.store[40..41].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bCallbackNeeded(&self) -> u8 {
+        u8::from_le_bytes(self.store[40..41].try_into().unwrap())
+    }
+    pub(crate) fn set_bCallbackNeeded(&mut self, fld: u8) {
+        self.store[40..41].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn rcJournalBufferSize(self, fld: u32) -> Self {
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_rcJournalBufferSize(&self) -> u32 {
+        u32::from_le_bytes(self.store[44..48].try_into().unwrap())
+    }
+    pub(crate) fn set_rcJournalBufferSize(&mut self, fld: u32) {
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
     }
 }
 
@@ -2562,11 +2657,11 @@ pub(crate) struct s_ACPI_METHOD_DATA<'s> {
 
 impl<'s> s_ACPI_METHOD_DATA<'s> {
     pub(crate) const fn str_size() -> usize {
-        484
+        676
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 484) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 676) },
     } }
 
     pub(crate) fn bValid(self, fld: u8) -> Self {
@@ -2596,7 +2691,7 @@ impl<'s> s_ACPI_METHOD_DATA<'s> {
 
 
     pub(crate) fn new_S_capsMethodData(&mut self) -> s_CAPS_METHOD_DATA<'s> {
-        s_CAPS_METHOD_DATA::new(unsafe { self.ptr.byte_offset(476) })
+        s_CAPS_METHOD_DATA::new(unsafe { self.ptr.byte_offset(668) })
     }
 
 }
@@ -2769,11 +2864,11 @@ pub(crate) struct s_MUX_METHOD_DATA<'s> {
 
 impl<'s> s_MUX_METHOD_DATA<'s> {
     pub(crate) const fn str_size() -> usize {
-        388
+        580
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 388) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 580) },
     } }
 
     pub(crate) fn tableLen(self, fld: u32) -> Self {
@@ -2794,6 +2889,11 @@ impl<'s> s_MUX_METHOD_DATA<'s> {
 
     pub(crate) fn new_S_acpiIdMuxPartTable(&mut self, idx: isize) -> s_MUX_METHOD_DATA_ELEMENT<'s> {
         s_MUX_METHOD_DATA_ELEMENT::new(unsafe { self.ptr.byte_offset(idx * 12 + 196) })
+    }
+
+
+    pub(crate) fn new_S_acpiIdMuxStateTable(&mut self, idx: isize) -> s_MUX_METHOD_DATA_ELEMENT<'s> {
+        s_MUX_METHOD_DATA_ELEMENT::new(unsafe { self.ptr.byte_offset(idx * 12 + 388) })
     }
 
 }
@@ -2996,6 +3096,52 @@ impl<'s> s_GSP_VF_INFO<'s> {
     }
 }
 
+pub(crate) struct s_EcidManufacturingInfo<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_EcidManufacturingInfo<'s> {
+    pub(crate) const fn str_size() -> usize {
+        12
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 12) },
+    } }
+
+    pub(crate) fn ecidLow(self, fld: u32) -> Self {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_ecidLow(&self) -> u32 {
+        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    }
+    pub(crate) fn set_ecidLow(&mut self, fld: u32) {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn ecidHigh(self, fld: u32) -> Self {
+        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_ecidHigh(&self) -> u32 {
+        u32::from_le_bytes(self.store[4..8].try_into().unwrap())
+    }
+    pub(crate) fn set_ecidHigh(&mut self, fld: u32) {
+        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn ecidExtended(self, fld: u32) -> Self {
+        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_ecidExtended(&self) -> u32 {
+        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+    }
+    pub(crate) fn set_ecidExtended(&mut self, fld: u32) {
+        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+}
+
 pub(crate) struct s_GspStaticConfigInfo<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -3003,11 +3149,11 @@ pub(crate) struct s_GspStaticConfigInfo<'s> {
 
 impl<'s> s_GspStaticConfigInfo<'s> {
     pub(crate) const fn str_size() -> usize {
-        2168
+        1656
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 2168) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 1656) },
     } }
 
     pub(crate) fn grCapsBits(self, fld: [u8; 23]) -> Self {
@@ -3039,198 +3185,122 @@ impl<'s> s_GspStaticConfigInfo<'s> {
     }
 
 
-    pub(crate) fn new_S_gpcInfo(&mut self) -> s_NV2080_CTRL_GPU_GET_FERMI_GPC_INFO_PARAMS<'s> {
-        s_NV2080_CTRL_GPU_GET_FERMI_GPC_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(292) })
-    }
-
-
-    pub(crate) fn new_S_tpcInfo(&mut self, idx: isize) -> s_NV2080_CTRL_GPU_GET_FERMI_TPC_INFO_PARAMS<'s> {
-        s_NV2080_CTRL_GPU_GET_FERMI_TPC_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(idx * 8 + 296) })
-    }
-
-
-    pub(crate) fn new_S_zcullInfo(&mut self, idx: isize) -> s_NV2080_CTRL_GPU_GET_FERMI_ZCULL_INFO_PARAMS<'s> {
-        s_NV2080_CTRL_GPU_GET_FERMI_ZCULL_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(idx * 8 + 552) })
-    }
-
-
     pub(crate) fn new_S_SKUInfo(&mut self) -> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
-        s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(808) })
+        s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(292) })
     }
 
 
     pub(crate) fn new_S_fbRegionInfoParams(&mut self) -> s_NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_PARAMS<'s> {
-        s_NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(840) })
+        s_NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO_PARAMS::new(unsafe { self.ptr.byte_offset(344) })
     }
 
-    pub(crate) fn computeBranding(self, fld: u32) -> Self {
-        self.store[1616..1620].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_computeBranding(&self) -> u32 {
-        u32::from_le_bytes(self.store[1616..1620].try_into().unwrap())
-    }
-    pub(crate) fn set_computeBranding(&mut self, fld: u32) {
-        self.store[1616..1620].copy_from_slice(&u32::to_le_bytes(fld));
-    }
 
     pub(crate) fn new_S_sriovCaps(&mut self) -> s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS<'s> {
-        s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS::new(unsafe { self.ptr.byte_offset(1624) })
+        s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS::new(unsafe { self.ptr.byte_offset(1120) })
     }
 
     pub(crate) fn sriovMaxGfid(self, fld: u32) -> Self {
-        self.store[1696..1700].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1200..1204].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_sriovMaxGfid(&self) -> u32 {
-        u32::from_le_bytes(self.store[1696..1700].try_into().unwrap())
+        u32::from_le_bytes(self.store[1200..1204].try_into().unwrap())
     }
     pub(crate) fn set_sriovMaxGfid(&mut self, fld: u32) {
-        self.store[1696..1700].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1200..1204].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn engineCaps(self, fld: [u32; 2]) -> Self {
-        let mut byte_data = [0u8; 8];
-        for i in 0..2 {
+    pub(crate) fn engineCaps(self, fld: [u32; 3]) -> Self {
+        let mut byte_data = [0u8; 12];
+        for i in 0..3 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[1700..1708].copy_from_slice(&byte_data);
+        self.store[1204..1216].copy_from_slice(&byte_data);
     self }
-    pub(crate) fn set_engineCaps(&mut self, fld: [u32; 2]) {
-        let mut byte_data = [0u8; 8];
-        for i in 0..2 {
+    pub(crate) fn set_engineCaps(&mut self, fld: [u32; 3]) {
+        let mut byte_data = [0u8; 12];
+        for i in 0..3 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[1700..1708].copy_from_slice(&byte_data);
+        self.store[1204..1216].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_engineCaps(&mut self) -> [u32; 2] {
-        let mut array = [0u32; 2];
-        for (i, chunk) in self.store[1700..1708].chunks_exact(4).enumerate() {
+    pub(crate) fn get_engineCaps(&mut self) -> [u32; 3] {
+        let mut array = [0u32; 3];
+        for (i, chunk) in self.store[1204..1216].chunks_exact(4).enumerate() {
             array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
-
-    pub(crate) fn new_S_SM_info(&mut self) -> s_GspSMInfo<'s> {
-        s_GspSMInfo::new(unsafe { self.ptr.byte_offset(1708) })
-    }
-
     pub(crate) fn poisonFuseEnabled(self, fld: u8) -> Self {
-        self.store[1744..1745].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1216..1217].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_poisonFuseEnabled(&self) -> u8 {
-        u8::from_le_bytes(self.store[1744..1745].try_into().unwrap())
+        u8::from_le_bytes(self.store[1216..1217].try_into().unwrap())
     }
     pub(crate) fn set_poisonFuseEnabled(&mut self, fld: u8) {
-        self.store[1744..1745].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1216..1217].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn fb_length(self, fld: u64) -> Self {
-        self.store[1752..1760].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1224..1232].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_fb_length(&self) -> u64 {
-        u64::from_le_bytes(self.store[1752..1760].try_into().unwrap())
+        u64::from_le_bytes(self.store[1224..1232].try_into().unwrap())
     }
     pub(crate) fn set_fb_length(&mut self, fld: u64) {
-        self.store[1752..1760].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1224..1232].copy_from_slice(&u64::to_le_bytes(fld));
     }
-    pub(crate) fn fbio_mask(self, fld: u32) -> Self {
-        self.store[1760..1764].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn fbio_mask(self, fld: u64) -> Self {
+        self.store[1232..1240].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_fbio_mask(&self) -> u32 {
-        u32::from_le_bytes(self.store[1760..1764].try_into().unwrap())
+    pub(crate) fn get_fbio_mask(&self) -> u64 {
+        u64::from_le_bytes(self.store[1232..1240].try_into().unwrap())
     }
-    pub(crate) fn set_fbio_mask(&mut self, fld: u32) {
-        self.store[1760..1764].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_fbio_mask(&mut self, fld: u64) {
+        self.store[1232..1240].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn fb_bus_width(self, fld: u32) -> Self {
-        self.store[1764..1768].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1240..1244].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_fb_bus_width(&self) -> u32 {
-        u32::from_le_bytes(self.store[1764..1768].try_into().unwrap())
+        u32::from_le_bytes(self.store[1240..1244].try_into().unwrap())
     }
     pub(crate) fn set_fb_bus_width(&mut self, fld: u32) {
-        self.store[1764..1768].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1240..1244].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn fb_ram_type(self, fld: u32) -> Self {
-        self.store[1768..1772].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1244..1248].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_fb_ram_type(&self) -> u32 {
-        u32::from_le_bytes(self.store[1768..1772].try_into().unwrap())
+        u32::from_le_bytes(self.store[1244..1248].try_into().unwrap())
     }
     pub(crate) fn set_fb_ram_type(&mut self, fld: u32) {
-        self.store[1768..1772].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1244..1248].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn fbp_mask(self, fld: u32) -> Self {
-        self.store[1772..1776].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn fbp_mask(self, fld: u64) -> Self {
+        self.store[1248..1256].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_fbp_mask(&self) -> u32 {
-        u32::from_le_bytes(self.store[1772..1776].try_into().unwrap())
+    pub(crate) fn get_fbp_mask(&self) -> u64 {
+        u64::from_le_bytes(self.store[1248..1256].try_into().unwrap())
     }
-    pub(crate) fn set_fbp_mask(&mut self, fld: u32) {
-        self.store[1772..1776].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_fbp_mask(&mut self, fld: u64) {
+        self.store[1248..1256].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn l2_cache_size(self, fld: u32) -> Self {
-        self.store[1776..1780].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1256..1260].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_l2_cache_size(&self) -> u32 {
-        u32::from_le_bytes(self.store[1776..1780].try_into().unwrap())
+        u32::from_le_bytes(self.store[1256..1260].try_into().unwrap())
     }
     pub(crate) fn set_l2_cache_size(&mut self, fld: u32) {
-        self.store[1776..1780].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn gfxpBufferSize(self, fld: [u32; 5]) -> Self {
-        let mut byte_data = [0u8; 20];
-        for i in 0..5 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
-        }
-        self.store[1780..1800].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_gfxpBufferSize(&mut self, fld: [u32; 5]) {
-        let mut byte_data = [0u8; 20];
-        for i in 0..5 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
-        }
-        self.store[1780..1800].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_gfxpBufferSize(&mut self) -> [u32; 5] {
-        let mut array = [0u32; 5];
-        for (i, chunk) in self.store[1780..1800].chunks_exact(4).enumerate() {
-            array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
-    }
-    pub(crate) fn gfxpBufferAlignment(self, fld: [u32; 5]) -> Self {
-        let mut byte_data = [0u8; 20];
-        for i in 0..5 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
-        }
-        self.store[1800..1820].copy_from_slice(&byte_data);
-    self }
-    pub(crate) fn set_gfxpBufferAlignment(&mut self, fld: [u32; 5]) {
-        let mut byte_data = [0u8; 20];
-        for i in 0..5 {
-            let bytes = fld[i].to_le_bytes();
-            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
-        }
-        self.store[1800..1820].copy_from_slice(&byte_data);
-    }
-    pub(crate) fn get_gfxpBufferAlignment(&mut self) -> [u32; 5] {
-        let mut array = [0u32; 5];
-        for (i, chunk) in self.store[1800..1820].chunks_exact(4).enumerate() {
-            array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
-        }
-        array
+        self.store[1256..1260].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn gpuNameString(self, fld: [u8; 64]) -> Self {
         let mut byte_data = [0u8; 64];
@@ -3238,7 +3308,7 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[1820..1884].copy_from_slice(&byte_data);
+        self.store[1260..1324].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_gpuNameString(&mut self, fld: [u8; 64]) {
         let mut byte_data = [0u8; 64];
@@ -3246,11 +3316,11 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[1820..1884].copy_from_slice(&byte_data);
+        self.store[1260..1324].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_gpuNameString(&mut self) -> [u8; 64] {
         let mut array = [0u8; 64];
-        for (i, chunk) in self.store[1820..1884].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[1260..1324].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -3261,7 +3331,7 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[1884..1948].copy_from_slice(&byte_data);
+        self.store[1324..1388].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_gpuShortNameString(&mut self, fld: [u8; 64]) {
         let mut byte_data = [0u8; 64];
@@ -3269,11 +3339,11 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[1884..1948].copy_from_slice(&byte_data);
+        self.store[1324..1388].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_gpuShortNameString(&mut self) -> [u8; 64] {
         let mut array = [0u8; 64];
-        for (i, chunk) in self.store[1884..1948].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[1324..1388].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -3284,7 +3354,7 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 2)..((i + 1) * 2)].copy_from_slice(&bytes);
         }
-        self.store[1948..2076].copy_from_slice(&byte_data);
+        self.store[1388..1516].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_gpuNameString_Unicode(&mut self, fld: [u16; 64]) {
         let mut byte_data = [0u8; 128];
@@ -3292,295 +3362,355 @@ impl<'s> s_GspStaticConfigInfo<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 2)..((i + 1) * 2)].copy_from_slice(&bytes);
         }
-        self.store[1948..2076].copy_from_slice(&byte_data);
+        self.store[1388..1516].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_gpuNameString_Unicode(&mut self) -> [u16; 64] {
         let mut array = [0u16; 64];
-        for (i, chunk) in self.store[1948..2076].chunks_exact(2).enumerate() {
+        for (i, chunk) in self.store[1388..1516].chunks_exact(2).enumerate() {
             array[i] = u16::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
     pub(crate) fn bGpuInternalSku(self, fld: u8) -> Self {
-        self.store[2076..2077].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1516..1517].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bGpuInternalSku(&self) -> u8 {
-        u8::from_le_bytes(self.store[2076..2077].try_into().unwrap())
+        u8::from_le_bytes(self.store[1516..1517].try_into().unwrap())
     }
     pub(crate) fn set_bGpuInternalSku(&mut self, fld: u8) {
-        self.store[2076..2077].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1516..1517].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsQuadroGeneric(self, fld: u8) -> Self {
-        self.store[2077..2078].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1517..1518].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsQuadroGeneric(&self) -> u8 {
-        u8::from_le_bytes(self.store[2077..2078].try_into().unwrap())
+        u8::from_le_bytes(self.store[1517..1518].try_into().unwrap())
     }
     pub(crate) fn set_bIsQuadroGeneric(&mut self, fld: u8) {
-        self.store[2077..2078].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1517..1518].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsQuadroAd(self, fld: u8) -> Self {
-        self.store[2078..2079].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1518..1519].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsQuadroAd(&self) -> u8 {
-        u8::from_le_bytes(self.store[2078..2079].try_into().unwrap())
+        u8::from_le_bytes(self.store[1518..1519].try_into().unwrap())
     }
     pub(crate) fn set_bIsQuadroAd(&mut self, fld: u8) {
-        self.store[2078..2079].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1518..1519].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsNvidiaNvs(self, fld: u8) -> Self {
-        self.store[2079..2080].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1519..1520].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsNvidiaNvs(&self) -> u8 {
-        u8::from_le_bytes(self.store[2079..2080].try_into().unwrap())
+        u8::from_le_bytes(self.store[1519..1520].try_into().unwrap())
     }
     pub(crate) fn set_bIsNvidiaNvs(&mut self, fld: u8) {
-        self.store[2079..2080].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1519..1520].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsVgx(self, fld: u8) -> Self {
-        self.store[2080..2081].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1520..1521].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsVgx(&self) -> u8 {
-        u8::from_le_bytes(self.store[2080..2081].try_into().unwrap())
+        u8::from_le_bytes(self.store[1520..1521].try_into().unwrap())
     }
     pub(crate) fn set_bIsVgx(&mut self, fld: u8) {
-        self.store[2080..2081].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1520..1521].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bGeforceSmb(self, fld: u8) -> Self {
-        self.store[2081..2082].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1521..1522].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bGeforceSmb(&self) -> u8 {
-        u8::from_le_bytes(self.store[2081..2082].try_into().unwrap())
+        u8::from_le_bytes(self.store[1521..1522].try_into().unwrap())
     }
     pub(crate) fn set_bGeforceSmb(&mut self, fld: u8) {
-        self.store[2081..2082].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1521..1522].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsTitan(self, fld: u8) -> Self {
-        self.store[2082..2083].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1522..1523].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsTitan(&self) -> u8 {
-        u8::from_le_bytes(self.store[2082..2083].try_into().unwrap())
+        u8::from_le_bytes(self.store[1522..1523].try_into().unwrap())
     }
     pub(crate) fn set_bIsTitan(&mut self, fld: u8) {
-        self.store[2082..2083].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1522..1523].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsTesla(self, fld: u8) -> Self {
-        self.store[2083..2084].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1523..1524].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsTesla(&self) -> u8 {
-        u8::from_le_bytes(self.store[2083..2084].try_into().unwrap())
+        u8::from_le_bytes(self.store[1523..1524].try_into().unwrap())
     }
     pub(crate) fn set_bIsTesla(&mut self, fld: u8) {
-        self.store[2083..2084].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1523..1524].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsMobile(self, fld: u8) -> Self {
-        self.store[2084..2085].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1524..1525].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsMobile(&self) -> u8 {
-        u8::from_le_bytes(self.store[2084..2085].try_into().unwrap())
+        u8::from_le_bytes(self.store[1524..1525].try_into().unwrap())
     }
     pub(crate) fn set_bIsMobile(&mut self, fld: u8) {
-        self.store[2084..2085].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1524..1525].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsGc6Rtd3Allowed(self, fld: u8) -> Self {
-        self.store[2085..2086].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1525..1526].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsGc6Rtd3Allowed(&self) -> u8 {
-        u8::from_le_bytes(self.store[2085..2086].try_into().unwrap())
+        u8::from_le_bytes(self.store[1525..1526].try_into().unwrap())
     }
     pub(crate) fn set_bIsGc6Rtd3Allowed(&mut self, fld: u8) {
-        self.store[2085..2086].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1525..1526].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bIsGc8Rtd3Allowed(self, fld: u8) -> Self {
+        self.store[1526..1527].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bIsGc8Rtd3Allowed(&self) -> u8 {
+        u8::from_le_bytes(self.store[1526..1527].try_into().unwrap())
+    }
+    pub(crate) fn set_bIsGc8Rtd3Allowed(&mut self, fld: u8) {
+        self.store[1526..1527].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsGcOffRtd3Allowed(self, fld: u8) -> Self {
-        self.store[2086..2087].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1527..1528].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsGcOffRtd3Allowed(&self) -> u8 {
-        u8::from_le_bytes(self.store[2086..2087].try_into().unwrap())
+        u8::from_le_bytes(self.store[1527..1528].try_into().unwrap())
     }
     pub(crate) fn set_bIsGcOffRtd3Allowed(&mut self, fld: u8) {
-        self.store[2086..2087].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1527..1528].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsGcoffLegacyAllowed(self, fld: u8) -> Self {
-        self.store[2087..2088].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1528..1529].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsGcoffLegacyAllowed(&self) -> u8 {
-        u8::from_le_bytes(self.store[2087..2088].try_into().unwrap())
+        u8::from_le_bytes(self.store[1528..1529].try_into().unwrap())
     }
     pub(crate) fn set_bIsGcoffLegacyAllowed(&mut self, fld: u8) {
-        self.store[2087..2088].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1528..1529].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bIsMigSupported(self, fld: u8) -> Self {
+        self.store[1529..1530].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bIsMigSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[1529..1530].try_into().unwrap())
+    }
+    pub(crate) fn set_bIsMigSupported(&mut self, fld: u8) {
+        self.store[1529..1530].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn RTD3GC6TotalBoardPower(self, fld: u16) -> Self {
+        self.store[1530..1532].copy_from_slice(&u16::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_RTD3GC6TotalBoardPower(&self) -> u16 {
+        u16::from_le_bytes(self.store[1530..1532].try_into().unwrap())
+    }
+    pub(crate) fn set_RTD3GC6TotalBoardPower(&mut self, fld: u16) {
+        self.store[1530..1532].copy_from_slice(&u16::to_le_bytes(fld));
+    }
+    pub(crate) fn RTD3GC6PerstDelay(self, fld: u16) -> Self {
+        self.store[1532..1534].copy_from_slice(&u16::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_RTD3GC6PerstDelay(&self) -> u16 {
+        u16::from_le_bytes(self.store[1532..1534].try_into().unwrap())
+    }
+    pub(crate) fn set_RTD3GC6PerstDelay(&mut self, fld: u16) {
+        self.store[1532..1534].copy_from_slice(&u16::to_le_bytes(fld));
     }
     pub(crate) fn bar1PdeBase(self, fld: u64) -> Self {
-        self.store[2088..2096].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1536..1544].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bar1PdeBase(&self) -> u64 {
-        u64::from_le_bytes(self.store[2088..2096].try_into().unwrap())
+        u64::from_le_bytes(self.store[1536..1544].try_into().unwrap())
     }
     pub(crate) fn set_bar1PdeBase(&mut self, fld: u64) {
-        self.store[2088..2096].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1536..1544].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn bar2PdeBase(self, fld: u64) -> Self {
-        self.store[2096..2104].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1544..1552].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bar2PdeBase(&self) -> u64 {
-        u64::from_le_bytes(self.store[2096..2104].try_into().unwrap())
+        u64::from_le_bytes(self.store[1544..1552].try_into().unwrap())
     }
     pub(crate) fn set_bar2PdeBase(&mut self, fld: u64) {
-        self.store[2096..2104].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1544..1552].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn bVbiosValid(self, fld: u8) -> Self {
-        self.store[2104..2105].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1552..1553].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bVbiosValid(&self) -> u8 {
-        u8::from_le_bytes(self.store[2104..2105].try_into().unwrap())
+        u8::from_le_bytes(self.store[1552..1553].try_into().unwrap())
     }
     pub(crate) fn set_bVbiosValid(&mut self, fld: u8) {
-        self.store[2104..2105].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1552..1553].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn vbiosSubVendor(self, fld: u32) -> Self {
-        self.store[2108..2112].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1556..1560].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_vbiosSubVendor(&self) -> u32 {
-        u32::from_le_bytes(self.store[2108..2112].try_into().unwrap())
+        u32::from_le_bytes(self.store[1556..1560].try_into().unwrap())
     }
     pub(crate) fn set_vbiosSubVendor(&mut self, fld: u32) {
-        self.store[2108..2112].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1556..1560].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn vbiosSubDevice(self, fld: u32) -> Self {
-        self.store[2112..2116].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1560..1564].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_vbiosSubDevice(&self) -> u32 {
-        u32::from_le_bytes(self.store[2112..2116].try_into().unwrap())
+        u32::from_le_bytes(self.store[1560..1564].try_into().unwrap())
     }
     pub(crate) fn set_vbiosSubDevice(&mut self, fld: u32) {
-        self.store[2112..2116].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1560..1564].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bPageRetirementSupported(self, fld: u8) -> Self {
-        self.store[2116..2117].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1564..1565].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bPageRetirementSupported(&self) -> u8 {
-        u8::from_le_bytes(self.store[2116..2117].try_into().unwrap())
+        u8::from_le_bytes(self.store[1564..1565].try_into().unwrap())
     }
     pub(crate) fn set_bPageRetirementSupported(&mut self, fld: u8) {
-        self.store[2116..2117].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1564..1565].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bSplitVasBetweenServerClientRm(self, fld: u8) -> Self {
-        self.store[2117..2118].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1565..1566].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bSplitVasBetweenServerClientRm(&self) -> u8 {
-        u8::from_le_bytes(self.store[2117..2118].try_into().unwrap())
+        u8::from_le_bytes(self.store[1565..1566].try_into().unwrap())
     }
     pub(crate) fn set_bSplitVasBetweenServerClientRm(&mut self, fld: u8) {
-        self.store[2117..2118].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1565..1566].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bClRootportNeedsNosnoopWAR(self, fld: u8) -> Self {
-        self.store[2118..2119].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1566..1567].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bClRootportNeedsNosnoopWAR(&self) -> u8 {
-        u8::from_le_bytes(self.store[2118..2119].try_into().unwrap())
+        u8::from_le_bytes(self.store[1566..1567].try_into().unwrap())
     }
     pub(crate) fn set_bClRootportNeedsNosnoopWAR(&mut self, fld: u8) {
-        self.store[2118..2119].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1566..1567].copy_from_slice(&u8::to_le_bytes(fld));
     }
 
     pub(crate) fn new_S_displaylessMaxHeads(&mut self) -> s_VIRTUAL_DISPLAY_GET_NUM_HEADS_PARAMS<'s> {
-        s_VIRTUAL_DISPLAY_GET_NUM_HEADS_PARAMS::new(unsafe { self.ptr.byte_offset(2120) })
+        s_VIRTUAL_DISPLAY_GET_NUM_HEADS_PARAMS::new(unsafe { self.ptr.byte_offset(1568) })
     }
 
 
     pub(crate) fn new_S_displaylessMaxResolution(&mut self) -> s_VIRTUAL_DISPLAY_GET_MAX_RESOLUTION_PARAMS<'s> {
-        s_VIRTUAL_DISPLAY_GET_MAX_RESOLUTION_PARAMS::new(unsafe { self.ptr.byte_offset(2128) })
+        s_VIRTUAL_DISPLAY_GET_MAX_RESOLUTION_PARAMS::new(unsafe { self.ptr.byte_offset(1576) })
     }
 
     pub(crate) fn displaylessMaxPixels(self, fld: u64) -> Self {
-        self.store[2144..2152].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1592..1600].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_displaylessMaxPixels(&self) -> u64 {
-        u64::from_le_bytes(self.store[2144..2152].try_into().unwrap())
+        u64::from_le_bytes(self.store[1592..1600].try_into().unwrap())
     }
     pub(crate) fn set_displaylessMaxPixels(&mut self, fld: u64) {
-        self.store[2144..2152].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[1592..1600].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn hInternalClient(self, fld: u32) -> Self {
-        self.store[2152..2156].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1600..1604].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hInternalClient(&self) -> u32 {
-        u32::from_le_bytes(self.store[2152..2156].try_into().unwrap())
+        u32::from_le_bytes(self.store[1600..1604].try_into().unwrap())
     }
     pub(crate) fn set_hInternalClient(&mut self, fld: u32) {
-        self.store[2152..2156].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1600..1604].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn hInternalDevice(self, fld: u32) -> Self {
-        self.store[2156..2160].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1604..1608].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hInternalDevice(&self) -> u32 {
-        u32::from_le_bytes(self.store[2156..2160].try_into().unwrap())
+        u32::from_le_bytes(self.store[1604..1608].try_into().unwrap())
     }
     pub(crate) fn set_hInternalDevice(&mut self, fld: u32) {
-        self.store[2156..2160].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1604..1608].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn hInternalSubdevice(self, fld: u32) -> Self {
-        self.store[2160..2164].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1608..1612].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hInternalSubdevice(&self) -> u32 {
-        u32::from_le_bytes(self.store[2160..2164].try_into().unwrap())
+        u32::from_le_bytes(self.store[1608..1612].try_into().unwrap())
     }
     pub(crate) fn set_hInternalSubdevice(&mut self, fld: u32) {
-        self.store[2160..2164].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[1608..1612].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bSelfHostedMode(self, fld: u8) -> Self {
-        self.store[2164..2165].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1612..1613].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bSelfHostedMode(&self) -> u8 {
-        u8::from_le_bytes(self.store[2164..2165].try_into().unwrap())
+        u8::from_le_bytes(self.store[1612..1613].try_into().unwrap())
     }
     pub(crate) fn set_bSelfHostedMode(&mut self, fld: u8) {
-        self.store[2164..2165].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1612..1613].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bAtsSupported(self, fld: u8) -> Self {
-        self.store[2165..2166].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1613..1614].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bAtsSupported(&self) -> u8 {
-        u8::from_le_bytes(self.store[2165..2166].try_into().unwrap())
+        u8::from_le_bytes(self.store[1613..1614].try_into().unwrap())
     }
     pub(crate) fn set_bAtsSupported(&mut self, fld: u8) {
-        self.store[2165..2166].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1613..1614].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bIsGpuUefi(self, fld: u8) -> Self {
-        self.store[2166..2167].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1614..1615].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsGpuUefi(&self) -> u8 {
-        u8::from_le_bytes(self.store[2166..2167].try_into().unwrap())
+        u8::from_le_bytes(self.store[1614..1615].try_into().unwrap())
     }
     pub(crate) fn set_bIsGpuUefi(&mut self, fld: u8) {
-        self.store[2166..2167].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[1614..1615].copy_from_slice(&u8::to_le_bytes(fld));
     }
+    pub(crate) fn bIsEfiInit(self, fld: u8) -> Self {
+        self.store[1615..1616].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bIsEfiInit(&self) -> u8 {
+        u8::from_le_bytes(self.store[1615..1616].try_into().unwrap())
+    }
+    pub(crate) fn set_bIsEfiInit(&mut self, fld: u8) {
+        self.store[1615..1616].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+
+    pub(crate) fn new_S_ecidInfo(&mut self, idx: isize) -> s_EcidManufacturingInfo<'s> {
+        s_EcidManufacturingInfo::new(unsafe { self.ptr.byte_offset(idx * 12 + 1616) })
+    }
+
+
+    pub(crate) fn new_S_fwWprLayoutOffset(&mut self) -> s_FW_WPR_LAYOUT_OFFSET<'s> {
+        s_FW_WPR_LAYOUT_OFFSET::new(unsafe { self.ptr.byte_offset(1640) })
+    }
+
 }
 
 pub(crate) struct s_NV2080_CTRL_GPU_GET_GID_INFO_PARAMS<'s> {
@@ -3695,11 +3825,11 @@ pub(crate) struct s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
 
 impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        32
+        48
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 32) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 48) },
     } }
 
     pub(crate) fn BoardID(self, fld: u32) -> Self {
@@ -3712,51 +3842,61 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
     pub(crate) fn set_BoardID(&mut self, fld: u32) {
         self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn chipSKU(self, fld: [u8; 4]) -> Self {
-        let mut byte_data = [0u8; 4];
-        for i in 0..4 {
+    pub(crate) fn chipSKU(self, fld: [u8; 9]) -> Self {
+        let mut byte_data = [0u8; 9];
+        for i in 0..9 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[4..8].copy_from_slice(&byte_data);
+        self.store[4..13].copy_from_slice(&byte_data);
     self }
-    pub(crate) fn set_chipSKU(&mut self, fld: [u8; 4]) {
-        let mut byte_data = [0u8; 4];
-        for i in 0..4 {
+    pub(crate) fn set_chipSKU(&mut self, fld: [u8; 9]) {
+        let mut byte_data = [0u8; 9];
+        for i in 0..9 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[4..8].copy_from_slice(&byte_data);
+        self.store[4..13].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_chipSKU(&mut self) -> [u8; 4] {
-        let mut array = [0u8; 4];
-        for (i, chunk) in self.store[4..8].chunks_exact(1).enumerate() {
+    pub(crate) fn get_chipSKU(&mut self) -> [u8; 9] {
+        let mut array = [0u8; 9];
+        for (i, chunk) in self.store[4..13].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
-    pub(crate) fn chipSKUMod(self, fld: [u8; 2]) -> Self {
-        let mut byte_data = [0u8; 2];
-        for i in 0..2 {
+    pub(crate) fn chipSKUMod(self, fld: [u8; 5]) -> Self {
+        let mut byte_data = [0u8; 5];
+        for i in 0..5 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[8..10].copy_from_slice(&byte_data);
+        self.store[13..18].copy_from_slice(&byte_data);
     self }
-    pub(crate) fn set_chipSKUMod(&mut self, fld: [u8; 2]) {
-        let mut byte_data = [0u8; 2];
-        for i in 0..2 {
+    pub(crate) fn set_chipSKUMod(&mut self, fld: [u8; 5]) {
+        let mut byte_data = [0u8; 5];
+        for i in 0..5 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[8..10].copy_from_slice(&byte_data);
+        self.store[13..18].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_chipSKUMod(&mut self) -> [u8; 2] {
-        let mut array = [0u8; 2];
-        for (i, chunk) in self.store[8..10].chunks_exact(1).enumerate() {
+    pub(crate) fn get_chipSKUMod(&mut self) -> [u8; 5] {
+        let mut array = [0u8; 5];
+        for (i, chunk) in self.store[13..18].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
+    }
+    pub(crate) fn skuConfigVersion(self, fld: u32) -> Self {
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_skuConfigVersion(&self) -> u32 {
+        u32::from_le_bytes(self.store[20..24].try_into().unwrap())
+    }
+    pub(crate) fn set_skuConfigVersion(&mut self, fld: u32) {
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn project(self, fld: [u8; 5]) -> Self {
         let mut byte_data = [0u8; 5];
@@ -3764,7 +3904,7 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[10..15].copy_from_slice(&byte_data);
+        self.store[24..29].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_project(&mut self, fld: [u8; 5]) {
         let mut byte_data = [0u8; 5];
@@ -3772,11 +3912,11 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[10..15].copy_from_slice(&byte_data);
+        self.store[24..29].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_project(&mut self) -> [u8; 5] {
         let mut array = [0u8; 5];
-        for (i, chunk) in self.store[10..15].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[24..29].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -3787,7 +3927,7 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[15..20].copy_from_slice(&byte_data);
+        self.store[29..34].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_projectSKU(&mut self, fld: [u8; 5]) {
         let mut byte_data = [0u8; 5];
@@ -3795,11 +3935,11 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[15..20].copy_from_slice(&byte_data);
+        self.store[29..34].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_projectSKU(&mut self) -> [u8; 5] {
         let mut array = [0u8; 5];
-        for (i, chunk) in self.store[15..20].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[29..34].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -3810,7 +3950,7 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[20..26].copy_from_slice(&byte_data);
+        self.store[34..40].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_CDP(&mut self, fld: [u8; 6]) {
         let mut byte_data = [0u8; 6];
@@ -3818,11 +3958,11 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[20..26].copy_from_slice(&byte_data);
+        self.store[34..40].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_CDP(&mut self) -> [u8; 6] {
         let mut array = [0u8; 6];
-        for (i, chunk) in self.store[20..26].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[34..40].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -3833,7 +3973,7 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[26..28].copy_from_slice(&byte_data);
+        self.store[40..42].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_projectSKUMod(&mut self, fld: [u8; 2]) {
         let mut byte_data = [0u8; 2];
@@ -3841,24 +3981,24 @@ impl<'s> s_NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS<'s> {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 1)..((i + 1) * 1)].copy_from_slice(&bytes);
         }
-        self.store[26..28].copy_from_slice(&byte_data);
+        self.store[40..42].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_projectSKUMod(&mut self) -> [u8; 2] {
         let mut array = [0u8; 2];
-        for (i, chunk) in self.store[26..28].chunks_exact(1).enumerate() {
+        for (i, chunk) in self.store[40..42].chunks_exact(1).enumerate() {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
     pub(crate) fn businessCycle(self, fld: u32) -> Self {
-        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_businessCycle(&self) -> u32 {
-        u32::from_le_bytes(self.store[28..32].try_into().unwrap())
+        u32::from_le_bytes(self.store[44..48].try_into().unwrap())
     }
     pub(crate) fn set_businessCycle(&mut self, fld: u32) {
-        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
     }
 }
 
@@ -4009,11 +4149,11 @@ pub(crate) struct s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS<'s> {
 
 impl<'s> s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        72
+        80
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 72) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 80) },
     } }
 
     pub(crate) fn totalVFs(self, fld: u32) -> Self {
@@ -4176,6 +4316,26 @@ impl<'s> s_NV0080_CTRL_GPU_GET_SRIOV_CAPS_PARAMS<'s> {
     pub(crate) fn set_bClientRmAllocatedCtxBuffer(&mut self, fld: u8) {
         self.store[70..71].copy_from_slice(&u8::to_le_bytes(fld));
     }
+    pub(crate) fn bNonPowerOf2ChannelCountSupported(self, fld: u8) -> Self {
+        self.store[71..72].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bNonPowerOf2ChannelCountSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[71..72].try_into().unwrap())
+    }
+    pub(crate) fn set_bNonPowerOf2ChannelCountSupported(&mut self, fld: u8) {
+        self.store[71..72].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bVfResizableBAR1Supported(self, fld: u8) -> Self {
+        self.store[72..73].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bVfResizableBAR1Supported(&self) -> u8 {
+        u8::from_le_bytes(self.store[72..73].try_into().unwrap())
+    }
+    pub(crate) fn set_bVfResizableBAR1Supported(&mut self, fld: u8) {
+        self.store[72..73].copy_from_slice(&u8::to_le_bytes(fld));
+    }
 }
 
 pub(crate) struct s_NV2080_CTRL_INTERNAL_ENGINE_CONTEXT_BUFFER_INFO<'s> {
@@ -4296,112 +4456,6 @@ impl<'s> s_VIRTUAL_DISPLAY_GET_NUM_HEADS_PARAMS<'s> {
     }
 }
 
-pub(crate) struct s_GspSMInfo<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_GspSMInfo<'s> {
-    pub(crate) const fn str_size() -> usize {
-        36
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 36) },
-    } }
-
-    pub(crate) fn version(self, fld: u32) -> Self {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_version(&self) -> u32 {
-        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
-    }
-    pub(crate) fn set_version(&mut self, fld: u32) {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn regBankCount(self, fld: u32) -> Self {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_regBankCount(&self) -> u32 {
-        u32::from_le_bytes(self.store[4..8].try_into().unwrap())
-    }
-    pub(crate) fn set_regBankCount(&mut self, fld: u32) {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn regBankRegCount(self, fld: u32) -> Self {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_regBankRegCount(&self) -> u32 {
-        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
-    }
-    pub(crate) fn set_regBankRegCount(&mut self, fld: u32) {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn maxWarpsPerSM(self, fld: u32) -> Self {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_maxWarpsPerSM(&self) -> u32 {
-        u32::from_le_bytes(self.store[12..16].try_into().unwrap())
-    }
-    pub(crate) fn set_maxWarpsPerSM(&mut self, fld: u32) {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn maxThreadsPerWarp(self, fld: u32) -> Self {
-        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_maxThreadsPerWarp(&self) -> u32 {
-        u32::from_le_bytes(self.store[16..20].try_into().unwrap())
-    }
-    pub(crate) fn set_maxThreadsPerWarp(&mut self, fld: u32) {
-        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn geomGsObufEntries(self, fld: u32) -> Self {
-        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_geomGsObufEntries(&self) -> u32 {
-        u32::from_le_bytes(self.store[20..24].try_into().unwrap())
-    }
-    pub(crate) fn set_geomGsObufEntries(&mut self, fld: u32) {
-        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn geomXbufEntries(self, fld: u32) -> Self {
-        self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_geomXbufEntries(&self) -> u32 {
-        u32::from_le_bytes(self.store[24..28].try_into().unwrap())
-    }
-    pub(crate) fn set_geomXbufEntries(&mut self, fld: u32) {
-        self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn maxSPPerSM(self, fld: u32) -> Self {
-        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_maxSPPerSM(&self) -> u32 {
-        u32::from_le_bytes(self.store[28..32].try_into().unwrap())
-    }
-    pub(crate) fn set_maxSPPerSM(&mut self, fld: u32) {
-        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn rtCoreCount(self, fld: u32) -> Self {
-        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_rtCoreCount(&self) -> u32 {
-        u32::from_le_bytes(self.store[32..36].try_into().unwrap())
-    }
-    pub(crate) fn set_rtCoreCount(&mut self, fld: u32) {
-        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-}
-
 pub(crate) struct s_GspSystemInfo<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -4409,11 +4463,11 @@ pub(crate) struct s_GspSystemInfo<'s> {
 
 impl<'s> s_GspSystemInfo<'s> {
     pub(crate) const fn str_size() -> usize {
-        664
+        920
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 664) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 920) },
     } }
 
     pub(crate) fn gpuPhysAddr(self, fld: u64) -> Self {
@@ -4446,226 +4500,421 @@ impl<'s> s_GspSystemInfo<'s> {
     pub(crate) fn set_gpuPhysInstAddr(&mut self, fld: u64) {
         self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
     }
-    pub(crate) fn nvDomainBusDeviceFunc(self, fld: u64) -> Self {
+    pub(crate) fn gpuPhysIoAddr(self, fld: u64) -> Self {
         self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_gpuPhysIoAddr(&self) -> u64 {
+        u64::from_le_bytes(self.store[24..32].try_into().unwrap())
+    }
+    pub(crate) fn set_gpuPhysIoAddr(&mut self, fld: u64) {
+        self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn nvDomainBusDeviceFunc(self, fld: u64) -> Self {
+        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_nvDomainBusDeviceFunc(&self) -> u64 {
-        u64::from_le_bytes(self.store[24..32].try_into().unwrap())
+        u64::from_le_bytes(self.store[32..40].try_into().unwrap())
     }
     pub(crate) fn set_nvDomainBusDeviceFunc(&mut self, fld: u64) {
-        self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn simAccessBufPhysAddr(self, fld: u64) -> Self {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_simAccessBufPhysAddr(&self) -> u64 {
-        u64::from_le_bytes(self.store[32..40].try_into().unwrap())
+        u64::from_le_bytes(self.store[40..48].try_into().unwrap())
     }
     pub(crate) fn set_simAccessBufPhysAddr(&mut self, fld: u64) {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn notifyOpSharedSurfacePhysAddr(self, fld: u64) -> Self {
+        self.store[48..56].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_notifyOpSharedSurfacePhysAddr(&self) -> u64 {
+        u64::from_le_bytes(self.store[48..56].try_into().unwrap())
+    }
+    pub(crate) fn set_notifyOpSharedSurfacePhysAddr(&mut self, fld: u64) {
+        self.store[48..56].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn pcieAtomicsOpMask(self, fld: u64) -> Self {
-        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_pcieAtomicsOpMask(&self) -> u64 {
-        u64::from_le_bytes(self.store[40..48].try_into().unwrap())
+        u64::from_le_bytes(self.store[56..64].try_into().unwrap())
     }
     pub(crate) fn set_pcieAtomicsOpMask(&mut self, fld: u64) {
-        self.store[40..48].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn consoleMemSize(self, fld: u64) -> Self {
-        self.store[48..56].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_consoleMemSize(&self) -> u64 {
-        u64::from_le_bytes(self.store[48..56].try_into().unwrap())
+        u64::from_le_bytes(self.store[64..72].try_into().unwrap())
     }
     pub(crate) fn set_consoleMemSize(&mut self, fld: u64) {
-        self.store[48..56].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[64..72].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn maxUserVa(self, fld: u64) -> Self {
-        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[72..80].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_maxUserVa(&self) -> u64 {
-        u64::from_le_bytes(self.store[56..64].try_into().unwrap())
+        u64::from_le_bytes(self.store[72..80].try_into().unwrap())
     }
     pub(crate) fn set_maxUserVa(&mut self, fld: u64) {
-        self.store[56..64].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[72..80].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn pciConfigMirrorBase(self, fld: u32) -> Self {
-        self.store[64..68].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[80..84].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_pciConfigMirrorBase(&self) -> u32 {
-        u32::from_le_bytes(self.store[64..68].try_into().unwrap())
+        u32::from_le_bytes(self.store[80..84].try_into().unwrap())
     }
     pub(crate) fn set_pciConfigMirrorBase(&mut self, fld: u32) {
-        self.store[64..68].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[80..84].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn pciConfigMirrorSize(self, fld: u32) -> Self {
-        self.store[68..72].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[84..88].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_pciConfigMirrorSize(&self) -> u32 {
-        u32::from_le_bytes(self.store[68..72].try_into().unwrap())
+        u32::from_le_bytes(self.store[84..88].try_into().unwrap())
     }
     pub(crate) fn set_pciConfigMirrorSize(&mut self, fld: u32) {
-        self.store[68..72].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[84..88].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn PCIDeviceID(self, fld: u32) -> Self {
+        self.store[88..92].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_PCIDeviceID(&self) -> u32 {
+        u32::from_le_bytes(self.store[88..92].try_into().unwrap())
+    }
+    pub(crate) fn set_PCIDeviceID(&mut self, fld: u32) {
+        self.store[88..92].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn PCISubDeviceID(self, fld: u32) -> Self {
+        self.store[92..96].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_PCISubDeviceID(&self) -> u32 {
+        u32::from_le_bytes(self.store[92..96].try_into().unwrap())
+    }
+    pub(crate) fn set_PCISubDeviceID(&mut self, fld: u32) {
+        self.store[92..96].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn PCIRevisionID(self, fld: u32) -> Self {
+        self.store[96..100].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_PCIRevisionID(&self) -> u32 {
+        u32::from_le_bytes(self.store[96..100].try_into().unwrap())
+    }
+    pub(crate) fn set_PCIRevisionID(&mut self, fld: u32) {
+        self.store[96..100].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn pcieAtomicsCplDeviceCapMask(self, fld: u32) -> Self {
+        self.store[100..104].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_pcieAtomicsCplDeviceCapMask(&self) -> u32 {
+        u32::from_le_bytes(self.store[100..104].try_into().unwrap())
+    }
+    pub(crate) fn set_pcieAtomicsCplDeviceCapMask(&mut self, fld: u32) {
+        self.store[100..104].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn oorArch(self, fld: u8) -> Self {
-        self.store[72..73].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[104..105].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_oorArch(&self) -> u8 {
-        u8::from_le_bytes(self.store[72..73].try_into().unwrap())
+        u8::from_le_bytes(self.store[104..105].try_into().unwrap())
     }
     pub(crate) fn set_oorArch(&mut self, fld: u8) {
-        self.store[72..73].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[104..105].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn clPdbProperties(self, fld: u64) -> Self {
-        self.store[80..88].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[112..120].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_clPdbProperties(&self) -> u64 {
-        u64::from_le_bytes(self.store[80..88].try_into().unwrap())
+        u64::from_le_bytes(self.store[112..120].try_into().unwrap())
     }
     pub(crate) fn set_clPdbProperties(&mut self, fld: u64) {
-        self.store[80..88].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[112..120].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn Chipset(self, fld: u32) -> Self {
-        self.store[88..92].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[120..124].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_Chipset(&self) -> u32 {
-        u32::from_le_bytes(self.store[88..92].try_into().unwrap())
+        u32::from_le_bytes(self.store[120..124].try_into().unwrap())
     }
     pub(crate) fn set_Chipset(&mut self, fld: u32) {
-        self.store[88..92].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[120..124].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bGpuBehindBridge(self, fld: u8) -> Self {
-        self.store[92..93].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[124..125].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bGpuBehindBridge(&self) -> u8 {
-        u8::from_le_bytes(self.store[92..93].try_into().unwrap())
+        u8::from_le_bytes(self.store[124..125].try_into().unwrap())
     }
     pub(crate) fn set_bGpuBehindBridge(&mut self, fld: u8) {
-        self.store[92..93].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[124..125].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bFlrSupported(self, fld: u8) -> Self {
+        self.store[125..126].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bFlrSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[125..126].try_into().unwrap())
+    }
+    pub(crate) fn set_bFlrSupported(&mut self, fld: u8) {
+        self.store[125..126].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn b64bBar0Supported(self, fld: u8) -> Self {
+        self.store[126..127].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_b64bBar0Supported(&self) -> u8 {
+        u8::from_le_bytes(self.store[126..127].try_into().unwrap())
+    }
+    pub(crate) fn set_b64bBar0Supported(&mut self, fld: u8) {
+        self.store[126..127].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bMnocAvailable(self, fld: u8) -> Self {
-        self.store[93..94].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[127..128].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bMnocAvailable(&self) -> u8 {
-        u8::from_le_bytes(self.store[93..94].try_into().unwrap())
+        u8::from_le_bytes(self.store[127..128].try_into().unwrap())
     }
     pub(crate) fn set_bMnocAvailable(&mut self, fld: u8) {
-        self.store[93..94].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[127..128].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn chipsetL1ssEnable(self, fld: u32) -> Self {
+        self.store[128..132].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_chipsetL1ssEnable(&self) -> u32 {
+        u32::from_le_bytes(self.store[128..132].try_into().unwrap())
+    }
+    pub(crate) fn set_chipsetL1ssEnable(&mut self, fld: u32) {
+        self.store[128..132].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bUpstreamL0sUnsupported(self, fld: u8) -> Self {
-        self.store[94..95].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[132..133].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bUpstreamL0sUnsupported(&self) -> u8 {
-        u8::from_le_bytes(self.store[94..95].try_into().unwrap())
+        u8::from_le_bytes(self.store[132..133].try_into().unwrap())
     }
     pub(crate) fn set_bUpstreamL0sUnsupported(&mut self, fld: u8) {
-        self.store[94..95].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[132..133].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bUpstreamL1Unsupported(self, fld: u8) -> Self {
-        self.store[95..96].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[133..134].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bUpstreamL1Unsupported(&self) -> u8 {
-        u8::from_le_bytes(self.store[95..96].try_into().unwrap())
+        u8::from_le_bytes(self.store[133..134].try_into().unwrap())
     }
     pub(crate) fn set_bUpstreamL1Unsupported(&mut self, fld: u8) {
-        self.store[95..96].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[133..134].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bUpstreamL1PorSupported(self, fld: u8) -> Self {
-        self.store[96..97].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[134..135].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bUpstreamL1PorSupported(&self) -> u8 {
-        u8::from_le_bytes(self.store[96..97].try_into().unwrap())
+        u8::from_le_bytes(self.store[134..135].try_into().unwrap())
     }
     pub(crate) fn set_bUpstreamL1PorSupported(&mut self, fld: u8) {
-        self.store[96..97].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[134..135].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn bUpstreamL1PorMobileOnly(self, fld: u8) -> Self {
-        self.store[97..98].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[135..136].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bUpstreamL1PorMobileOnly(&self) -> u8 {
-        u8::from_le_bytes(self.store[97..98].try_into().unwrap())
+        u8::from_le_bytes(self.store[135..136].try_into().unwrap())
     }
     pub(crate) fn set_bUpstreamL1PorMobileOnly(&mut self, fld: u8) {
-        self.store[97..98].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[135..136].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bSystemHasMux(self, fld: u8) -> Self {
+        self.store[136..137].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bSystemHasMux(&self) -> u8 {
+        u8::from_le_bytes(self.store[136..137].try_into().unwrap())
+    }
+    pub(crate) fn set_bSystemHasMux(&mut self, fld: u8) {
+        self.store[136..137].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn upstreamAddressValid(self, fld: u8) -> Self {
-        self.store[98..99].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[137..138].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_upstreamAddressValid(&self) -> u8 {
-        u8::from_le_bytes(self.store[98..99].try_into().unwrap())
+        u8::from_le_bytes(self.store[137..138].try_into().unwrap())
     }
     pub(crate) fn set_upstreamAddressValid(&mut self, fld: u8) {
-        self.store[98..99].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[137..138].copy_from_slice(&u8::to_le_bytes(fld));
     }
 
     pub(crate) fn new_S_FHBBusInfo(&mut self) -> s_BUSINFO<'s> {
-        s_BUSINFO::new(unsafe { self.ptr.byte_offset(100) })
+        s_BUSINFO::new(unsafe { self.ptr.byte_offset(138) })
     }
 
 
     pub(crate) fn new_S_chipsetIDInfo(&mut self) -> s_BUSINFO<'s> {
-        s_BUSINFO::new(unsafe { self.ptr.byte_offset(110) })
+        s_BUSINFO::new(unsafe { self.ptr.byte_offset(148) })
     }
 
 
     pub(crate) fn new_S_acpiMethodData(&mut self) -> s_ACPI_METHOD_DATA<'s> {
-        s_ACPI_METHOD_DATA::new(unsafe { self.ptr.byte_offset(120) })
+        s_ACPI_METHOD_DATA::new(unsafe { self.ptr.byte_offset(160) })
     }
 
     pub(crate) fn hypervisorType(self, fld: u32) -> Self {
-        self.store[604..608].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[836..840].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hypervisorType(&self) -> u32 {
-        u32::from_le_bytes(self.store[604..608].try_into().unwrap())
+        u32::from_le_bytes(self.store[836..840].try_into().unwrap())
     }
     pub(crate) fn set_hypervisorType(&mut self, fld: u32) {
-        self.store[604..608].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[836..840].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bIsPassthru(self, fld: u8) -> Self {
-        self.store[608..609].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[840..841].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bIsPassthru(&self) -> u8 {
-        u8::from_le_bytes(self.store[608..609].try_into().unwrap())
+        u8::from_le_bytes(self.store[840..841].try_into().unwrap())
     }
     pub(crate) fn set_bIsPassthru(&mut self, fld: u8) {
-        self.store[608..609].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[840..841].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn sysTimerOffsetNs(self, fld: u64) -> Self {
-        self.store[616..624].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[848..856].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_sysTimerOffsetNs(&self) -> u64 {
-        u64::from_le_bytes(self.store[616..624].try_into().unwrap())
+        u64::from_le_bytes(self.store[848..856].try_into().unwrap())
     }
     pub(crate) fn set_sysTimerOffsetNs(&mut self, fld: u64) {
-        self.store[616..624].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[848..856].copy_from_slice(&u64::to_le_bytes(fld));
     }
 
     pub(crate) fn new_S_gspVFInfo(&mut self) -> s_GSP_VF_INFO<'s> {
-        s_GSP_VF_INFO::new(unsafe { self.ptr.byte_offset(624) })
+        s_GSP_VF_INFO::new(unsafe { self.ptr.byte_offset(856) })
     }
 
+    pub(crate) fn bIsPrimary(self, fld: u8) -> Self {
+        self.store[896..897].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bIsPrimary(&self) -> u8 {
+        u8::from_le_bytes(self.store[896..897].try_into().unwrap())
+    }
+    pub(crate) fn set_bIsPrimary(&mut self, fld: u8) {
+        self.store[896..897].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn isGridBuild(self, fld: u8) -> Self {
+        self.store[897..898].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_isGridBuild(&self) -> u8 {
+        u8::from_le_bytes(self.store[897..898].try_into().unwrap())
+    }
+    pub(crate) fn set_isGridBuild(&mut self, fld: u8) {
+        self.store[897..898].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+
+    pub(crate) fn new_S_pcieConfigReg(&mut self) -> s_GSP_PCIE_CONFIG_REG<'s> {
+        s_GSP_PCIE_CONFIG_REG::new(unsafe { self.ptr.byte_offset(900) })
+    }
+
+    pub(crate) fn gridBuildCsp(self, fld: u32) -> Self {
+        self.store[904..908].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_gridBuildCsp(&self) -> u32 {
+        u32::from_le_bytes(self.store[904..908].try_into().unwrap())
+    }
+    pub(crate) fn set_gridBuildCsp(&mut self, fld: u32) {
+        self.store[904..908].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn bPreserveVideoMemoryAllocations(self, fld: u8) -> Self {
+        self.store[908..909].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bPreserveVideoMemoryAllocations(&self) -> u8 {
+        u8::from_le_bytes(self.store[908..909].try_into().unwrap())
+    }
+    pub(crate) fn set_bPreserveVideoMemoryAllocations(&mut self, fld: u8) {
+        self.store[908..909].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bTdrEventSupported(self, fld: u8) -> Self {
+        self.store[909..910].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bTdrEventSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[909..910].try_into().unwrap())
+    }
+    pub(crate) fn set_bTdrEventSupported(&mut self, fld: u8) {
+        self.store[909..910].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bFeatureStretchVblankCapable(self, fld: u8) -> Self {
+        self.store[910..911].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bFeatureStretchVblankCapable(&self) -> u8 {
+        u8::from_le_bytes(self.store[910..911].try_into().unwrap())
+    }
+    pub(crate) fn set_bFeatureStretchVblankCapable(&mut self, fld: u8) {
+        self.store[910..911].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bEnableDynamicGranularityPageArrays(self, fld: u8) -> Self {
+        self.store[911..912].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bEnableDynamicGranularityPageArrays(&self) -> u8 {
+        u8::from_le_bytes(self.store[911..912].try_into().unwrap())
+    }
+    pub(crate) fn set_bEnableDynamicGranularityPageArrays(&mut self, fld: u8) {
+        self.store[911..912].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bClockBoostSupported(self, fld: u8) -> Self {
+        self.store[912..913].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bClockBoostSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[912..913].try_into().unwrap())
+    }
+    pub(crate) fn set_bClockBoostSupported(&mut self, fld: u8) {
+        self.store[912..913].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn bRouteDispIntrsToCPU(self, fld: u8) -> Self {
+        self.store[913..914].copy_from_slice(&u8::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_bRouteDispIntrsToCPU(&self) -> u8 {
+        u8::from_le_bytes(self.store[913..914].try_into().unwrap())
+    }
+    pub(crate) fn set_bRouteDispIntrsToCPU(&mut self, fld: u8) {
+        self.store[913..914].copy_from_slice(&u8::to_le_bytes(fld));
+    }
 }
 
 pub(crate) struct s_NV_MEMORY_DESC_PARAMS<'s> {
@@ -4731,11 +4980,11 @@ pub(crate) struct s_NV0000_ALLOC_PARAMETERS<'s> {
 
 impl<'s> s_NV0000_ALLOC_PARAMETERS<'s> {
     pub(crate) const fn str_size() -> usize {
-        108
+        120
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 108) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 120) },
     } }
 
     pub(crate) fn hClient(self, fld: u32) -> Self {
@@ -4780,6 +5029,16 @@ impl<'s> s_NV0000_ALLOC_PARAMETERS<'s> {
             array[i] = u8::from_le_bytes(chunk.try_into().unwrap());
         }
         array
+    }
+    pub(crate) fn pOsPidInfo(self, fld: u64) -> Self {
+        self.store[112..120].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_pOsPidInfo(&self) -> u64 {
+        u64::from_le_bytes(self.store[112..120].try_into().unwrap())
+    }
+    pub(crate) fn set_pOsPidInfo(&mut self, fld: u64) {
+        self.store[112..120].copy_from_slice(&u64::to_le_bytes(fld));
     }
 }
 
@@ -4988,11 +5247,11 @@ pub(crate) struct s_NV_CHANNEL_ALLOC_PARAMS<'s> {
 
 impl<'s> s_NV_CHANNEL_ALLOC_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        360
+        368
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 360) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 368) },
     } }
 
     pub(crate) fn hObjectError(self, fld: u32) -> Self {
@@ -5290,6 +5549,16 @@ impl<'s> s_NV_CHANNEL_ALLOC_PARAMS<'s> {
         }
         array
     }
+    pub(crate) fn tpcConfigID(self, fld: u32) -> Self {
+        self.store[360..364].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_tpcConfigID(&self) -> u32 {
+        u32::from_le_bytes(self.store[360..364].try_into().unwrap())
+    }
+    pub(crate) fn set_tpcConfigID(&mut self, fld: u32) {
+        self.store[360..364].copy_from_slice(&u32::to_le_bytes(fld));
+    }
 }
 
 pub(crate) struct s_NV_VASPACE_ALLOCATION_PARAMETERS<'s> {
@@ -5467,11 +5736,11 @@ pub(crate) struct s_NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS<'s> {
 
 impl<'s> s_NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS<'s> {
     pub(crate) const fn str_size() -> usize {
-        32
+        40
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 32) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 40) },
     } }
 
     pub(crate) fn channelInstance(self, fld: u32) -> Self {
@@ -5533,6 +5802,26 @@ impl<'s> s_NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS<'s> {
     }
     pub(crate) fn set_flags(&mut self, fld: u32) {
         self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn channelPBSize(self, fld: u32) -> Self {
+        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_channelPBSize(&self) -> u32 {
+        u32::from_le_bytes(self.store[28..32].try_into().unwrap())
+    }
+    pub(crate) fn set_channelPBSize(&mut self, fld: u32) {
+        self.store[28..32].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn subDeviceId(self, fld: u32) -> Self {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_subDeviceId(&self) -> u32 {
+        u32::from_le_bytes(self.store[32..36].try_into().unwrap())
+    }
+    pub(crate) fn set_subDeviceId(&mut self, fld: u32) {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
     }
 }
 
@@ -5681,11 +5970,11 @@ pub(crate) struct s_NV_OFA_ALLOCATION_PARAMETERS<'s> {
 
 impl<'s> s_NV_OFA_ALLOCATION_PARAMETERS<'s> {
     pub(crate) const fn str_size() -> usize {
-        8
+        12
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 8) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 12) },
     } }
 
     pub(crate) fn size(self, fld: u32) -> Self {
@@ -5707,6 +5996,78 @@ impl<'s> s_NV_OFA_ALLOCATION_PARAMETERS<'s> {
     }
     pub(crate) fn set_prohibitMultipleInstances(&mut self, fld: u32) {
         self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn engineInstance(self, fld: u32) -> Self {
+        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_engineInstance(&self) -> u32 {
+        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+    }
+    pub(crate) fn set_engineInstance(&mut self, fld: u32) {
+        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+}
+
+pub(crate) struct s_GSP_PCIE_CONFIG_REG<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_GSP_PCIE_CONFIG_REG<'s> {
+    pub(crate) const fn str_size() -> usize {
+        4
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 4) },
+    } }
+
+    pub(crate) fn linkCap(self, fld: u32) -> Self {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_linkCap(&self) -> u32 {
+        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    }
+    pub(crate) fn set_linkCap(&mut self, fld: u32) {
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+}
+
+pub(crate) struct s_FW_WPR_LAYOUT_OFFSET<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_FW_WPR_LAYOUT_OFFSET<'s> {
+    pub(crate) const fn str_size() -> usize {
+        16
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 16) },
+    } }
+
+    pub(crate) fn nonWprHeapOffset(self, fld: u64) -> Self {
+        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_nonWprHeapOffset(&self) -> u64 {
+        u64::from_le_bytes(self.store[0..8].try_into().unwrap())
+    }
+    pub(crate) fn set_nonWprHeapOffset(&mut self, fld: u64) {
+        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn frtsOffset(self, fld: u64) -> Self {
+        self.store[8..16].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_frtsOffset(&self) -> u64 {
+        u64::from_le_bytes(self.store[8..16].try_into().unwrap())
+    }
+    pub(crate) fn set_frtsOffset(&mut self, fld: u64) {
+        self.store[8..16].copy_from_slice(&u64::to_le_bytes(fld));
     }
 }
 
@@ -5928,14 +6289,14 @@ impl<'s> s_NV0073_CTRL_DFP_GET_INFO_PARAMS<'s> {
     pub(crate) fn set_flags(&mut self, fld: u32) {
         self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn flags2(self, fld: u32) -> Self {
+    pub(crate) fn UHBRSupportedByDfp(self, fld: u32) -> Self {
         self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_flags2(&self) -> u32 {
+    pub(crate) fn get_UHBRSupportedByDfp(&self) -> u32 {
         u32::from_le_bytes(self.store[12..16].try_into().unwrap())
     }
-    pub(crate) fn set_flags2(&mut self, fld: u32) {
+    pub(crate) fn set_UHBRSupportedByDfp(&mut self, fld: u32) {
         self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
     }
 }
@@ -6121,6 +6482,9 @@ pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP1_2_YES: u3
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP1_4: u32 = 1;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP1_4_NO: u32 = 0x00000000;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP1_4_YES: u32 = 0x00000001;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP2_0: u32 = 2;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP2_0_NO: u32 = 0x00000000;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DP_VERSIONS_SUPPORTED_DP2_0_YES: u32 = 0x00000001;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DSC_BITS_PER_PIXEL_PRECISION_1: u32 = 0x00000005;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DSC_BITS_PER_PIXEL_PRECISION_1_16: u32 = 0x00000001;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_DSC_BITS_PER_PIXEL_PRECISION_1_2: u32 = 0x00000004;
@@ -6138,6 +6502,15 @@ pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_MAX_LINK_RATE_5_40: u32 = 0x0000000
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_MAX_LINK_RATE_8_10: u32 = 0x00000004;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_MAX_LINK_RATE_NONE: u32 = 0x00000000;
 pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS_MESSAGE_ID: u32 = 0x69;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR10_0: u32 = 0;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR10_0_NO: u32 = 0x00000000;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR10_0_YES: u32 = 0x00000001;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR13_5: u32 = 1;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR13_5_NO: u32 = 0x00000000;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR13_5_YES: u32 = 0x00000001;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR20_0: u32 = 2;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR20_0_NO: u32 = 0x00000000;
+pub(crate) const NV0073_CTRL_CMD_DP_GET_CAPS_UHBR_SUPPORTED_UHBR20_0_YES: u32 = 0x00000001;
 pub(crate) const NV0073_CTRL_CMD_DP_SET_LANE_DATA: u32 = 0x731346;
 pub(crate) const NV0073_CTRL_DP_SET_LANE_DATA_PARAMS_MESSAGE_ID: u32 = 0x46;
 pub(crate) const NV0073_CTRL_CMD_DP_SET_MANUAL_DISPLAYPORT: u32 = 0x731365;
@@ -6194,11 +6567,11 @@ pub(crate) const NV0073_CTRL_CMD_DP_TOPOLOGY_FREE_DISPLAYID: u32 = 0x73135c;
 pub(crate) const NV0073_CTRL_CMD_DP_TOPOLOGY_FREE_DISPLAYID_PARAMS_MESSAGE_ID: u32 = 0x5C;
 pub(crate) const NV0073_CTRL_CMD_DP_TOPOLOGY_ALLOCATE_DISPLAYID: u32 = 0x73135b;
 pub(crate) const NV0073_CTRL_CMD_DP_TOPOLOGY_ALLOCATE_DISPLAYID_PARAMS_MESSAGE_ID: u32 = 0x5B;
-pub(crate) const NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE: u32 = 0x730126;
+pub(crate) const NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE: u32 = 0x73010c;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_ACTIVE_FLAGS_CLIENT: u32 = 0;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_ACTIVE_FLAGS_CLIENT_DISABLE: u32 = 0x00000000;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_ACTIVE_FLAGS_CLIENT_ENABLE: u32 = 0x00000001;
-pub(crate) const NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS_MESSAGE_ID: u32 = 0x26;
+pub(crate) const NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS_MESSAGE_ID: u32 = 0x0C;
 pub(crate) struct s_NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -6259,7 +6632,7 @@ pub(crate) const NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS: u32 = 0x730102;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT: u32 = 0;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT_DISABLE: u32 = 0x00000000;
 pub(crate) const NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT_ENABLE: u32 = 0x00000001;
-pub(crate) const NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS_MESSAGE_ID: u32 = 0x2;
+pub(crate) const NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS_MESSAGE_ID: u32 = 0x02;
 pub(crate) struct s_NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -6306,8 +6679,8 @@ impl<'s> s_NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS<'s> {
     }
 }
 
-pub(crate) const NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED: u32 = 0x730120;
-pub(crate) const NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS_MESSAGE_ID: u32 = 0x20;
+pub(crate) const NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED: u32 = 0x730107;
+pub(crate) const NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS_MESSAGE_ID: u32 = 0x07;
 pub(crate) struct s_NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
@@ -7590,87 +7963,14 @@ impl<'s> s_NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY<'s> {
     }
 }
 
-pub(crate) const NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE: u32 = 0x2080017e;
-pub(crate) const NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS_MESSAGE_ID: u32 = 0x7E;
-pub(crate) struct s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS<'s> {
+pub(crate) const NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO: u32 = 0x208001b0;
+pub(crate) const NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS_MESSAGE_ID: u32 = 0xB0;
+pub(crate) struct s_NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
 }
 
-impl<'s> s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS<'s> {
-    pub(crate) const fn str_size() -> usize {
-        8
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 8) },
-    } }
-
-    pub(crate) fn vmmuSegmentSize(self, fld: u64) -> Self {
-        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_vmmuSegmentSize(&self) -> u64 {
-        u64::from_le_bytes(self.store[0..8].try_into().unwrap())
-    }
-    pub(crate) fn set_vmmuSegmentSize(&mut self, fld: u64) {
-        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
-    }
-}
-
-pub(crate) const NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS_MESSAGE_ID: u32 = 0x33;
-pub(crate) struct s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS<'s> {
-    pub(crate) const fn str_size() -> usize {
-        1600
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 1600) },
-    } }
-
-
-    pub(crate) fn new_S_engineContextBuffersInfo(&mut self, idx: isize) -> s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
-        s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO::new(unsafe { self.ptr.byte_offset(idx * 200 + 0) })
-    }
-
-}
-
-pub(crate) struct s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
-    pub(crate) const fn str_size() -> usize {
-        200
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 200) },
-    } }
-
-
-    pub(crate) fn new_S_engine(&mut self, idx: isize) -> s_NV2080_CTRL_INTERNAL_ENGINE_CONTEXT_BUFFER_INFO<'s> {
-        s_NV2080_CTRL_INTERNAL_ENGINE_CONTEXT_BUFFER_INFO::new(unsafe { self.ptr.byte_offset(idx * 8 + 0) })
-    }
-
-}
-
-pub(crate) const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO: u32 = 0x20800a32;
-pub(crate) const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS_MESSAGE_ID: u32 = 0x32;
-pub(crate) const NV2080_CTRL_CMD_INTERNAL_GET_CONSTRUCTED_FALCON_INFO: u32 = 0x20800a42;
-pub(crate) const NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS_MESSAGE_ID: u32 = 0x42;
-pub(crate) struct s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS<'s> {
+impl<'s> s_NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
         1284
     }
@@ -7690,18 +7990,18 @@ impl<'s> s_NV2080_CTRL_INTERNAL_GET_CONSTRUCTED_FALCON_INFO_PARAMS<'s> {
         self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
     }
 
-    pub(crate) fn new_S_constructedFalconsTable(&mut self, idx: isize) -> s_NV2080_CTRL_INTERNAL_CONSTRUCTED_FALCON_INFO<'s> {
-        s_NV2080_CTRL_INTERNAL_CONSTRUCTED_FALCON_INFO::new(unsafe { self.ptr.byte_offset(idx * 20 + 4) })
+    pub(crate) fn new_S_constructedFalconsTable(&mut self, idx: isize) -> s_NV2080_CTRL_GPU_CONSTRUCTED_FALCON_INFO<'s> {
+        s_NV2080_CTRL_GPU_CONSTRUCTED_FALCON_INFO::new(unsafe { self.ptr.byte_offset(idx * 20 + 4) })
     }
 
 }
 
-pub(crate) struct s_NV2080_CTRL_INTERNAL_CONSTRUCTED_FALCON_INFO<'s> {
+pub(crate) struct s_NV2080_CTRL_GPU_CONSTRUCTED_FALCON_INFO<'s> {
     ptr: *mut u8,
     store: &'s mut[u8],
 }
 
-impl<'s> s_NV2080_CTRL_INTERNAL_CONSTRUCTED_FALCON_INFO<'s> {
+impl<'s> s_NV2080_CTRL_GPU_CONSTRUCTED_FALCON_INFO<'s> {
     pub(crate) const fn str_size() -> usize {
         20
     }
@@ -7762,6 +8062,79 @@ impl<'s> s_NV2080_CTRL_INTERNAL_CONSTRUCTED_FALCON_INFO<'s> {
     }
 }
 
+pub(crate) const NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE: u32 = 0x2080017e;
+pub(crate) const NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS_MESSAGE_ID: u32 = 0x7E;
+pub(crate) struct s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_NV2080_CTRL_GPU_GET_VMMU_SEGMENT_SIZE_PARAMS<'s> {
+    pub(crate) const fn str_size() -> usize {
+        8
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 8) },
+    } }
+
+    pub(crate) fn vmmuSegmentSize(self, fld: u64) -> Self {
+        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_vmmuSegmentSize(&self) -> u64 {
+        u64::from_le_bytes(self.store[0..8].try_into().unwrap())
+    }
+    pub(crate) fn set_vmmuSegmentSize(&mut self, fld: u64) {
+        self.store[0..8].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+}
+
+pub(crate) const NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS_MESSAGE_ID: u32 = 0x33;
+pub(crate) struct s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS<'s> {
+    pub(crate) const fn str_size() -> usize {
+        1664
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 1664) },
+    } }
+
+
+    pub(crate) fn new_S_engineContextBuffersInfo(&mut self, idx: isize) -> s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
+        s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO::new(unsafe { self.ptr.byte_offset(idx * 208 + 0) })
+    }
+
+}
+
+pub(crate) struct s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
+    ptr: *mut u8,
+    store: &'s mut[u8],
+}
+
+impl<'s> s_NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO<'s> {
+    pub(crate) const fn str_size() -> usize {
+        208
+    }
+    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
+        ptr,
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 208) },
+    } }
+
+
+    pub(crate) fn new_S_engine(&mut self, idx: isize) -> s_NV2080_CTRL_INTERNAL_ENGINE_CONTEXT_BUFFER_INFO<'s> {
+        s_NV2080_CTRL_INTERNAL_ENGINE_CONTEXT_BUFFER_INFO::new(unsafe { self.ptr.byte_offset(idx * 8 + 0) })
+    }
+
+}
+
+pub(crate) const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO: u32 = 0x20800a32;
+pub(crate) const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS_MESSAGE_ID: u32 = 0x32;
 pub(crate) const NV2080_CTRL_CMD_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER: u32 = 0x20800a58;
 pub(crate) const NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS_MESSAGE_ID: u32 = 0x58;
 pub(crate) struct s_NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS<'s> {
@@ -7771,11 +8144,11 @@ pub(crate) struct s_NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS<'s> {
 
 impl<'s> s_NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        40
+        56
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 40) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 56) },
     } }
 
     pub(crate) fn addressSpace(self, fld: u32) -> Self {
@@ -7848,6 +8221,36 @@ impl<'s> s_NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS<'s> {
     pub(crate) fn set_valid(&mut self, fld: u8) {
         self.store[36..37].copy_from_slice(&u8::to_le_bytes(fld));
     }
+    pub(crate) fn pbTargetAperture(self, fld: u32) -> Self {
+        self.store[40..44].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_pbTargetAperture(&self) -> u32 {
+        u32::from_le_bytes(self.store[40..44].try_into().unwrap())
+    }
+    pub(crate) fn set_pbTargetAperture(&mut self, fld: u32) {
+        self.store[40..44].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn channelPBSize(self, fld: u32) -> Self {
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_channelPBSize(&self) -> u32 {
+        u32::from_le_bytes(self.store[44..48].try_into().unwrap())
+    }
+    pub(crate) fn set_channelPBSize(&mut self, fld: u32) {
+        self.store[44..48].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn subDeviceId(self, fld: u32) -> Self {
+        self.store[48..52].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_subDeviceId(&self) -> u32 {
+        u32::from_le_bytes(self.store[48..52].try_into().unwrap())
+    }
+    pub(crate) fn set_subDeviceId(&mut self, fld: u32) {
+        self.store[48..52].copy_from_slice(&u32::to_le_bytes(fld));
+    }
 }
 
 pub(crate) const NV2080_CTRL_CMD_INTERNAL_DISPLAY_WRITE_INST_MEM: u32 = 0x20800a49;
@@ -7917,11 +8320,11 @@ pub(crate) struct s_NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS<'s> {
 
 impl<'s> s_NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        28
+        36
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 28) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 36) },
     } }
 
     pub(crate) fn feHwSysCap(self, fld: u32) -> Self {
@@ -7964,113 +8367,65 @@ impl<'s> s_NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS<'s> {
     pub(crate) fn set_numHeads(&mut self, fld: u32) {
         self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn bPrimaryVga(self, fld: u8) -> Self {
-        self.store[16..17].copy_from_slice(&u8::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_bPrimaryVga(&self) -> u8 {
-        u8::from_le_bytes(self.store[16..17].try_into().unwrap())
-    }
-    pub(crate) fn set_bPrimaryVga(&mut self, fld: u8) {
-        self.store[16..17].copy_from_slice(&u8::to_le_bytes(fld));
-    }
     pub(crate) fn i2cPort(self, fld: u32) -> Self {
-        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_i2cPort(&self) -> u32 {
-        u32::from_le_bytes(self.store[20..24].try_into().unwrap())
+        u32::from_le_bytes(self.store[16..20].try_into().unwrap())
     }
     pub(crate) fn set_i2cPort(&mut self, fld: u32) {
-        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[16..20].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn internalDispActiveMask(self, fld: u32) -> Self {
-        self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_internalDispActiveMask(&self) -> u32 {
-        u32::from_le_bytes(self.store[24..28].try_into().unwrap())
+        u32::from_le_bytes(self.store[20..24].try_into().unwrap())
     }
     pub(crate) fn set_internalDispActiveMask(&mut self, fld: u32) {
+        self.store[20..24].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn embeddedDisplayPortMask(self, fld: u32) -> Self {
+        self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_embeddedDisplayPortMask(&self) -> u32 {
+        u32::from_le_bytes(self.store[24..28].try_into().unwrap())
+    }
+    pub(crate) fn set_embeddedDisplayPortMask(&mut self, fld: u32) {
         self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
     }
-}
-
-pub(crate) const NV2080_CTRL_CMD_INTERNAL_FBSR_SEND_REGION_INFO: u32 = 0x20800ac3;
-pub(crate) const NV2080_CTRL_INTERNAL_FBSR_SEND_REGION_INFO_PARAMS_MESSAGE_ID: u32 = 0xC3;
-pub(crate) struct s_NV2080_CTRL_INTERNAL_FBSR_SEND_REGION_INFO_PARAMS<'s> {
-    ptr: *mut u8,
-    store: &'s mut[u8],
-}
-
-impl<'s> s_NV2080_CTRL_INTERNAL_FBSR_SEND_REGION_INFO_PARAMS<'s> {
-    pub(crate) const fn str_size() -> usize {
-        40
-    }
-    pub(crate) fn new(ptr: *mut u8) -> Self { Self {
-        ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 40) },
-    } }
-
-    pub(crate) fn fbsrType(self, fld: u32) -> Self {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn bExternalMuxSupported(self, fld: u8) -> Self {
+        self.store[28..29].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_fbsrType(&self) -> u32 {
-        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
+    pub(crate) fn get_bExternalMuxSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[28..29].try_into().unwrap())
     }
-    pub(crate) fn set_fbsrType(&mut self, fld: u32) {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_bExternalMuxSupported(&mut self, fld: u8) {
+        self.store[28..29].copy_from_slice(&u8::to_le_bytes(fld));
     }
-    pub(crate) fn hClient(self, fld: u32) -> Self {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn bInternalMuxSupported(self, fld: u8) -> Self {
+        self.store[29..30].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_hClient(&self) -> u32 {
-        u32::from_le_bytes(self.store[4..8].try_into().unwrap())
+    pub(crate) fn get_bInternalMuxSupported(&self) -> u8 {
+        u8::from_le_bytes(self.store[29..30].try_into().unwrap())
     }
-    pub(crate) fn set_hClient(&mut self, fld: u32) {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn set_bInternalMuxSupported(&mut self, fld: u8) {
+        self.store[29..30].copy_from_slice(&u8::to_le_bytes(fld));
     }
-    pub(crate) fn hVidMem(self, fld: u32) -> Self {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+    pub(crate) fn numDispChannels(self, fld: u32) -> Self {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
-    pub(crate) fn get_hVidMem(&self) -> u32 {
-        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+    pub(crate) fn get_numDispChannels(&self) -> u32 {
+        u32::from_le_bytes(self.store[32..36].try_into().unwrap())
     }
-    pub(crate) fn set_hVidMem(&mut self, fld: u32) {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn vidOffset(self, fld: u64) -> Self {
-        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_vidOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[16..24].try_into().unwrap())
-    }
-    pub(crate) fn set_vidOffset(&mut self, fld: u64) {
-        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
-    }
-    pub(crate) fn sysOffset(self, fld: u64) -> Self {
-        self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_sysOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[24..32].try_into().unwrap())
-    }
-    pub(crate) fn set_sysOffset(&mut self, fld: u64) {
-        self.store[24..32].copy_from_slice(&u64::to_le_bytes(fld));
-    }
-    pub(crate) fn size(self, fld: u64) -> Self {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_size(&self) -> u64 {
-        u64::from_le_bytes(self.store[32..40].try_into().unwrap())
-    }
-    pub(crate) fn set_size(&mut self, fld: u64) {
-        self.store[32..40].copy_from_slice(&u64::to_le_bytes(fld));
+    pub(crate) fn set_numDispChannels(&mut self, fld: u32) {
+        self.store[32..36].copy_from_slice(&u32::to_le_bytes(fld));
     }
 }
 
@@ -8083,72 +8438,52 @@ pub(crate) struct s_NV2080_CTRL_INTERNAL_FBSR_INIT_PARAMS<'s> {
 
 impl<'s> s_NV2080_CTRL_INTERNAL_FBSR_INIT_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        32
+        24
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 32) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 24) },
     } }
 
-    pub(crate) fn fbsrType(self, fld: u32) -> Self {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_fbsrType(&self) -> u32 {
-        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
-    }
-    pub(crate) fn set_fbsrType(&mut self, fld: u32) {
-        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn numRegions(self, fld: u32) -> Self {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_numRegions(&self) -> u32 {
-        u32::from_le_bytes(self.store[4..8].try_into().unwrap())
-    }
-    pub(crate) fn set_numRegions(&mut self, fld: u32) {
-        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
-    }
     pub(crate) fn hClient(self, fld: u32) -> Self {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hClient(&self) -> u32 {
-        u32::from_le_bytes(self.store[8..12].try_into().unwrap())
+        u32::from_le_bytes(self.store[0..4].try_into().unwrap())
     }
     pub(crate) fn set_hClient(&mut self, fld: u32) {
-        self.store[8..12].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[0..4].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn hSysMem(self, fld: u32) -> Self {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_hSysMem(&self) -> u32 {
-        u32::from_le_bytes(self.store[12..16].try_into().unwrap())
+        u32::from_le_bytes(self.store[4..8].try_into().unwrap())
     }
     pub(crate) fn set_hSysMem(&mut self, fld: u32) {
-        self.store[12..16].copy_from_slice(&u32::to_le_bytes(fld));
-    }
-    pub(crate) fn gspFbAllocsSysOffset(self, fld: u64) -> Self {
-        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
-    self }
-
-    pub(crate) fn get_gspFbAllocsSysOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[16..24].try_into().unwrap())
-    }
-    pub(crate) fn set_gspFbAllocsSysOffset(&mut self, fld: u64) {
-        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[4..8].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn bEnteringGcoffState(self, fld: u8) -> Self {
-        self.store[24..25].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[8..9].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bEnteringGcoffState(&self) -> u8 {
-        u8::from_le_bytes(self.store[24..25].try_into().unwrap())
+        u8::from_le_bytes(self.store[8..9].try_into().unwrap())
     }
     pub(crate) fn set_bEnteringGcoffState(&mut self, fld: u8) {
-        self.store[24..25].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[8..9].copy_from_slice(&u8::to_le_bytes(fld));
+    }
+    pub(crate) fn sysmemAddrOfSuspendResumeData(self, fld: u64) -> Self {
+        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_sysmemAddrOfSuspendResumeData(&self) -> u64 {
+        u64::from_le_bytes(self.store[16..24].try_into().unwrap())
+    }
+    pub(crate) fn set_sysmemAddrOfSuspendResumeData(&mut self, fld: u64) {
+        self.store[16..24].copy_from_slice(&u64::to_le_bytes(fld));
     }
 }
 
@@ -8347,11 +8682,11 @@ pub(crate) struct s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_
 
 impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        6496
+        6616
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 6496) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 6616) },
     } }
 
     pub(crate) fn dbdf(self, fld: u32) -> Self {
@@ -8424,48 +8759,48 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s
     pub(crate) fn set_numPluginChannels(&mut self, fld: u32) {
         self.store[24..28].copy_from_slice(&u32::to_le_bytes(fld));
     }
-    pub(crate) fn chidOffset(self, fld: [u32; 62]) -> Self {
-        let mut byte_data = [0u8; 248];
-        for i in 0..62 {
+    pub(crate) fn chidOffset(self, fld: [u32; 84]) -> Self {
+        let mut byte_data = [0u8; 336];
+        for i in 0..84 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[28..276].copy_from_slice(&byte_data);
+        self.store[28..364].copy_from_slice(&byte_data);
     self }
-    pub(crate) fn set_chidOffset(&mut self, fld: [u32; 62]) {
-        let mut byte_data = [0u8; 248];
-        for i in 0..62 {
+    pub(crate) fn set_chidOffset(&mut self, fld: [u32; 84]) {
+        let mut byte_data = [0u8; 336];
+        for i in 0..84 {
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
         }
-        self.store[28..276].copy_from_slice(&byte_data);
+        self.store[28..364].copy_from_slice(&byte_data);
     }
-    pub(crate) fn get_chidOffset(&mut self) -> [u32; 62] {
-        let mut array = [0u32; 62];
-        for (i, chunk) in self.store[28..276].chunks_exact(4).enumerate() {
+    pub(crate) fn get_chidOffset(&mut self) -> [u32; 84] {
+        let mut array = [0u32; 84];
+        for (i, chunk) in self.store[28..364].chunks_exact(4).enumerate() {
             array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
     pub(crate) fn bDisableDefaultSmcExecPartRestore(self, fld: u8) -> Self {
-        self.store[276..277].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[364..365].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bDisableDefaultSmcExecPartRestore(&self) -> u8 {
-        u8::from_le_bytes(self.store[276..277].try_into().unwrap())
+        u8::from_le_bytes(self.store[364..365].try_into().unwrap())
     }
     pub(crate) fn set_bDisableDefaultSmcExecPartRestore(&mut self, fld: u8) {
-        self.store[276..277].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[364..365].copy_from_slice(&u8::to_le_bytes(fld));
     }
     pub(crate) fn numGuestFbSegments(self, fld: u32) -> Self {
-        self.store[280..284].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[368..372].copy_from_slice(&u32::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_numGuestFbSegments(&self) -> u32 {
-        u32::from_le_bytes(self.store[280..284].try_into().unwrap())
+        u32::from_le_bytes(self.store[368..372].try_into().unwrap())
     }
     pub(crate) fn set_numGuestFbSegments(&mut self, fld: u32) {
-        self.store[280..284].copy_from_slice(&u32::to_le_bytes(fld));
+        self.store[368..372].copy_from_slice(&u32::to_le_bytes(fld));
     }
     pub(crate) fn guestFbPhysAddrList(self, fld: [u64; 384]) -> Self {
         let mut byte_data = [0u8; 3072];
@@ -8473,7 +8808,7 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 8)..((i + 1) * 8)].copy_from_slice(&bytes);
         }
-        self.store[288..3360].copy_from_slice(&byte_data);
+        self.store[376..3448].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_guestFbPhysAddrList(&mut self, fld: [u64; 384]) {
         let mut byte_data = [0u8; 3072];
@@ -8481,11 +8816,11 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 8)..((i + 1) * 8)].copy_from_slice(&bytes);
         }
-        self.store[288..3360].copy_from_slice(&byte_data);
+        self.store[376..3448].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_guestFbPhysAddrList(&mut self) -> [u64; 384] {
         let mut array = [0u64; 384];
-        for (i, chunk) in self.store[288..3360].chunks_exact(8).enumerate() {
+        for (i, chunk) in self.store[376..3448].chunks_exact(8).enumerate() {
             array[i] = u64::from_le_bytes(chunk.try_into().unwrap());
         }
         array
@@ -8496,7 +8831,7 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 8)..((i + 1) * 8)].copy_from_slice(&bytes);
         }
-        self.store[3360..6432].copy_from_slice(&byte_data);
+        self.store[3448..6520].copy_from_slice(&byte_data);
     self }
     pub(crate) fn set_guestFbLengthList(&mut self, fld: [u64; 384]) {
         let mut byte_data = [0u8; 3072];
@@ -8504,94 +8839,134 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_BOOTLOAD_GSP_VGPU_PLUGIN_TASK_PARAMS<'s
             let bytes = fld[i].to_le_bytes();
             byte_data[(i * 8)..((i + 1) * 8)].copy_from_slice(&bytes);
         }
-        self.store[3360..6432].copy_from_slice(&byte_data);
+        self.store[3448..6520].copy_from_slice(&byte_data);
     }
     pub(crate) fn get_guestFbLengthList(&mut self) -> [u64; 384] {
         let mut array = [0u64; 384];
-        for (i, chunk) in self.store[3360..6432].chunks_exact(8).enumerate() {
+        for (i, chunk) in self.store[3448..6520].chunks_exact(8).enumerate() {
             array[i] = u64::from_le_bytes(chunk.try_into().unwrap());
         }
         array
     }
     pub(crate) fn pluginHeapMemoryPhysAddr(self, fld: u64) -> Self {
-        self.store[6432..6440].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6520..6528].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_pluginHeapMemoryPhysAddr(&self) -> u64 {
-        u64::from_le_bytes(self.store[6432..6440].try_into().unwrap())
+        u64::from_le_bytes(self.store[6520..6528].try_into().unwrap())
     }
     pub(crate) fn set_pluginHeapMemoryPhysAddr(&mut self, fld: u64) {
-        self.store[6432..6440].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6520..6528].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn pluginHeapMemoryLength(self, fld: u64) -> Self {
-        self.store[6440..6448].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6528..6536].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_pluginHeapMemoryLength(&self) -> u64 {
-        u64::from_le_bytes(self.store[6440..6448].try_into().unwrap())
+        u64::from_le_bytes(self.store[6528..6536].try_into().unwrap())
     }
     pub(crate) fn set_pluginHeapMemoryLength(&mut self, fld: u64) {
-        self.store[6440..6448].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6528..6536].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn ctrlBuffOffset(self, fld: u64) -> Self {
-        self.store[6448..6456].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6536..6544].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_ctrlBuffOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[6448..6456].try_into().unwrap())
+        u64::from_le_bytes(self.store[6536..6544].try_into().unwrap())
     }
     pub(crate) fn set_ctrlBuffOffset(&mut self, fld: u64) {
-        self.store[6448..6456].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6536..6544].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn initTaskLogBuffOffset(self, fld: u64) -> Self {
-        self.store[6456..6464].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6544..6552].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_initTaskLogBuffOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[6456..6464].try_into().unwrap())
+        u64::from_le_bytes(self.store[6544..6552].try_into().unwrap())
     }
     pub(crate) fn set_initTaskLogBuffOffset(&mut self, fld: u64) {
-        self.store[6456..6464].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6544..6552].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn initTaskLogBuffSize(self, fld: u64) -> Self {
-        self.store[6464..6472].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6552..6560].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_initTaskLogBuffSize(&self) -> u64 {
-        u64::from_le_bytes(self.store[6464..6472].try_into().unwrap())
+        u64::from_le_bytes(self.store[6552..6560].try_into().unwrap())
     }
     pub(crate) fn set_initTaskLogBuffSize(&mut self, fld: u64) {
-        self.store[6464..6472].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6552..6560].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn vgpuTaskLogBuffOffset(self, fld: u64) -> Self {
-        self.store[6472..6480].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6560..6568].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_vgpuTaskLogBuffOffset(&self) -> u64 {
-        u64::from_le_bytes(self.store[6472..6480].try_into().unwrap())
+        u64::from_le_bytes(self.store[6560..6568].try_into().unwrap())
     }
     pub(crate) fn set_vgpuTaskLogBuffOffset(&mut self, fld: u64) {
-        self.store[6472..6480].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6560..6568].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn vgpuTaskLogBuffSize(self, fld: u64) -> Self {
-        self.store[6480..6488].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6568..6576].copy_from_slice(&u64::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_vgpuTaskLogBuffSize(&self) -> u64 {
-        u64::from_le_bytes(self.store[6480..6488].try_into().unwrap())
+        u64::from_le_bytes(self.store[6568..6576].try_into().unwrap())
     }
     pub(crate) fn set_vgpuTaskLogBuffSize(&mut self, fld: u64) {
-        self.store[6480..6488].copy_from_slice(&u64::to_le_bytes(fld));
+        self.store[6568..6576].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn kernelLogBuffOffset(self, fld: u64) -> Self {
+        self.store[6576..6584].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_kernelLogBuffOffset(&self) -> u64 {
+        u64::from_le_bytes(self.store[6576..6584].try_into().unwrap())
+    }
+    pub(crate) fn set_kernelLogBuffOffset(&mut self, fld: u64) {
+        self.store[6576..6584].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn kernelLogBuffSize(self, fld: u64) -> Self {
+        self.store[6584..6592].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_kernelLogBuffSize(&self) -> u64 {
+        u64::from_le_bytes(self.store[6584..6592].try_into().unwrap())
+    }
+    pub(crate) fn set_kernelLogBuffSize(&mut self, fld: u64) {
+        self.store[6584..6592].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn migRmHeapMemoryPhysAddr(self, fld: u64) -> Self {
+        self.store[6592..6600].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_migRmHeapMemoryPhysAddr(&self) -> u64 {
+        u64::from_le_bytes(self.store[6592..6600].try_into().unwrap())
+    }
+    pub(crate) fn set_migRmHeapMemoryPhysAddr(&mut self, fld: u64) {
+        self.store[6592..6600].copy_from_slice(&u64::to_le_bytes(fld));
+    }
+    pub(crate) fn migRmHeapMemoryLength(self, fld: u64) -> Self {
+        self.store[6600..6608].copy_from_slice(&u64::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_migRmHeapMemoryLength(&self) -> u64 {
+        u64::from_le_bytes(self.store[6600..6608].try_into().unwrap())
+    }
+    pub(crate) fn set_migRmHeapMemoryLength(&mut self, fld: u64) {
+        self.store[6600..6608].copy_from_slice(&u64::to_le_bytes(fld));
     }
     pub(crate) fn bDeviceProfilingEnabled(self, fld: u8) -> Self {
-        self.store[6488..6489].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[6608..6609].copy_from_slice(&u8::to_le_bytes(fld));
     self }
 
     pub(crate) fn get_bDeviceProfilingEnabled(&self) -> u8 {
-        u8::from_le_bytes(self.store[6488..6489].try_into().unwrap())
+        u8::from_le_bytes(self.store[6608..6609].try_into().unwrap())
     }
     pub(crate) fn set_bDeviceProfilingEnabled(&mut self, fld: u8) {
-        self.store[6488..6489].copy_from_slice(&u8::to_le_bytes(fld));
+        self.store[6608..6609].copy_from_slice(&u8::to_le_bytes(fld));
     }
 }
 
@@ -8604,11 +8979,11 @@ pub(crate) struct s_NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS<'s> 
 
 impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS<'s> {
     pub(crate) const fn str_size() -> usize {
-        316936
+        334344
     }
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 316936) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 334344) },
     } }
 
     pub(crate) fn discardVgpuTypes(self, fld: u8) -> Self {
@@ -8633,7 +9008,7 @@ impl<'s> s_NV2080_CTRL_VGPU_MGR_INTERNAL_PGPU_ADD_VGPU_TYPE_PARAMS<'s> {
     }
 
     pub(crate) fn new_S_vgpuInfo(&mut self, idx: isize) -> s_NVA081_CTRL_VGPU_INFO<'s> {
-        s_NVA081_CTRL_VGPU_INFO::new(unsafe { self.ptr.byte_offset(idx * 4952 + 8) })
+        s_NVA081_CTRL_VGPU_INFO::new(unsafe { self.ptr.byte_offset(idx * 5224 + 8) })
     }
 
 }
@@ -8645,15 +9020,14 @@ pub(crate) struct s_NVA081_CTRL_VGPU_INFO<'s> {
 
 impl<'s> s_NVA081_CTRL_VGPU_INFO<'s> {
     pub(crate) const fn str_size() -> usize {
-        4952
+        5224
     }
-
     pub(crate) fn raw(&mut self) -> *mut u8 {
 	self.ptr
-    }
+    }    
     pub(crate) fn new(ptr: *mut u8) -> Self { Self {
         ptr,
-        store: unsafe { core::slice::from_raw_parts_mut(ptr, 4952) },
+        store: unsafe { core::slice::from_raw_parts_mut(ptr, 5224) },
     } }
 
     pub(crate) fn vgpuType(self, fld: u32) -> Self {
@@ -9142,6 +9516,82 @@ impl<'s> s_NVA081_CTRL_VGPU_INFO<'s> {
     }
     pub(crate) fn set_gpuInstanceProfileId(&mut self, fld: u32) {
         self.store[4948..4952].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn placementSize(self, fld: u32) -> Self {
+        self.store[4952..4956].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_placementSize(&self) -> u32 {
+        u32::from_le_bytes(self.store[4952..4956].try_into().unwrap())
+    }
+    pub(crate) fn set_placementSize(&mut self, fld: u32) {
+        self.store[4952..4956].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn homogeneousPlacementCount(self, fld: u32) -> Self {
+        self.store[4956..4960].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_homogeneousPlacementCount(&self) -> u32 {
+        u32::from_le_bytes(self.store[4956..4960].try_into().unwrap())
+    }
+    pub(crate) fn set_homogeneousPlacementCount(&mut self, fld: u32) {
+        self.store[4956..4960].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn homogeneousPlacementIds(self, fld: [u32; 32]) -> Self {
+        let mut byte_data = [0u8; 128];
+        for i in 0..32 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[4960..5088].copy_from_slice(&byte_data);
+    self }
+    pub(crate) fn set_homogeneousPlacementIds(&mut self, fld: [u32; 32]) {
+        let mut byte_data = [0u8; 128];
+        for i in 0..32 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[4960..5088].copy_from_slice(&byte_data);
+    }
+    pub(crate) fn get_homogeneousPlacementIds(&mut self) -> [u32; 32] {
+        let mut array = [0u32; 32];
+        for (i, chunk) in self.store[4960..5088].chunks_exact(4).enumerate() {
+            array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        array
+    }
+    pub(crate) fn heterogeneousPlacementCount(self, fld: u32) -> Self {
+        self.store[5088..5092].copy_from_slice(&u32::to_le_bytes(fld));
+    self }
+
+    pub(crate) fn get_heterogeneousPlacementCount(&self) -> u32 {
+        u32::from_le_bytes(self.store[5088..5092].try_into().unwrap())
+    }
+    pub(crate) fn set_heterogeneousPlacementCount(&mut self, fld: u32) {
+        self.store[5088..5092].copy_from_slice(&u32::to_le_bytes(fld));
+    }
+    pub(crate) fn heterogeneousPlacementIds(self, fld: [u32; 32]) -> Self {
+        let mut byte_data = [0u8; 128];
+        for i in 0..32 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[5092..5220].copy_from_slice(&byte_data);
+    self }
+    pub(crate) fn set_heterogeneousPlacementIds(&mut self, fld: [u32; 32]) {
+        let mut byte_data = [0u8; 128];
+        for i in 0..32 {
+            let bytes = fld[i].to_le_bytes();
+            byte_data[(i * 4)..((i + 1) * 4)].copy_from_slice(&bytes);
+        }
+        self.store[5092..5220].copy_from_slice(&byte_data);
+    }
+    pub(crate) fn get_heterogeneousPlacementIds(&mut self) -> [u32; 32] {
+        let mut array = [0u32; 32];
+        for (i, chunk) in self.store[5092..5220].chunks_exact(4).enumerate() {
+            array[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        array
     }
 }
 

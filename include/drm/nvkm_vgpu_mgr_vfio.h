@@ -30,7 +30,7 @@ struct bootload_vgpu {
 	u32 dbdf;
 	u32 gfid;
 	u32 num_channels;
-	u32 chid_offset[62];
+	u32 chid_offset[84];
 	u64 fbmem_heap_addr;
 	u64 fbmem_heap_size;
 	u64 heap_mem_addr;

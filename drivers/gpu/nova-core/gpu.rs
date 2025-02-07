@@ -514,6 +514,10 @@ impl Drop for GpuDeviceVmm {
     }
 }
 
+static SUPPORTED_FWS: [&'static str; 2] = {
+    [ "570.86.16", "535.113.01" ]
+};
+
 impl Gpu {
 
     pub(crate) fn alloc_mmu(&self) -> Result<Arc<Mmu>> {
@@ -610,11 +614,36 @@ impl Gpu {
         let sec2 = Sec2::new(base.clone())?;
         let gsp_falcon = GspFalcon::new(base.clone())?;
 
-        let fw = Firmware::new(pdev.as_dev(), &base, &sec2, "535.113.01")?;
+        let mut fw: Option<Firmware> = None;
+        let mut picked_ver : &'static str = "";
+        for fw_ver in SUPPORTED_FWS {
+            pr_info!("Trying to load fw {}", fw_ver);
+            let res = Firmware::new(pdev.as_dev(), &base, &sec2, fw_ver);
+
+            match res {
+                Err(_) => { continue; }
+                _ => {}
+            }
+            fw = Some(res.unwrap());
+            picked_ver = fw_ver;
+            break;
+        }
+        if fw.is_none() {
+            return Err(EINVAL);
+        }
+
+        let fw = fw.unwrap();
 
         let mut vram_mm = MemRange::new(1)?;
 
-        let gsp = GspManagerr535_113_01::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager>;
+        let gsp = match picked_ver {
+            "570.86.16" => { GspManagerr570_86_16::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
+            "535.113.01" => { GspManagerr535_113_01::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
+            _ => {
+                return Err(EINVAL);
+            }
+        };
+
 
         let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
 

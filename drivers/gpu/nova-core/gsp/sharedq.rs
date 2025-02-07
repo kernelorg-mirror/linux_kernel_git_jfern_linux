@@ -491,18 +491,22 @@ impl GSPSharedQueues::ver {
                 },
                 fw::ver::gen::NV_VGPU_MSG_EVENT_OS_ERROR_LOG => {
                     notifiers::Notifiers::ver::os_error_log(&mut msg);
-                }
-                fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_SEND_USER_SHARED_DATA => {
-                    notifiers::Notifiers::ver::user_shared_data(&mut msg);
-                }
+                },
                 fw::ver::gen::NV_VGPU_MSG_EVENT_RC_TRIGGERED => {
                     notifiers::Notifiers::ver::rc_triggered(&mut msg, &self.kill_handler);
-                }
+                },
                 fw::ver::gen::NV_VGPU_MSG_EVENT_MMU_FAULT_QUEUED => {
                     notifiers::Notifiers::ver::mmu_fault_queued(&mut msg);
-                }
-                fw::ver::gen::NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES => {}
+                },
+                fw::ver::gen::NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES => {},
+
+                #[ver(r == r535_113_01)]
+                fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_SEND_USER_SHARED_DATA => {
+                    notifiers::Notifiers::ver::user_shared_data(&mut msg);
+                },
+
                 unk => { pr_info!("Unhandled {:#x}\n", unk); },
+
             }
 
             if rpc_fn == 0 && lq.msgq.queue_empty() {

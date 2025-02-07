@@ -23,8 +23,20 @@ impl GspSystemInfoRpcMsg::ver {
         bars[0] = pci_dev.resource_start(0)?;
         bars[1] = pci_dev.resource_start(1)?;
         bars[2] = pci_dev.resource_start(3)?;
+        bars[3] = pci_dev.resource_start(5)?;
 
         let pciaddr = pci_dev.dev_id()?;
+
+        #[ver(r == r570_86_16)]
+        let device_id = (pci_dev.read_config_word(bindings::PCI_DEVICE_ID)? as u32) << 16 |
+        pci_dev.read_config_word(bindings::PCI_VENDOR_ID)? as u32;
+
+        #[ver(r == r570_86_16)]
+        let subdevice_id = (pci_dev.read_config_word(bindings::PCI_SUBSYSTEM_ID)? as u32) << 16 |
+        pci_dev.read_config_word(bindings::PCI_SUBSYSTEM_VENDOR_ID)? as u32;
+
+        #[ver(r == r570_86_16)]
+        let revision_id = pci_dev.read_config_byte(bindings::PCI_REVISION_ID)? as u32;
 
         let mut msg = fw::ver::gen::s_GspSystemInfo::new(rpc.get_data_ptr())
             .gpuPhysAddr(bars[0])
@@ -35,6 +47,13 @@ impl GspSystemInfoRpcMsg::ver {
             .pciConfigMirrorBase(0x88000)
             .pciConfigMirrorSize(0x1000);
 
+        #[ver(r == r570_86_16)]
+        {
+            msg = msg.gpuPhysIoAddr(bars[3]).
+                PCIDeviceID(device_id).
+                PCISubDeviceID(subdevice_id).
+                PCIRevisionID(revision_id);
+        }
 
         if vgpu_support {
             let pos = pci_dev.find_ext_capability(bindings::PCI_EXT_CAP_ID_SRIOV as i32)? as u32;
@@ -176,19 +195,24 @@ impl GSPStaticConfigRpc::ver {
     }
 
     pub(crate) fn get_gr_info(&mut self) -> (u8, u8) {
-	let gpc_info = self.msg().new_S_gpcInfo();
-	let gpc_mask = gpc_info.get_gpcMask();
+        #[ver(r == r535_113_01)]
+        {
+            let gpc_info = self.msg().new_S_gpcInfo();
+            let gpc_mask = gpc_info.get_gpcMask();
 
-	let mut tpcs: u8 = 0;
-	let mut gpcs: u8 = 0;
-	for gpc in 0..MAX_GPC_COUNT {
-	    if (gpc_mask & (1 << gpc)) != 0 {
-		let tpc = self.msg().new_S_tpcInfo(gpc as isize);
-		tpcs += tpc.get_tpcMask().count_ones() as u8;
-		gpcs += 1;
-	    }
-	}
-	(gpcs, tpcs)
+            let mut tpcs: u8 = 0;
+            let mut gpcs: u8 = 0;
+            for gpc in 0..MAX_GPC_COUNT {
+                if (gpc_mask & (1 << gpc)) != 0 {
+                    let tpc = self.msg().new_S_tpcInfo(gpc as isize);
+                    tpcs += tpc.get_tpcMask().count_ones() as u8;
+                    gpcs += 1;
+                }
+            }
+            (gpcs, tpcs)
+        }
+        #[ver(r == r570_86_16)]
+        (0, 0)
     }
 
     pub(crate) fn fill_fb_regions(&mut self, fb_addr_info: &mut FBInfo) -> Result<()> {

@@ -152,8 +152,17 @@ impl GSPSharedMemObjects::ver {
 
         Self::fill_shm_ptes(&mut shm, ptes_nr);
 
-        let num_logs : usize = fw::ver::gen::LOGIDX_SIZE as usize;
+        let mut num_logs : usize = fw::ver::gen::LOGIDX_SIZE as usize;
         let mut kern: Option<DmaObject> = None;
+        #[ver(r == r570_86_16)]
+        {
+           /* LIBOS 2 on 560 is same are prior */
+            if chipsets_before!(&gpu_base.spec.chipset, GA102) {
+                num_logs -= 1;
+            } else {
+                kern = Some(DmaObject::new_cleared(&gpu_base.dev, 0x10000, "kern")?);
+            }
+        }
         let mut loginit = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "loginit")?;
         let mut logintr = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "logintr")?;
         let mut logrm = DmaObject::new_cleared(&gpu_base.dev, 0x10000, "logrm")?;
@@ -796,7 +805,7 @@ impl GspManager::ver {
         let bar = gpu_base.bar.try_access().ok_or(ENXIO)?;
 
         timer_msec!({
-            if (gsp_objs.queues.gsp_falcon.as_ref().unwrap().falcon.rd32(0x40)? & 0x80000000) != 0 {
+            if gsp_objs.queues.gsp_falcon.as_ref().unwrap().falcon.rd32(0x40)? == 0x80000000 {
                 break;
             }
         }, 2000, &gpu_base.timer);
@@ -1014,7 +1023,35 @@ impl GspManager::ver {
         let mut vmmu_segment_size_msg = GetVmmuSegmentSize::ver::new(&internal_device)?;
         let _ = vmmu_segment_size_msg.push(&mut gsp_objs.queues)?;
 
-        let (gpcs, tpcs) = gsp_static_config.get_gr_info();
+        let gpcs;
+        let tpcs;
+
+        #[ver(r == r535_113_01)]
+        {
+            let (in_gpcs, in_tpcs) = gsp_static_config.get_gr_info();
+            gpcs = in_gpcs;
+            tpcs = in_tpcs;
+        }
+
+        #[ver(r == r570_86_16)]
+        {
+            let mut gpcmsg = GpcInfo::ver::new(&internal_device)?;
+            let gpc_mask = gpcmsg.push(&mut gsp_objs.queues)?;
+
+            let mut in_tpcs: u8 = 0;
+            let mut in_gpcs: u8 = 0;
+            for gpc in 0..MAX_GPC_COUNT {
+                if (gpc_mask & (1 << gpc)) != 0 {
+                    let mut tpcmsg = TpcInfo::ver::new(&internal_device, gpc)?;
+                    let tpc_mask = tpcmsg.push(&mut gsp_objs.queues)?;
+
+                    in_tpcs += tpc_mask.count_ones() as u8;
+                    in_gpcs += 1;
+                }
+            }
+            gpcs = in_gpcs;
+            tpcs = in_tpcs;
+        }
 
         let gsp_objs = KBox::pin_init(new_mutex!(gsp_objs), GFP_KERNEL)?;
 

@@ -92,9 +92,10 @@ struct VersionConfig {
 static GSP_VERSIONS: VersionConfig = VersionConfig {
     fields: &["r"],
     enums: &[
-	&["r535_113_01"],
+	&["r535_113_01", "r570_86_16"],
     ],
-    versions: &[ &["r535_113_01"]
+    versions: &[ &["r535_113_01"],
+		 &["r570_86_16"]
     ],
 };
 

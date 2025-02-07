@@ -45,7 +45,15 @@ pub(crate) struct Wpr {}
 #[versions(GSP)]
 #[allow(non_upper_case_globals)]
 const LIBOS3_CARVEOUT: u64 = {
-    fw::ver::gen::GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS3 as u64
+    #[ver(r == r535_113_01)]
+    {
+        fw::ver::gen::GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS3 as u64
+    }
+
+    #[ver(r == r570_86_16)]
+    {
+        fw::ver::gen::GSP_FW_HEAP_PARAM_OS_SIZE_LIBOS3_BAREMETAL as u64
+    }
 };
 
 #[versions(GSP)]
@@ -86,6 +94,9 @@ pub(crate) fn fill_rmargs(args: *mut u8, shm_addr: u64, ptes_nr: u32, cmdq_offse
 	.pageTableEntryCount(ptes_nr)
 	.cmdQueueOffset(cmdq_offset)
 	.statQueueOffset(statq_offset);
+
+    #[ver(r == r570_86_16)]
+    msg.bDmemStack(1);
 }
 
 pub(crate) const fn get_wpr_meta_size() -> usize {
