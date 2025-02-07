@@ -305,6 +305,8 @@ pub(crate) struct Channel {
     instbuf: InstObj,
     mthdbuf: DmaObject,
 
+    nonstall: Option<u32>,
+
     pub mgr: Arc<dyn GspManager>,
     pub(crate) gsp_chan: Arc<GspChannel>,
 }
@@ -353,6 +355,11 @@ impl Channel {
         gpu.gsp.bind_fifo(&gsp_chan)?;
         gpu.gsp.schedule_fifo(&gsp_chan, true)?;
 
+        let nonstall = match gpu.gsp.find_nonstall(runl_id) {
+            Err(x) => { return Err(x); }
+            Ok(ns) => Some(ns),
+        };
+
         Ok(Arc::new(Self {
             id: chid,
             runl_id,
@@ -360,6 +367,7 @@ impl Channel {
             instbuf,
             mthdbuf,
             gsp_chan,
+            nonstall,
             mgr: gpu.gsp.clone()
         }, GFP_KERNEL)?)
     }
@@ -408,9 +416,10 @@ impl Channel {
                                     gpu: &Gpu,
                                     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
                                     data: *mut core::ffi::c_void) -> Result<Arc<ChannelNonStall>> {
-        let nonstall = match chan.mgr.find_nonstall(chan.runl_id) {
-            Err(x) => { return Err(x); },
-            Ok(ns) => ns
+
+        let nonstall = match chan.nonstall {
+            None => { return Err(ENOENT); }
+            Some(ns) => ns,
         };
 
         let cns = Arc::new(ChannelNonStall {
@@ -421,7 +430,6 @@ impl Channel {
             },
             vfn: gpu.vfn.clone(),
         }, GFP_KERNEL)?;
-
 
         pr_info!("nonstall registered {:#x} {:#x}\n", chan.runl_id, nonstall);
         let _ = gpu.vfn.add_handler(nonstall, cns.clone() as Arc<dyn VfnHandler>);
