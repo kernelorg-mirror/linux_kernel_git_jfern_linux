@@ -4,7 +4,17 @@ README on nova-core:
 
 nova-core is a rust implementation of a core driver to init and talk to the NVIDIA GSP processor and provide some core services for other drivers. Other drivers are currently considered to be vGPU and nova-drm driver in the future.
 
-This tree also has the nova-c driver which is a port of nouveau to nova-core API.
+This tree also has the nova-c driver which is a port of nouveau to nova-core API. This is currently only accelerator support, no display code has been ported as this point.
+
+Config Options:
+===============
+
+This branch has
+
+CONFIG_NOVA_CORE - this enables the core driver support
+CONFIG_NOVA_CORE_VGPU_SUPPORT - this enables the basic features for the VFIO driver (CONFIG_NVIDIA_VGPU_VFIO_PCI) to talk to. Do *NOT* enable this option if you want to use nova-c
+
+CONFIG_DRM_NOVA_C - this enable the NOVA_C driver. DO NOT ENABLE THIS AND THE VGPU SUPPORT, if you do you will get wierd RC TRIGGERED when you use the graphics engine
 
 Code layout:
 ============
