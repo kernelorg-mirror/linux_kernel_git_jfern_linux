@@ -23,10 +23,10 @@ use kernel::list::{
 #[macro_export]
 macro_rules! runtime_optional_name {
     ($name:expr) => {
-	match $name {
+        match $name {
             None => c_str!(::core::concat!(::core::file!(), ":", ::core::line!())),
-	    Some(x) => x,
-	}
+            Some(x) => x,
+        }
     };
 }
 
@@ -2195,11 +2195,11 @@ impl Vmm {
 
         Ok(Self {
             inner: KBox::pin_init(Mutex::new(inner,
-					     runtime_optional_name!(lock_name),
-					     inner_lock_key), GFP_KERNEL)?,
+                                             runtime_optional_name!(lock_name),
+                                             inner_lock_key), GFP_KERNEL)?,
             pd: KBox::pin_init(Mutex::new(pd,
-					  runtime_optional_name!(lock_name),
-					  pd_lock_key), GFP_KERNEL)?,
+                                          runtime_optional_name!(lock_name),
+                                          pd_lock_key), GFP_KERNEL)?,
             sinfo,
             managed,
             rsvd,
