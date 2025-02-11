@@ -251,6 +251,7 @@ pub(crate) struct GspManager {
     tpcs: u8,
     vmmu_segment_size: u64,
     runl: FifoRunList,
+    rsvd_chids: u32,
     mthdbuf_size: u32,
     internal_client: Arc<GspClient>,
     internal_device: Arc<GspDevice>,
@@ -442,7 +443,7 @@ impl GspManager for GspManager::ver {
                          inst: &InstObj,
                          fifo_class: u32) -> Result<Arc<GspChannel>> {
         let mut msg = FifoAlloc::ver::golden(device, va,
-                                          inst, fifo_class)?;
+                                             inst, self.rsvd_chids, fifo_class)?;
 
         let gsp_objs = self.gsp_objs.clone();
         let mut gsp_objs = gsp_objs.inner.lock();
@@ -1015,7 +1016,18 @@ impl GspManager::ver {
 
         let gr_ctx_info = Self::setup_ctx_buf_info(gr_ctx_bufs)?;
 
-        let runl = FifoRunList::create_runlist_from_table(&table)?;
+        let rsvd_chids;
+        {
+            #[ver(r == r535_113_01)]
+            rsvd_chids = 0;
+        }
+
+        {
+            #[ver(r == r570_86_16)]
+            rsvd_chids = 8;
+        }
+
+        let runl = FifoRunList::create_runlist_from_table(&table, rsvd_chids)?;
 
         let mut fault_buffer_size = CEGetFaultMethodBufferSize::ver::new(&internal_device)?;
         let mthdbuf_size = fault_buffer_size.push(&mut gsp_objs.queues)?;
@@ -1075,6 +1087,7 @@ impl GspManager::ver {
             tpcs,
             vmmu_segment_size: vmmu_segment_size_msg.get_segment_size(),
             runl,
+            rsvd_chids,
             mthdbuf_size,
             internal_client,
             internal_device,

@@ -217,10 +217,10 @@ impl FifoRunList {
         return Err(EINVAL);
     }
 
-    pub(crate) fn create_runlist_from_table(table: &FifoDeviceInfoTable) -> Result<FifoRunList> {
+    pub(crate) fn create_runlist_from_table(table: &FifoDeviceInfoTable, rsvd_chids: u32) -> Result<FifoRunList> {
         let mut entries: KVec<RunListEntry> = KVec::new();
 
-        let chids = ChId::new(2048, 0, 2048)?;
+        let chids = ChId::new(2048, rsvd_chids, 2048)?;
 
         #[cfg(CONFIG_NOVA_CORE_VGPU_SUPPORT)]
         chids.reserve(512, 1536);

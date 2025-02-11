@@ -298,9 +298,11 @@ impl FifoAlloc::ver {
     pub(crate) fn golden(device: &GspDevice,
                          va: &GspVa,
                          instobj: &InstObj,
+                         rsvd_chids: u32,
                          oclass: u32) -> Result<Self> {
+        let chan_id = rsvd_chids;
         let client = device.object.client.as_ref().unwrap();
-        let handle = 0xf1f00000;
+        let handle = 0xf1f00000 | chan_id;
         let mut msg = AllocMsg::ver::get(Some(&client),
                                          Some(&device.object),
                                          handle,
@@ -316,10 +318,12 @@ impl FifoAlloc::ver {
         // runq 0
         // delay channel scheduling FLASE
         // deny physical mode CE FALSE
-        // userd index value 3 - bits 0
+        let userd_i = chan_id % 8;
+        let userd_p = chan_id / 8;
+        flags |= userd_i << 8;
         // userd index fixed
-        // userd page value - 0
-        // used page fixed
+        // userd page value
+        flags |= userd_p << 12;
         flags |= 1 << 21;
         // deny auth level priv FALSE
         // skip scrubber FALSE
