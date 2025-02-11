@@ -4,6 +4,7 @@ config DRM_NOVA_C
        depends on NOVA_CORE
        select AUXILIARY_BUS
        select DRM_TTM
+       select DRM_TTM_HELPER
        select DRM_EXEC
        select DRM_GPUVM
        select DRM_SCHED
