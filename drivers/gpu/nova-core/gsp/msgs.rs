@@ -72,16 +72,17 @@ impl RpcMsg::ver {
 	let mut msg = fw::ver::gen::s_GSP_MSG_QUEUE_ELEMENT::new(self.data.as_mut_ptr());
 	let mut argc = msg.get_checkSum();
 
-	argc = align((Self::get_gsp_msg_hdr_size() + argc) as usize, GSP_PAGE_SIZE as usize) as u32;
+	let csum_size = Self::get_gsp_msg_hdr_size() + argc;
+	let page_aligned_size = align(csum_size as usize, GSP_PAGE_SIZE as usize) as u32;
 	msg.set_seqNum(seq);
-	msg.set_elemCount(div_round_up(argc as usize, 0x1000) as u32);
+	msg.set_elemCount(div_round_up(page_aligned_size as usize, 0x1000) as u32);
 	msg.set_checkSum(0);
 
 	let mut ptr : *const u64 = self.data.as_ptr() as *const u64;
 	let mut csum: u64 = 0;
 
 	unsafe {
-	    let end : *const u64 = (self.data.as_ptr() as *const u8).byte_offset(argc as isize) as *const u64;
+	    let end : *const u64 = (self.data.as_ptr() as *const u8).byte_offset(csum_size as isize) as *const u64;
 
 	    while ptr < end {
 		csum ^= *ptr;
@@ -91,7 +92,7 @@ impl RpcMsg::ver {
 
 	let final_csum = (csum >> 32) as u32 ^ (csum & 0xffffffff) as u32;
 	msg.set_checkSum(final_csum);
-	argc
+	page_aligned_size
     }
 
     pub(crate) fn new(rpc_fn: u32, has_reply: bool, size: usize) -> Result<Self> {
@@ -103,7 +104,7 @@ impl RpcMsg::ver {
 	let mut data = KVec::with_capacity(cmd_align_size as usize, GFP_KERNEL)?;
 
 	unsafe {
-	    core::ptr::write_bytes(data.as_mut_ptr() as *mut u8, 0, cmd_size);
+	    core::ptr::write_bytes(data.as_mut_ptr() as *mut u8, 0, cmd_align_size);
 	    data.set_len(cmd_size);
 	}
 
