@@ -172,6 +172,10 @@ pub(crate) fn rc_triggered(msg: &mut KVec<u8>, handlers: &Option<Arc<EventHandle
              rc_triggered.get_scope(),
              rc_triggered.get_partitionAttributionId());
 
+    #[ver(r == r570_86_16)]
+    pr_info!("RC MMU: {:#x} {:#x} type: {:#x}\n", rc_triggered.get_mmuFaultAddrHi(),
+	     rc_triggered.get_mmuFaultAddrLo(), rc_triggered.get_mmuFaultType());
+
     let handlers = match handlers {
 	None => { return; }
 	Some(h) => h
