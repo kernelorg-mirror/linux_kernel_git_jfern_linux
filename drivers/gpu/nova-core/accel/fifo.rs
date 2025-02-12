@@ -459,7 +459,7 @@ impl EventHandler {
     pub(crate) fn add_handler(&self, killed: ChannelKilled) -> Result<()> {
         let mut handlers = self.handlers.lock();
         for handler in &mut *handlers {
-            if handler.id == 0 {
+            if handler.killed.cb == None {
                 *handler = killed;
                 return Ok(());
             }
@@ -484,7 +484,7 @@ impl EventHandler {
         let handlers = self.handlers.lock();
 
         for handler in &*handlers {
-            if handler.id == chid {
+            if handler.id == chid && handler.killed.cb.is_some() {
                 handler.killed();
                 break;
             }
