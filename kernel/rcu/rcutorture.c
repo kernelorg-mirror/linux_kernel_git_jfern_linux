@@ -2440,7 +2440,7 @@ struct rcu_torture_one_read_state_updown {
 	struct rcu_torture_one_read_state rtorsu_rtors;
 };
 
-struct rcu_torture_one_read_state_updown *updownreaders;
+static struct rcu_torture_one_read_state_updown *updownreaders;
 static DEFINE_TORTURE_RANDOM(rcu_torture_updown_rand);
 static int rcu_torture_updown(void *arg);
 
