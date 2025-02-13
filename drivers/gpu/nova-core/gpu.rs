@@ -559,18 +559,6 @@ impl Gpu {
         Self::int_alloc_client_device(self.alloc_id.clone(), self.gsp.clone())
     }
 
-    pub(crate) fn create_channel(&self,
-                                 device: &GpuDevice,
-                                 runl: u32,
-                                 chan_priv: bool,
-                                 offset: u64,
-                                 length: u64,
-                                 vmm: &GpuDeviceVmm,
-                                 userd: &VramObj) -> Result<Arc<Channel>> {
-
-        Ok(Channel::new(self, device, &vmm, userd, runl, offset, length, chan_priv)?)
-    }
-
     pub(crate) fn get_engine_bitmap(&self) -> u64 {
         self.gsp.get_engine_bitmap()
     }

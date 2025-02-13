@@ -61,7 +61,7 @@ struct nouveau_fence_priv {
 #define nouveau_fence(drm) ((struct nouveau_fence_priv *)(drm)->fence)
 
 void nouveau_fence_context_new(struct nouveau_channel *, struct nouveau_fence_chan *);
-void nouveau_fence_context_del(struct nouveau_fence_chan *);
+void nouveau_fence_context_del(struct nouveau_drm *drm, struct nouveau_fence_chan *);
 void nouveau_fence_context_free(struct nouveau_fence_chan *);
 void nouveau_fence_context_kill(struct nouveau_fence_chan *, int error);
 

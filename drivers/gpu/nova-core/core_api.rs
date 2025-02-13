@@ -615,10 +615,7 @@ pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_d
 
     let ncchan = unsafe { &mut (*chan) };
     let userd_obj : &VramObj = unsafe { KBox::borrow((*userd).obj) };
-    let gpu_chan = match gpu.create_channel(&dev_arc,
-                                            runl as u32, chan_priv,
-                                            offset, length,
-                                            &vmm_arc, userd_obj) {
+    let gpu_chan = match Channel::new(gpu, &dev_arc, &vmm_arc, userd_obj, runl as u32, offset, length, chan_priv) {
         Err(x) => { return x.to_errno() }
         Ok(x) => { x }
     };
@@ -740,14 +737,20 @@ pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings:
 #[no_mangle]
 #[allow(dead_code)]
 /// Unregister a callback to get nonstall interrupts for a channel
-pub unsafe extern "C" fn nova_core_unregister_nonstall(cns_ptr: *mut bindings::nova_core_nonstall) {
+pub unsafe extern "C" fn nova_core_unregister_nonstall(auxdev: *mut bindings::auxiliary_device,
+                                                       cns_ptr: *mut bindings::nova_core_nonstall) {
+
+    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
+    let gpu = unsafe { &(*core_driver).gpu };
     let cns_info = unsafe { &mut (*cns_ptr) };
+
     unsafe {
         if cns_info.arc == core::ptr::null_mut() {
             return;
         }
         let cns : Arc<ChannelNonStall> = Arc::from_foreign(cns_info.arc);
-        ChannelNonStall::unregister(&cns);
+
+        Channel::unregister_nonstall(&gpu.event_handler, &gpu.vfn, &cns);
         cns_info.arc = core::ptr::null_mut();
     }
 }

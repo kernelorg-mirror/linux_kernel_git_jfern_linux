@@ -73,7 +73,7 @@ nv84_fence_context_del(struct nouveau_channel *chan)
 	mutex_lock(&priv->mutex);
 	nouveau_vma_del(&fctx->vma);
 	mutex_unlock(&priv->mutex);
-	nouveau_fence_context_del(&fctx->base);
+	nouveau_fence_context_del(chan->cli->drm, &fctx->base);
 	chan->fence = NULL;
 	nouveau_fence_context_free(&fctx->base);
 }

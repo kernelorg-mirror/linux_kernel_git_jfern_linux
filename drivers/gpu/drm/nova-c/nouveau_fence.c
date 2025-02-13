@@ -98,12 +98,12 @@ nouveau_fence_context_kill(struct nouveau_fence_chan *fctx, int error)
 }
 
 void
-nouveau_fence_context_del(struct nouveau_fence_chan *fctx)
+nouveau_fence_context_del(struct nouveau_drm *drm, struct nouveau_fence_chan *fctx)
 {
 	cancel_work_sync(&fctx->uevent_work);
 	nouveau_fence_context_kill(fctx, 0);
 
-	nova_core_unregister_nonstall(&fctx->nonstall);
+	nova_core_unregister_nonstall(drm->auxdev, &fctx->nonstall);
 	fctx->dead = 1;
 
 	/*

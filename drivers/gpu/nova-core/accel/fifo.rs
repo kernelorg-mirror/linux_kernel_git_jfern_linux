@@ -278,17 +278,84 @@ pub(crate) struct GpuPromoteBufferEntry {
     pub nonmapped: bool,
 }
 
+// Register one of these per non-stall interrupt source
+// Then all channels for that runl get added
+
+pub(crate) struct NonStallTrackerInner {
+    num_registered: u32,
+    cns_handlers: KVec<Option<Arc<ChannelNonStall>>>,
+}
+
+#[pin_data]
+pub(crate) struct NonStallTracker {
+    nonstall: u32,
+    #[pin]
+    inner: Mutex<NonStallTrackerInner>,
+}
+
+impl VfnHandler for NonStallTracker {
+    fn handle_vfn(&self) -> Result<u32> {
+        pr_info!("nonstall handler\n");
+
+        let inner = &self.inner.lock();
+        for cns in &inner.cns_handlers {
+            match cns {
+                None => {},
+                Some(cns) => { unsafe { cns.cb.cb.unwrap()(cns.cb.data); } }
+            }
+        }
+        Ok(1)
+    }
+}
+
+impl NonStallTracker {
+    fn num_reg(&self) -> u32 {
+        self.inner.lock().num_registered
+    }
+
+    fn add_cns(&self, cns: Arc<ChannelNonStall>) -> Result<()> {
+        let inner = &mut self.inner.lock();
+        for channs in &mut inner.cns_handlers {
+            if channs.is_none() {
+                *channs = Some(cns);
+                inner.num_registered += 1;
+                return Ok(());
+            }
+        }
+        inner.cns_handlers.push(Some(cns), GFP_KERNEL)?;
+        inner.num_registered += 1;
+        Ok(())
+    }
+
+    fn remove_cns(&self, chan_id: u32) -> Result<()> {
+        let inner = &mut self.inner.lock();
+        for channs in &mut inner.cns_handlers {
+            let in_channs = match channs {
+                Some(c) => c,
+                None => { continue }
+            };
+            if in_channs.chan_id == chan_id {
+                *channs = None;
+                inner.num_registered -= 1;
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) struct ChannelCbInfo {
     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
     data: *mut core::ffi::c_void,
 }
 
+unsafe impl Send for ChannelCbInfo {}
+unsafe impl Sync for ChannelCbInfo {}
+
 pub(crate) struct ChannelKilled {
     id: u32,
     killed: ChannelCbInfo,
 }
-
-unsafe impl Send for ChannelKilled {}
 
 impl ChannelKilled {
     pub(crate) fn killed(&self) {
@@ -314,7 +381,7 @@ pub(crate) struct Channel {
 pub(crate) struct ChannelNonStall {
     nonstall: u32,
     cb: ChannelCbInfo,
-    vfn: Arc<Vfn>,
+    chan_id: u32,
 }
 
 impl VfnHandler for ChannelNonStall {
@@ -322,14 +389,6 @@ impl VfnHandler for ChannelNonStall {
         pr_info!("nonstall handler\n");
         unsafe { (self.cb.cb.unwrap())(self.cb.data) };
         Ok(1)
-    }
-}
-
-impl ChannelNonStall {
-    pub(crate) fn unregister(cns: &Arc<ChannelNonStall>) {
-        pr_info!("nonstall unregistered {:#x}\n", cns.nonstall);
-        let _ = cns.vfn.intr_block(cns.nonstall);
-        let _ = cns.vfn.remove_handler(cns.clone() as Arc<dyn VfnHandler>);
     }
 }
 
@@ -399,14 +458,14 @@ impl Channel {
             },
         };
 
-        let _ = gpu.event_handler.add_handler(killed);
+        let _ = gpu.event_handler.add_killed_handler(killed);
         pr_info!("killed registered\n");
         0
     }
 
     pub(crate) fn unregister_killed(chan: Arc<Channel>,
                                     gpu: &Gpu) -> i32 {
-        gpu.event_handler.remove_handler(chan.id);
+        gpu.event_handler.remove_killed_handler(chan.id);
         pr_info!("killed unregistered\n");
         0
     }
@@ -427,13 +486,17 @@ impl Channel {
                 cb,
                 data
             },
-            vfn: gpu.vfn.clone(),
+            chan_id: chan.id,
         }, GFP_KERNEL)?;
 
         pr_info!("nonstall registered {:#x} {:#x}\n", chan.runl_id, nonstall);
-        let _ = gpu.vfn.add_handler(nonstall, cns.clone() as Arc<dyn VfnHandler>);
-        gpu.vfn.intr_allow(nonstall)?;
+
+        gpu.event_handler.register_nonstall_handler(gpu, nonstall, cns.clone())?;
         Ok(cns)
+    }
+
+    pub(crate) fn unregister_nonstall(event_handler: &EventHandler, vfn: &Vfn, cns: &ChannelNonStall) -> Result<()>{
+        event_handler.unregister_nonstall_handler(vfn, cns.nonstall, cns.chan_id)
     }
 
     pub(crate) fn free(&self) {
@@ -445,18 +508,21 @@ impl Channel {
 #[pin_data]
 pub(crate) struct EventHandler {
     #[pin]
-    handlers: Mutex<KVec<ChannelKilled>>
+    handlers: Mutex<KVec<ChannelKilled>>,
+    #[pin]
+    nonstall: Mutex<KVec<Arc<NonStallTracker>>>,
 }
 
 impl EventHandler {
 
     pub(crate) fn new() -> Result<Arc<EventHandler>> {
         Arc::pin_init(pin_init!(EventHandler {
-            handlers <- new_mutex!(KVec::new())
+            handlers <- new_mutex!(KVec::new()),
+            nonstall <- new_mutex!(KVec::new()),
         }), GFP_KERNEL)
     }
 
-    pub(crate) fn add_handler(&self, killed: ChannelKilled) -> Result<()> {
+    pub(crate) fn add_killed_handler(&self, killed: ChannelKilled) -> Result<()> {
         let mut handlers = self.handlers.lock();
         for handler in &mut *handlers {
             if handler.killed.cb == None {
@@ -468,7 +534,7 @@ impl EventHandler {
         Ok(())
     }
 
-    pub(crate) fn remove_handler(&self, chid: u32) {
+    pub(crate) fn remove_killed_handler(&self, chid: u32) {
         let mut handlers = self.handlers.lock();
 
         for handler in &mut *handlers {
@@ -488,6 +554,61 @@ impl EventHandler {
                 handler.killed();
                 break;
             }
+        }
+    }
+
+    pub(crate) fn register_nonstall_handler(&self, gpu: &Gpu, nonstall: u32,
+                                            cns: Arc<ChannelNonStall>) -> Result<()> {
+        let mut nonstall_handlers = self.nonstall.lock();
+
+        for ns in &mut *nonstall_handlers {
+            if ns.nonstall == nonstall {
+                ns.add_cns(cns);
+
+                if ns.num_reg() == 1 {
+                    gpu.vfn.intr_allow(nonstall)?;
+                }
+                return Ok(())
+            }
+        }
+
+        let nst_inner = NonStallTrackerInner {
+            num_registered: 0,
+            cns_handlers: KVec::new(),
+        };
+
+        let nst = Arc::pin_init(pin_init!(NonStallTracker {
+            nonstall,
+            inner <- new_mutex!(nst_inner),
+        }), GFP_KERNEL)?;
+
+        nst.add_cns(cns);
+        nonstall_handlers.push(nst.clone(), GFP_KERNEL)?;
+
+        let _ = gpu.vfn.add_handler(nonstall, nst.clone() as Arc<dyn VfnHandler>);
+        gpu.vfn.intr_allow(nonstall)?;
+
+        Ok(())
+    }
+
+    pub(crate) fn unregister_nonstall_handler(&self, vfn: &Vfn, nonstall: u32, chan_id: u32) -> Result<()> {
+        let mut nonstall_handlers = self.nonstall.lock();
+        for ns in &mut *nonstall_handlers {
+            if ns.nonstall == nonstall {
+                ns.remove_cns(chan_id);
+
+                if ns.num_reg() == 0 {
+                    vfn.intr_block(nonstall);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn unregister(&self, gpu: &Gpu) {
+        let mut nonstall_handlers = self.nonstall.lock();
+        for ns in &mut *nonstall_handlers {
+            gpu.vfn.remove_handler(ns.clone() as Arc<dyn VfnHandler>);
         }
     }
 }
