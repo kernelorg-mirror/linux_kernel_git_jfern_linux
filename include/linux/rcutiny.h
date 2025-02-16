@@ -63,6 +63,11 @@ static inline void cond_synchronize_rcu_full(struct rcu_gp_oldstate *rgosp)
 	cond_synchronize_rcu(rgosp->rgos_norm);
 }
 
+static inline int get_gp_wrap_count(int cpu)
+{
+	return 0;
+}
+
 static inline unsigned long start_poll_synchronize_rcu_expedited(void)
 {
 	return start_poll_synchronize_rcu();
