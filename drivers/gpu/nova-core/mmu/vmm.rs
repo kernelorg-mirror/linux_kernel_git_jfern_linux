@@ -949,7 +949,7 @@ impl<'a> VmmIter<'a> {
             pr_info!("ref_hwpt: {}: {:#x}\n", pg_type, size);
         }
 
-        let mut pt = MmuPtC::get(self.vmm_info.instmem.clone(), size as usize, (*desc).align() as usize, true)?;
+        let mut pt = MmuPtC::get(&self.vmm_info.instmem, size as usize, (*desc).align() as usize, true)?;
 
         pgt.pt[pg_type] = Some(pt);
 
@@ -1927,7 +1927,7 @@ impl Vmm {
         let mut m = 0;
         let mut size = in_size;
         let mut addr = in_addr;
-        let base = &sinfo.instmem.base.clone();
+        let base = &sinfo.instmem.base;
 
         while size != 0 {
             /* Limit maximum page size based on remaining size. */
@@ -1972,13 +1972,13 @@ impl Vmm {
 
     fn put_internal(inner: &mut VmmInner, pt: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>) -> Result<()> {
         if vma.mapref() || !vma.sparse {
-            let base = sinfo.instmem.base.clone();
+            let base = &sinfo.instmem.base;
             if vma.mapped() {
-                let page = Self::page(&base, vma.refd());
+                let page = Self::page(base, vma.refd());
                 Self::ptes_unmap_put(pt, sinfo, page, vma.addr(), vma.size(), vma.sparse);
             } else {
                 if vma.refd() != NVKM_VMA_PAGE_NONE {
-                    let page = Self::page(&base, vma.refd());
+                    let page = Self::page(base, vma.refd());
                     Self::ptes_put(pt, sinfo, page, vma.addr(), vma.size());
                 }
             }
@@ -2098,8 +2098,8 @@ impl Vmm {
         }
 
         if getref {
-            let base = sinfo.instmem.base.clone();
-            let page = Self::page(&base, page_idx.unwrap());
+            let base = &sinfo.instmem.base;
+            let page = Self::page(base, page_idx.unwrap());
             Self::ptes_get(pd, sinfo, page, curr.addr(), curr.size())?;
         }
 
@@ -2119,10 +2119,10 @@ impl Vmm {
     }
 
     pub(crate) fn boot(inner: &mut VmmInner, pd: &mut VmmPt, sinfo: &mut VmmStaticInfo, vmm_start: u64, vmm_limit: u64) -> Result<()> {
-        let base = sinfo.instmem.base.clone();
+        let base = &sinfo.instmem.base;
         let limit = vmm_limit - vmm_start;
-        let page_idx = Self::smallest_page_idx(&base);
-        let pg = Self::page(&base, page_idx);
+        let page_idx = Self::smallest_page_idx(base);
+        let pg = Self::page(base, page_idx);
 
         Self::ptes_get(pd, sinfo, pg, vmm_start, limit)?;
 
@@ -2132,7 +2132,7 @@ impl Vmm {
         Ok(())
     }
 
-    pub(crate) fn new(instmem: Arc<InstMem>,
+    pub(crate) fn new(instmem: &Arc<InstMem>,
                       lock_class: Option<(&'static LockClassKey, &'static LockClassKey)>,
                       addr: u64, size: u64,
                       vmm_type: u8,
@@ -2180,7 +2180,7 @@ impl Vmm {
             },
             None => {
                 if gpu_size > 0 {
-                    pt0 = Some(MmuPtC::get(instmem.clone(), gpu_size, desc_ref.align() as usize, true)?);
+                    pt0 = Some(MmuPtC::get(instmem, gpu_size, desc_ref.align() as usize, true)?);
                 }
             }
         }
@@ -2286,12 +2286,12 @@ impl Vmm {
         Ok(pd.pde[0].1.as_ref().unwrap().pt[0].as_ref().unwrap().addr)
     }
 
-    pub(crate) fn map(&self, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
+    pub(crate) fn map(&self, vma: &Vma, map: &mut VmmMap<'_>) -> Result<()> {
         let mut locked_pd = self.pd.lock();
         Self::map_internal(&mut locked_pd, &self.sinfo, vma, map)
     }
 
-    pub(crate) fn map_internal(pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>, map: &mut VmmMap<'_>) -> Result<()> {
+    pub(crate) fn map_internal(pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: &Vma, map: &mut VmmMap<'_>) -> Result<()> {
         let mut map_internal = VmmMapInternal {
             page_idx: 0,
             pg_shift: 0,
@@ -2303,7 +2303,7 @@ impl Vmm {
             midx: 0,
             dma_base: core::ptr::null_mut(),
         };
-        let base = &sinfo.instmem.base.clone();
+        let base = &sinfo.instmem.base;
 
         if vma.page() == NVKM_VMA_PAGE_NONE && vma.refd() == NVKM_VMA_PAGE_NONE {
             Self::map_choose(base, &vma, map, &mut map_internal)?;
@@ -2491,7 +2491,7 @@ impl Vmm {
         let mut pd = self.pd.lock();
         let vma = locked_inner.node_search(addr)?;
 
-        let base = self.sinfo.instmem.base.clone();
+        let base = &self.sinfo.instmem.base;
         let page = Self::page(&base, vma.refd());
         if vma.mapref() {
             Self::ptes_unmap_put(&mut pd, &self.sinfo, page, vma.addr(), vma.size(), vma.sparse);
@@ -2601,7 +2601,7 @@ impl Vmm {
 
         let vma = Vma::new_raw(addr, size, page_idx)?;
 
-        self.map(vma.clone_arc(), map)?;
+        self.map(&vma, map)?;
         Ok(())
     }
 

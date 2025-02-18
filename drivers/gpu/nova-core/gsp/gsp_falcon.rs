@@ -18,7 +18,7 @@ pub(crate) struct GspFalconFw {
 }
 
 impl GspFalcon {
-    pub(crate) fn new(gpu_base: Arc<GpuBase>) -> Result<Self> {
+    pub(crate) fn new(gpu_base: &Arc<GpuBase>) -> Result<Self> {
         let riscv_irqmask: u32 = if chipsets_after!(&gpu_base.spec.chipset, GA102) {
             0x528
         } else {
@@ -26,7 +26,7 @@ impl GspFalcon {
         };
 
         Ok(Self {
-            falcon: Arc::new(Falcon::new(gpu_base.clone(),
+            falcon: Arc::new(Falcon::new(gpu_base,
                                          0x110000, 0x1000, 0x0, riscv_irqmask, false)?, GFP_KERNEL)?,
             libos_addr: 0,
             app_version: 0,

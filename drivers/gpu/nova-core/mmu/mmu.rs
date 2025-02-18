@@ -28,7 +28,7 @@ impl MmuPtC {
         }
     }
 
-    pub(crate) fn get(instmem: Arc<InstMem>, size: usize, align: usize, zero: bool) -> Result<MmuPt> {
+    pub(crate) fn get(instmem: &Arc<InstMem>, size: usize, align: usize, zero: bool) -> Result<MmuPt> {
         if align < 0x1000 {
 
 
@@ -56,7 +56,7 @@ pub(crate) struct MmuPt {
 }
 
 impl MmuPt {
-    pub(crate) fn new(instmem: Arc<InstMem>, size: usize, align: usize, zero: bool, sub: bool) -> Result<Self> {
+    pub(crate) fn new(instmem: &Arc<InstMem>, size: usize, align: usize, zero: bool, sub: bool) -> Result<Self> {
 
         let memory = InstObj::new(instmem, size, align, zero, true)?;
         let addr = memory.addr()?;
@@ -239,9 +239,9 @@ impl Mmu {
         Ok(())
     }
 
-    pub(crate) fn new(gpu_base: Arc<GpuBase>, heap_size: u64) -> Result<Self> {
+    pub(crate) fn new(gpu_base: &Arc<GpuBase>, heap_size: u64) -> Result<Self> {
         let mut mmu = Self {
-            base: gpu_base,
+            base: gpu_base.clone(),
             dma_bits: DMA_BITS,
             types: KVec::new(),
             heaps: KVec::new(),

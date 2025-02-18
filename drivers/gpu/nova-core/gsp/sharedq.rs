@@ -272,7 +272,7 @@ impl GSPSharedQueues::ver {
         self.kill_handler = Some(kill_handler);
     }
 
-    fn cmdq_push(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver) -> Result<()> {
+    fn cmdq_push(&self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver) -> Result<()> {
         let mut argc = rpc.csum(lq.cmdq.inc_seq());
 
         let mut off = 0;
@@ -303,7 +303,7 @@ impl GSPSharedQueues::ver {
         Ok(())
     }
 
-    fn rpc_send(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>,
+    fn rpc_send(&self, lq: &mut Guard<'_, LockedQueues, MutexBackend>,
                 rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
         self.cmdq_push(lq, rpc)?;
 
@@ -316,7 +316,7 @@ impl GSPSharedQueues::ver {
         Ok(())
     }
 
-    fn rpc_push_locked(&mut self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
+    fn rpc_push_locked(&self, lq: &mut Guard<'_, LockedQueues, MutexBackend>, rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
         let max_msg_size : u32 = (16 * 0x1000) - RpcMsg::ver::get_gsp_msg_hdr_size();
         let max_rpc_size : u32 = max_msg_size - RpcMsg::ver::get_gsp_rpc_hdr_size();
         let mut rpc_size : u32 = rpc.get_rpc_length() - RpcMsg::ver::get_gsp_rpc_hdr_size();
@@ -517,23 +517,20 @@ impl GSPSharedQueues::ver {
     }
 
     pub(crate) fn rpc_poll(&mut self, rpc_fn: u32) -> Result<()> {
-        let lq = self.lq.clone();
-        let mut locked = lq.lock();
+        let mut locked = self.lq.lock();
         self.msg_recv(&mut locked, rpc_fn, 0)?;
         Ok(())
     }
 
     pub(crate) fn msg_irq_work(&self) {
-        let lq = &self.lq.clone();
-        let mut locked = lq.lock();
+        let mut locked = self.lq.lock();
         if !locked.msgq.queue_empty() {
             let _ = self.msg_recv(&mut locked, 0, 0);
         }
     }
 
     pub(crate) fn rpc_push(&mut self, rpc: &mut RpcMsg::ver, wait: bool, repc: u32) -> Result<()> {
-        let lq = self.lq.clone();
-        let mut locked = lq.lock();
+        let mut locked = self.lq.lock();
         self.rpc_push_locked(&mut locked, rpc, wait, repc)
     }
 

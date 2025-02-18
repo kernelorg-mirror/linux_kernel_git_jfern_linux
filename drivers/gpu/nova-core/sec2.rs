@@ -22,9 +22,9 @@ pub(crate) struct Sec2 {
 }
 
 impl Sec2 {
-    pub(crate) fn new(gpu_base: Arc<GpuBase>) -> Result<Self> {
+    pub(crate) fn new(gpu_base: &Arc<GpuBase>) -> Result<Self> {
 	Ok(Self {
-	    falcon: Arc::new(Falcon::new(gpu_base.clone(),
+	    falcon: Arc::new(Falcon::new(gpu_base,
 					 gpu_base.spec.gpu_consts.sec2_addr,
 					 0x1000, 0x408, 0, true)?, GFP_KERNEL)?,
 	})
@@ -48,7 +48,7 @@ impl Sec2Fw {
 	fwinfo.boot_addr = load_hdr_v2.os_code_offset;
     }
 
-    fn tu102_boot_fw_setup(dev: &device::Device, falcon: Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self>
+    fn tu102_boot_fw_setup(dev: &device::Device, falcon: &Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self>
     {
 	let load_hdr = BinHdr::from_fw(fw);
 	let hs_hdr_v2 = HsHeader_v2::from_fw(fw, load_hdr.header_offset as usize);
@@ -71,7 +71,7 @@ impl Sec2Fw {
 				     &fw.data())?;
 
 	let mut fw = FalconFw::new_from_info(nvfw,
-					     falcon.clone(),
+					     falcon,
 					     sigs,
 					     fw_info);
 	
@@ -99,7 +99,7 @@ impl Sec2Fw {
 	info.ucode_id = meta[2];
     }
 
-    fn ga102_boot_fw_setup(dev: &device::Device, falcon: Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self> {
+    fn ga102_boot_fw_setup(dev: &device::Device, falcon: &Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self> {
 	let load_hdr = BinHdr::from_fw(fw);
 	let hs_hdr_v2 = HsHeader_v2::from_fw(fw, load_hdr.header_offset as usize);
         pr_info!("{} load_hdr {:?}", name, load_hdr);
@@ -174,7 +174,7 @@ impl Sec2Fw {
 	self.fw.boot(mbox0, mbox1)
     }
 
-    pub(crate) fn new(dev: &device::Device, falcon: Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self> {
+    pub(crate) fn new(dev: &device::Device, falcon: &Arc<Falcon>, fw: &Firmware, name: &'static str) -> Result<Self> {
 	if chipsets_after!(&falcon.base.spec.chipset, GA102) {
 	    Self::ga102_boot_fw_setup(dev, falcon, fw, name)
 	} else {

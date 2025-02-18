@@ -81,7 +81,8 @@ impl AllocSubdevice::ver {
         let handle = 0x5d1d0000;
         let oclass = fw::ver::gen::NV20_SUBDEVICE_0;
 
-        let msg = AllocMsg::ver::get(devobj.client.clone().as_deref(),
+        let client = devobj.client.as_ref().unwrap();
+        let msg = AllocMsg::ver::get(Some(&client),
                                      Some(devobj),
                                      handle,
                                      oclass,

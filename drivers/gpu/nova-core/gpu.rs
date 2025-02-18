@@ -396,8 +396,8 @@ impl Firmware {
         }
 
         let bootloader_fw = RiscvFw::new_from_fw(&dev, &bootloader, "bootloader")?;
-        let loader_fw = Sec2Fw::new(&dev, sec2.falcon.clone(), &booter_load, "booter-load")?;
-        let unload_fw = Sec2Fw::new(&dev, sec2.falcon.clone(), &booter_unload, "booter-unload")?;
+        let loader_fw = Sec2Fw::new(&dev, &sec2.falcon, &booter_load, "booter-load")?;
+        let unload_fw = Sec2Fw::new(&dev, &sec2.falcon, &booter_unload, "booter-unload")?;
 
         let mut bl_fw = None;
         if !bl.is_none() {
@@ -522,13 +522,13 @@ impl Gpu {
 
     pub(crate) fn alloc_mmu(&self) -> Result<Arc<Mmu>> {
         let size = (self.instmem.vram_mm.size(0)? << NVKM_MM_PAGE_SHIFT) as u64;
-        let mmu = Mmu::new(self.base.clone(), size)?;
+        let mmu = Mmu::new(&self.base, size)?;
         Ok(Arc::new(mmu, GFP_KERNEL)?)
     }
 
     pub(crate) fn alloc_vmm(&self, device: &GpuDevice,
                             addr: u64, size: u64, vmm_type: u8) -> Result<Arc<GpuDeviceVmm>> {
-        let vmm = Vmm::new(self.instmem.clone(), None, addr, size, vmm_type, false, false, None,
+        let vmm = Vmm::new(&self.instmem, None, addr, size, vmm_type, false, false, None,
                            None, true, 0, c_str!("uvmm"))?;
         let va = self.gsp.alloc_vaspace(&device.gsp, &vmm, vmm_type)?;
 
@@ -541,12 +541,12 @@ impl Gpu {
 
     pub(crate) fn gr_ctx(&self, device: &GpuDevice, chan: &Channel,
                          vmm: Arc<GpuDeviceVmm>) -> Result<Arc<GrCtx>>{
-        GrCtx::new_ctx(self.instmem.clone(), self.gsp.clone(),
+        GrCtx::new_ctx(&self.instmem, &self.gsp,
                        device, chan,
                        vmm, &self.gr_ctx_bufs)
     }
 
-    pub(crate) fn int_alloc_client_device(alloc_id: Arc<AllocId>, gsp: Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
+    pub(crate) fn int_alloc_client_device(alloc_id: &Arc<AllocId>, gsp: &Arc<dyn GspManager>) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
 
         let client_id = alloc_id.alloc();
         let (gsp_client, gsp_device) = gsp.alloc_client_device(client_id)?;
@@ -556,7 +556,7 @@ impl Gpu {
     }
 
     pub(crate) fn alloc_client_device(&self) -> Result<(Arc<GpuClient>, Arc<GpuDevice>)> {
-        Self::int_alloc_client_device(self.alloc_id.clone(), self.gsp.clone())
+        Self::int_alloc_client_device(&self.alloc_id, &self.gsp)
     }
 
     pub(crate) fn get_engine_bitmap(&self) -> u64 {
@@ -599,8 +599,8 @@ impl Gpu {
 
         let event_handler = EventHandler::new()?;
 
-        let sec2 = Sec2::new(base.clone())?;
-        let gsp_falcon = GspFalcon::new(base.clone())?;
+        let sec2 = Sec2::new(&base)?;
+        let gsp_falcon = GspFalcon::new(&base)?;
 
         let mut fw: Option<Firmware> = None;
         let mut picked_ver : &'static str = "";
@@ -625,8 +625,8 @@ impl Gpu {
         let mut vram_mm = MemRange::new(1)?;
 
         let gsp = match picked_ver {
-            "570.86.16" => { GspManagerr570_86_16::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
-            "535.113.01" => { GspManagerr535_113_01::new(base.clone(), &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
+            "570.86.16" => { GspManagerr570_86_16::new(&base, &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
+            "535.113.01" => { GspManagerr535_113_01::new(&base, &vfn, event_handler.clone(), &mut vram_mm, gsp_falcon, sec2, fw)? as Arc<dyn GspManager> },
             _ => {
                 return Err(EINVAL);
             }
@@ -635,12 +635,12 @@ impl Gpu {
 
         let vram_mm = Arc::new(vram_mm, GFP_KERNEL)?;
 
-        let mmu = Arc::new(Mmu::new(base.clone(), (vram_mm.size(0)? << NVKM_MM_PAGE_SHIFT) as u64)?, GFP_KERNEL)?;
-        let instmem = InstMem::new(base.clone(), vram_mm.clone(),
+        let mmu = Arc::new(Mmu::new(&base, (vram_mm.size(0)? << NVKM_MM_PAGE_SHIFT) as u64)?, GFP_KERNEL)?;
+        let instmem = InstMem::new(&base, &vram_mm,
                                    pdev.resource_start(3)?)?;
 
-        let bars = Arc::new(Bar::new(instmem.clone(),
-                                     gsp.clone(),
+        let bars = Arc::new(Bar::new(&instmem,
+                                     &gsp,
                                      pdev.resource_len(1)?,
                                      Some(pdev.resource_len(3)?),
                                      pdev.resource_start(3)?)?, GFP_KERNEL)?;
@@ -657,7 +657,7 @@ impl Gpu {
             bar.try_writel(0x40, 0x110004)?;
         }
 
-        let gr_ctx_bufs = GrCtx::golden_init(instmem.clone(), gsp.clone(), id_allocator.clone())?;
+        let gr_ctx_bufs = GrCtx::golden_init(&instmem, &gsp, &id_allocator)?;
         Ok(pin_init!(Self { base, event_handler, vfn, gsp, mmu, bar: bars, instmem, vgpu, gr_ctx_bufs, alloc_id: id_allocator }))
     }
 

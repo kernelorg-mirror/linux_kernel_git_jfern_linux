@@ -45,7 +45,7 @@ pub(crate) trait Memory {
     fn size(&self) -> Result<u64>;
     fn addr(&self) -> Result<u64>;
     fn map(&mut self, offset: u64);
-    fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()>;
+    fn kmap(&mut self, vmm: &Vmm) -> Result<()>;
     fn kmap_locked(&mut self, vmm_info: &VmmStaticInfo, vmm: &mut VmmInner, pd: &mut VmmPt) -> Result<()> {
         return Err(ENOSPC);
     }
@@ -107,7 +107,7 @@ impl Memory for VramObj {
 
     }
 
-    fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
+    fn kmap(&mut self, vmm: &Vmm) -> Result<()> {
         Err(ENOSPC)
     }
 
@@ -136,7 +136,7 @@ impl Memory for VramObj {
 
 impl VramObj {
 
-    pub(crate) fn vram_kmap(vramobj: VramObj, instmem: Arc<InstMem>) -> Result<InstObj> {
+    pub(crate) fn vram_kmap(vramobj: VramObj, instmem: &Arc<InstMem>) -> Result<InstObj> {
         InstObj::wrap(instmem, vramobj)
     }
 
@@ -153,7 +153,8 @@ impl VramObj {
         })
 
     }
-    pub(crate) fn new(mm: Arc<MemRange>, heap: u8, mm_type: u8, rpage: u8, size: usize, contig: bool, back: bool) -> Result<Self> {
+
+    pub(crate) fn new(mm: &Arc<MemRange>, heap: u8, mm_type: u8, rpage: u8, size: usize, contig: bool, back: bool) -> Result<Self> {
         let page: u8 = core::cmp::max(rpage, NVKM_MM_PAGE_SHIFT as u8);
         let szalign: usize = (1 << page) >> NVKM_MM_PAGE_SHIFT;
         let mut szmax: usize = align(size, 1 << page) >> NVKM_MM_PAGE_SHIFT;
@@ -197,7 +198,7 @@ impl VramObj {
         Ok(ret)
     }
 
-    pub(crate) fn vram_map(&self, offset: u64, vmm: &Vmm, vma: Arc<Vma>, kind: u8) -> Result<()> {
+    pub(crate) fn vram_map(&self, offset: u64, vmm: &Vmm, vma: &Vma, kind: u8) -> Result<()> {
         let mut vmmmap = VmmMap {
             memory: self,
             offset,
@@ -212,7 +213,7 @@ impl VramObj {
         Ok(())
     }
 
-    pub(crate) fn vram_map_locked(&mut self, offset: u64, pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: Arc<Vma>) -> Result<()> {
+    pub(crate) fn vram_map_locked(&mut self, offset: u64, pd: &mut VmmPt, sinfo: &VmmStaticInfo, vma: &Vma) -> Result<()> {
         let mut vmmmap = VmmMap {
             memory: self,
             offset,
@@ -279,7 +280,7 @@ impl Memory for InstObj {
     fn map(&mut self, offset: u64) {
     }
 
-    fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
+    fn kmap(&mut self, vmm: &Vmm) -> Result<()> {
         // LOCKING RECURSION??
         let size = self.size()?;
 
@@ -294,11 +295,10 @@ impl Memory for InstObj {
                 Ok(x) => { x }
             };
 
-            self.vram.vram_map(0, vmm, bar.clone(), 0)?;
+            self.vram.vram_map(0, vmm, &bar, 0)?;
 
             self.bar2_vma_addr = Some(bar.addr());
-            pr_info!("kmap inst {:#x} {:#x}\n", bar.clone().addr(), bar.clone().size());
-            self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
+            self.bar2_io = Some(unsafe { Io::<PAGE_SIZE>::new((self.instmem.bar2_phys_base + bar.addr()) as usize, bar.size() as usize)? });
             self.bar2_map = Some(unsafe { self.bar2_io.as_ref().unwrap().remap(bar.size() as usize) });
             break;
         }
@@ -320,7 +320,7 @@ impl Memory for InstObj {
                 Ok(x) => { x }
             };
 
-            self.vram.vram_map_locked(0, pd, vmm_info, bar.clone())?;
+            self.vram.vram_map_locked(0, pd, vmm_info, &bar)?;
             // map memory to bar
             // do ioremap
             self.bar2_vma_addr = Some(bar.addr());
@@ -442,13 +442,13 @@ impl Memory for InstObj {
 }
 
 impl InstObj {
-    pub(crate) fn new(instmem: Arc<InstMem>, size: usize, align: usize, zero: bool, preserve: bool) -> Result<InstObj> {
+    pub(crate) fn new(instmem: &Arc<InstMem>, size: usize, align: usize, zero: bool, preserve: bool) -> Result<InstObj> {
         let page: u8 = core::cmp::max::<u32>(order_base_2(align), 12) as u8;
         pr_info!("instobj new {} {}\n", size, align);
 
         let mut obj = Self {
             instmem: instmem.clone(),
-            vram: VramObj::new(instmem.vram_mm.clone(), 0, 1, page, size, true, true)?,
+            vram: VramObj::new(&instmem.vram_mm, 0, 1, page, size, true, true)?,
             bar2_vma_addr: None,
             bar2_map: None,
             bar2_io: None,
@@ -462,7 +462,7 @@ impl InstObj {
         Ok(obj)
     }
 
-    pub(crate) fn wrap(instmem: Arc<InstMem>, vramobj: VramObj) -> Result<InstObj> {
+    pub(crate) fn wrap(instmem: &Arc<InstMem>, vramobj: VramObj) -> Result<InstObj> {
         Ok(Self {
             instmem: instmem.clone(),
             vram: vramobj,
@@ -483,7 +483,7 @@ impl InstObj {
             None => { self.use_fast = Some(false); }
             Some(bar) => {
                 if self.bar2_map.is_none() {
-                    self.kmap(bar.bar2_vmm().unwrap(), self.instmem.clone())?;
+                    self.kmap(bar.bar2_vmm().unwrap())?;
                 }
                 self.use_fast = Some(self.bar2_map.is_some());
             }
@@ -548,11 +548,11 @@ pub(crate) struct InstMem {
 }
 
 impl InstMem {
-    pub(crate) fn new(base: Arc<GpuBase>, vram_mm: Arc<MemRange>,
+    pub(crate) fn new(base: &Arc<GpuBase>, vram_mm: &Arc<MemRange>,
                       bar2_phys_base: u64) -> Result<Arc<Self>> {
         Arc::pin_init(pin_init!(Self {
-            base,
-            vram_mm,
+            base: base.clone(),
+            vram_mm: vram_mm.clone(),
             objs: KVec::new(),
             bar: UnsafeCell::new(None),
             bar2_phys_base,
@@ -624,7 +624,7 @@ impl Memory for DmaMemObj {
 
     fn map(&mut self, offset: u64) {
     }
-    fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
+    fn kmap(&mut self, vmm: &Vmm) -> Result<()> {
         Err(ENOSPC)
     }
 
@@ -696,7 +696,7 @@ impl Memory for SglMemObj {
     }
     fn map(&mut self, offset: u64) {
     }
-    fn kmap(&mut self, vmm: &Vmm, instmem: Arc<InstMem>) -> Result<()> {
+    fn kmap(&mut self, vmm: &Vmm) -> Result<()> {
         Err(ENOSPC)
     }
 

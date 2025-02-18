@@ -250,7 +250,7 @@ impl Fwsec {
         }
         let nv_fw = NvkmFirmware::new("fwsec", DmaObject::new_from_data(&gpu_base.dev,
                                                                         gpu_base.bios.get_range(ucode_data_start..ucode_data_start + ucode_len).unwrap(), "fwsec")?);
-        fw = GspFalconFw::new(FalconFw::new_from_info(nv_fw, gsp_falcon.falcon.clone(),
+        fw = GspFalconFw::new(FalconFw::new_from_info(nv_fw, &gsp_falcon.falcon,
                                                       sigs, fwinfo))?;
         Fwsec::patch(&mut fw.fw, ioffset, init_cmd, frts_addr, frts_size)?;
 

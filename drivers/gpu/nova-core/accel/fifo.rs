@@ -399,7 +399,7 @@ impl Channel {
         let mthdbuf_size = gpu.gsp.get_mthdbuf_size();
         /* need a vctx engine rm.size */
         /* with a vmm and mapped into it */
-        let mut instbuf = InstObj::new(gpu.instmem.clone(), 0x1000, 0x1000, true, true)?;
+        let mut instbuf = InstObj::new(&gpu.instmem, 0x1000, 0x1000, true, true)?;
 
         vmm.vmm.join(&mut instbuf)?;
 
@@ -445,7 +445,7 @@ impl Channel {
         }, GFP_KERNEL)?)
     }
 
-    pub(crate) fn register_killed(chan: Arc<Channel>,
+    pub(crate) fn register_killed(chan: &Arc<Channel>,
                                   gpu: &Gpu,
                                   cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
                                   data: *mut core::ffi::c_void) -> i32 {
@@ -463,14 +463,14 @@ impl Channel {
         0
     }
 
-    pub(crate) fn unregister_killed(chan: Arc<Channel>,
+    pub(crate) fn unregister_killed(chan: &Arc<Channel>,
                                     gpu: &Gpu) -> i32 {
         gpu.event_handler.remove_killed_handler(chan.id);
         pr_info!("killed unregistered\n");
         0
     }
 
-    pub(crate) fn register_nonstall(chan: Arc<Channel>,
+    pub(crate) fn register_nonstall(chan: &Arc<Channel>,
                                     gpu: &Gpu,
                                     cb: Option<unsafe extern "C" fn(data: *mut core::ffi::c_void) -> i32>,
                                     data: *mut core::ffi::c_void) -> Result<Arc<ChannelNonStall>> {

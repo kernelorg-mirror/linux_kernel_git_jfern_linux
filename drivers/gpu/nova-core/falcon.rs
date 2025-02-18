@@ -80,12 +80,12 @@ pub(crate) struct FalconFw {
 
 impl FalconFw {
     pub(crate) fn new_from_info(fw: NvkmFirmware,
-    	       			falcon: Arc<Falcon>,
+                                falcon: &Arc<Falcon>,
 				sigs: FalconFwSign,
 				info: FalconFwInfo) -> Self {
 	Self {
 	    fw,
-	    falcon,
+	    falcon: falcon.clone(),
 	    sigs,
 	    info,
 	}
@@ -275,7 +275,7 @@ pub(crate) enum FalconMem {
 }
 
 impl Falcon {
-    pub(crate) fn new(base: Arc<GpuBase>, addr: u32, addr2: u32, debug: u32, riscv_irqmask: u32, reset_pmc: bool) -> Result<Self> {
+    pub(crate) fn new(base: &Arc<GpuBase>, addr: u32, addr2: u32, debug: u32, riscv_irqmask: u32, reset_pmc: bool) -> Result<Self> {
 	let bar = base.bar.try_access().ok_or(ENXIO)?;
 	let reg = bar.try_readl((addr + 0x12c) as usize)?;
 	let version = reg & 0x0000000f;
@@ -298,7 +298,7 @@ impl Falcon {
 	    data_ports,
 	    riscv_irqmask,
 	    reset_pmc,
-	    base,
+	    base: base.clone(),
 	})
     }
     pub(crate) fn wait_for_reg_bits_set(&self, offset: u32, mask: u32, timeout_us: u64) -> Result<()> {

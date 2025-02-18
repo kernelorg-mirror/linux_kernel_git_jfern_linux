@@ -34,7 +34,7 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
     let gpu = unsafe { &(*core_driver).gpu };
     let pdev = unsafe { &(*core_driver).pdev };
     let ncinfo = unsafe { &mut (*info) };
-    let base = gpu.base.clone();
+    let base = &gpu.base;
 
 
     ncinfo.boot0 = base.spec.boot0;
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
 pub unsafe extern "C" fn nova_core_timer_time(auxdev: *mut bindings::auxiliary_device) -> u64 {
     let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
 
-    let base = unsafe { (*core_driver).gpu.base.clone() };
+    let base = unsafe { &(*core_driver).gpu.base };
 
     base.timer.read().unwrap()
 }
@@ -148,13 +148,17 @@ pub unsafe extern "C" fn nova_core_free_gsp_client(client: *mut bindings::nova_c
 {
     let ncclient = unsafe { &mut (*client) };
 
-    let gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
-    /* ensure the gpu device gets dropped before the client */
-    drop(gpu_device);
-    ncclient.gsp_device = core::ptr::null_mut();
+    if ncclient.gsp_device != core::ptr::null_mut() {
+	let gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
+	/* ensure the gpu device gets dropped before the client */
+	drop(gpu_device);
+	ncclient.gsp_device = core::ptr::null_mut();
+    }
 
-    let _gpu_client : Arc<GpuClient> = unsafe { Arc::from_foreign(ncclient.gsp_client) };
-    ncclient.gsp_client = core::ptr::null_mut();
+    if ncclient.gsp_client != core::ptr::null_mut() {
+	let _gpu_client : Arc<GpuClient> = unsafe { Arc::from_foreign(ncclient.gsp_client) };
+	ncclient.gsp_client = core::ptr::null_mut();
+    }
 }
 
 #[no_mangle]
@@ -307,7 +311,7 @@ pub unsafe extern "C" fn nova_core_alloc_mem(auxdev: *mut bindings::auxiliary_de
 
     let mmu_internal_type = (*mmu).types[mmu_type as usize].mmu_type;
     if mmu_internal_type & NVKM_MEM_VRAM != 0 {
-        let vram = match VramObj::new(gpu.instmem.vram_mm.clone(),
+        let vram = match VramObj::new(&gpu.instmem.vram_mm,
                                       0, mmu_internal_type, page, size as usize, contig, false) {
             Err(x) => { return x.to_errno(); }
             Ok(x) => x
@@ -405,7 +409,7 @@ pub unsafe extern "C" fn nova_core_mem_bar1_map(auxdev: *mut bindings::auxiliary
                 Ok(v) => v
             };
 
-            match vramobj.vram_map(0, &vmm, vma.clone(), kind as u8) {
+            match vramobj.vram_map(0, &vmm, &vma, kind as u8) {
                 Err(x) => { return x.to_errno(); }
                 Ok(m) => m
             };
@@ -477,7 +481,7 @@ pub unsafe extern "C" fn nova_core_vmm_map(vmm_ptr: *mut bindings::nova_core_vmm
         private: ncargs.private,
         vol: ncargs.vol,
     };
-    let _ = vmm.vmm.map(vma, &mut vmmmap);
+    let _ = vmm.vmm.map(&vma, &mut vmmmap);
     0
 }
 
@@ -725,7 +729,7 @@ pub unsafe extern "C" fn nova_core_chan_register_nonstall(auxdev: *mut bindings:
     let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
-    let cns = match Channel::register_nonstall(chan.clone(), gpu, cb, data) {
+    let cns = match Channel::register_nonstall(&chan, gpu, cb, data) {
         Err(x) => { return x.to_errno(); },
         Ok(x) => x
     };
@@ -768,7 +772,7 @@ pub unsafe extern "C" fn nova_core_chan_register_killed(auxdev: *mut bindings::a
     let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
-    Channel::register_killed(chan.clone(), gpu, cb, data);
+    Channel::register_killed(&chan, gpu, cb, data);
     0
 }
 
@@ -782,7 +786,7 @@ pub unsafe extern "C" fn nova_core_chan_unregister_killed(auxdev: *mut bindings:
     let chan_arc: ArcBorrow<'_, Channel>=  unsafe { Arc::borrow((*chan_ptr).arc) };
 
     let chan: Arc<Channel> = Arc::<Channel>::from(chan_arc);
-    Channel::unregister_killed(chan.clone(), gpu);
+    Channel::unregister_killed(&chan, gpu);
     0
 }
 

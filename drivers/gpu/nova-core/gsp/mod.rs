@@ -91,7 +91,7 @@ impl VfnHandler for GSPSharedMemObjects::ver {
             }
         }
 
-        let flcn = gsp_falcon.falcon.clone();
+        let flcn = &gsp_falcon.falcon;
         let intr: u32 = flcn.rd32(0x0008)?;
         let inte: u32 = flcn.rd32(flcn.addr2 + flcn.riscv_irqmask)?;
         let mut stat = intr & inte;
@@ -140,7 +140,7 @@ impl GSPSharedMemObjects::ver {
         }
     }
 
-    pub(crate) fn new(gpu_base: Arc<GpuBase>) -> Result<Self> {
+    pub(crate) fn new(gpu_base: &GpuBase) -> Result<Self> {
         let cmdq_size = 0x40000;
         let msgq_size = 0x40000;
         let mut ptes_nr = (cmdq_size + msgq_size) >> GSP_PAGE_SHIFT;
@@ -339,8 +339,7 @@ impl GspManager for GspManager::ver {
     fn free_client(&self, client: &GspClient) -> Result<()> {
         let mut msg = FreeMsg::ver::get(&client.object)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         Ok(())
@@ -349,8 +348,7 @@ impl GspManager for GspManager::ver {
     fn free_device(&self, device: &GspDevice) -> Result<()>{
         let mut msg = FreeMsg::ver::get(&device.subdevice)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         let mut msg = FreeMsg::ver::get(&device.object)?;
@@ -394,8 +392,7 @@ impl GspManager for GspManager::ver {
                                           inst, userd, mthdbuf,
                                           chid, fifo_class, offset, length, chan_priv)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(Arc::new(GspChannel {
             object: Arc::new(GspObject {
@@ -412,8 +409,7 @@ impl GspManager for GspManager::ver {
     fn bind_fifo(&self,
                  channel: &GspChannel) -> Result<()> {
         let mut msg = BindParams::ver::new(channel, channel.engine_type, channel.engine_inst)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
@@ -422,17 +418,14 @@ impl GspManager for GspManager::ver {
                      channel: &GspChannel,
                      enable: bool) -> Result<()> {
         let mut msg = GpFifoSchedule::ver::new(channel, enable)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
 
     fn free_fifo_chan(&self, channel: &GspChannel) -> Result<()> {
         let mut msg = FreeMsg::ver::get(&channel.object)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
@@ -444,9 +437,7 @@ impl GspManager for GspManager::ver {
                          fifo_class: u32) -> Result<Arc<GspChannel>> {
         let mut msg = FifoAlloc::ver::golden(device, va,
                                              inst, self.rsvd_chids, fifo_class)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(Arc::new(GspChannel {
             object: Arc::new(GspObject {
@@ -464,8 +455,7 @@ impl GspManager for GspManager::ver {
     fn alloc_ce_obj(&self, channel: &GspChannel, handle: u32, oclass: u32, inst: u8) -> Result<Arc<GspObject>> {
         let mut msg = CEAlloc::ver::new(channel, handle, oclass, inst as u32)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         Ok(Arc::new(GspObject {
@@ -480,8 +470,7 @@ impl GspManager for GspManager::ver {
                                          Some(&channel.object),
                                          handle,
                                          oclass, 0)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         Ok(Arc::new(GspObject {
@@ -494,17 +483,14 @@ impl GspManager for GspManager::ver {
 
     fn free_chan_obj(&self, object: &GspObject) -> Result<()> {
         let mut msg = FreeMsg::ver::get(object)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
 
     fn alloc_event(&self, device: &GspDevice, handle: u32, id: u32) -> Result<GspEvent> {
         let mut msg = AllocEvent::ver::new(device, handle, id)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         let gsp_event = GspEvent {
@@ -517,27 +503,23 @@ impl GspManager for GspManager::ver {
         };
 
         let mut msg = EventSetNotification::ver::new(&device, id, EventSetNotificationAction::REPEAT)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(gsp_event)
     }
 
     fn free_event(&self, event: &GspEvent) -> Result<()> {
         let mut msg = FreeMsg::ver::get(&event.object)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
 
 
     fn alloc_vaspace(&self, device: &GspDevice, vmm: &Vmm, vmm_type: u8) -> Result<GspVa> {
-	let id = if vmm_type == 3 { 1 } else { 0 };
+        let id = if vmm_type == 3 { 1 } else { 0 };
         let mut msg = AllocVMM::ver::new(device, id)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         let gsp_va = GspVa {
@@ -555,16 +537,13 @@ impl GspManager for GspManager::ver {
 
     fn free_vaspace(&self, va: &GspVa) -> Result<()> {
         let mut msg = FreeMsg::ver::get(&va.object)?;
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
     fn update_bar_pde(&self, bar: u32, addr: u64, shift: u32) -> Result<()> {
         let mut msg = UpdateBarPdeMsg::ver::get(bar, addr, shift)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
         Ok(())
     }
@@ -624,17 +603,14 @@ impl GspManager for GspManager::ver {
                       buffer_entries: &KVec<GpuPromoteBufferEntry>) -> Result<()> {
         let mut msg = GpuPromoteCtx::ver::new_promote_gr(device, channel,
                                                          buffer_entries)?;
-
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)
     }
 
     fn cleanup_vgpu_plugin(&self, device: &GspDevice, gfid: u32) -> i32 {
         let mut msg = CleanupVgpuPlugin::ver::new(device, gfid).unwrap();
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         match msg.push(&mut gsp_objs.queues) {
             Err(x) => { x.to_errno() }
             _ => { 0 }
@@ -644,8 +620,7 @@ impl GspManager for GspManager::ver {
     fn shutdown_vgpu_plugin_task(&self, device: &GspDevice, gfid: u32) -> i32 {
         let mut msg = ShutdownVgpuPluginTask::ver::new(device, gfid).unwrap();
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         match msg.push(&mut gsp_objs.queues) {
             Err(x) => { x.to_errno() }
             _ => { 0 }
@@ -654,8 +629,8 @@ impl GspManager for GspManager::ver {
 
     fn bootload_vgpu_plugin_task(&self, device: &GspDevice, params: *const bindings::bootload_vgpu) -> i32 {
         let mut msg = BootloadVgpuPluginTask::ver::new(device, params).unwrap();
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         match msg.push(&mut gsp_objs.queues) {
             Err(x) => { x.to_errno() }
             _ => { 0 }
@@ -664,8 +639,7 @@ impl GspManager for GspManager::ver {
 
     fn add_vgpu_type(&self, device: &GspDevice, count: u32, ptr: *const core::ffi::c_void) -> i32 {
         let mut msg = PgpuAddVgpuType::ver::new(&device, count, ptr).unwrap();
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         match msg.push(&mut gsp_objs.queues) {
             Err(x) => { x.to_errno() }
             _ => { 0 }
@@ -733,8 +707,7 @@ impl GspManager::ver {
     fn alloc_client(&self, client_id: u32) -> Result<GspClient> {
         let mut msg = AllocClient::ver::new(client_id as u16, 0xffffffff)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         Ok(GspClient {
@@ -749,8 +722,7 @@ impl GspManager::ver {
     fn alloc_device(&self, client: Arc<GspClient>) -> Result<GspDevice> {
         let mut msg = AllocDevice::ver::new(&client)?;
 
-        let gsp_objs = self.gsp_objs.clone();
-        let mut gsp_objs = gsp_objs.inner.lock();
+        let mut gsp_objs = self.gsp_objs.inner.lock();
         msg.push(&mut gsp_objs.queues)?;
 
         let devobj = Arc::new(GspObject {
@@ -905,7 +877,7 @@ impl GspManager::ver {
         Ok(buf_info)
     }
 
-    pub(crate) fn new(gpu_base: Arc<GpuBase>,
+    pub(crate) fn new(gpu_base: &Arc<GpuBase>,
                       vfn: &Arc<Vfn>,
                       event_handler: Arc<EventHandler>,
                       mm: &mut MemRange,
@@ -944,7 +916,7 @@ impl GspManager::ver {
 
         gsp_falcon.set_app_version(fw.bootloader_fw.app_version);
 
-        let mut gsp_objs = GSPSharedMemObjects::ver::new(gpu_base.clone())?;
+        let mut gsp_objs = GSPSharedMemObjects::ver::new(&gpu_base)?;
 
         boot_structs::Wpr::ver::fill_wpr_meta(gsp_objs.wpr_meta.dma.start_ptr_mut(), &fw.gsp_fw.radix3, &fw.bootloader_fw, &fw.gsp_sigs.dma, &fb_addr_info);
 
@@ -1076,7 +1048,7 @@ impl GspManager::ver {
         vfn.rearm()?;
 
         let mgr = GspManager::ver {
-            gpu_base,
+            gpu_base: gpu_base.clone(),
             sysmem_flush,
             fw,
             fb_addr_info,
@@ -1103,9 +1075,8 @@ impl GspManager::ver {
 #[versions(GSP)]
 impl Drop for GspManager::ver {
     fn drop(&mut self) {
-        let gsp_objs = self.gsp_objs.clone();
-        let locked_gsp_objs = gsp_objs.inner.lock();
-        let mut inner_gsp_objs = locked_gsp_objs;
+
+        let mut inner_gsp_objs = self.gsp_objs.inner.lock();
         let _ = Self::fini(&self.gpu_base, &self.fw, &mut inner_gsp_objs, true, 0xff, 0xff);
     }
 }

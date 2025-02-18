@@ -148,7 +148,7 @@ unsafe extern "C" fn alloc_fbmem(handle: *mut core::ffi::c_void, size: u64, vmmu
 
     let shift: u32 = if vmmu_aligned { nova.gpu.vgpu.vmmu_segment_size.ilog2() } else { NVKM_MM_PAGE_SHIFT as u32};
 
-    let vramobj = VramObj::new(nova.gpu.instmem.vram_mm.clone(), 0, 0, shift as u8, size as usize, true, true).unwrap();
+    let vramobj = VramObj::new(&nova.gpu.instmem.vram_mm, 0, 0, shift as u8, size as usize, true, true).unwrap();
 
     let fbmem: Pin<KBox<VGPUMem>> = KBox::new(
         VGPUMem {
@@ -175,7 +175,7 @@ unsafe extern "C" fn bar1_map_mem(base: *mut bindings::nvidia_vgpu_mem) -> i32 {
     let size = fbmem.base.size;
     let vma = vmm.get(false, true, false, 12, 0, size).unwrap();
 
-    match fbmem.obj.vram_map(0, &vmm, vma.clone(), 0) {
+    match fbmem.obj.vram_map(0, &vmm, &vma, 0) {
         Err(x) => { return x.to_errno(); }
         _ => {}
     }
