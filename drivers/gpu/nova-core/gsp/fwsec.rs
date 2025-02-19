@@ -137,68 +137,67 @@ pub(crate) struct Fwsec {
 impl Fwsec {
 
     pub(crate) fn patch(fw: &mut FalconFw, if_offset: u32, init_cmd: u32, frts_addr: u64, frts_size: u64) -> Result<()> {
-        unsafe {
-            let hdr: *const nvfw_falcon_appif_hdr_v1 = fw.fw.dma.dma.start_ptr().offset((fw.info.dmem_base_img + if_offset) as isize) as *const nvfw_falcon_appif_hdr_v1;
+        let hdr_ptr: *const nvfw_falcon_appif_hdr_v1 = unsafe { fw.fw.dma.dma.start_ptr().offset((fw.info.dmem_base_img + if_offset) as isize) as *const nvfw_falcon_appif_hdr_v1 };
 
-            let dmem: *mut u8 = fw.fw.dma.dma.start_ptr_mut().offset(fw.info.dmem_base_img as isize);
-            if (*hdr).ver != 1 {
-                return Err(EINVAL);
+        let hdr = unsafe { &(*hdr_ptr) };
+        let dmem: *mut u8 = unsafe { fw.fw.dma.dma.start_ptr_mut().offset(fw.info.dmem_base_img as isize) };
+        if hdr.ver != 1 {
+            return Err(EINVAL);
+        }
+
+        for i in 0..hdr.cnt {
+            let app_ptr: *const nvfw_falcon_appif_v1 = unsafe { (hdr_ptr as *const u8).offset((hdr.hdr + i * hdr.len) as isize) as *const nvfw_falcon_appif_v1 };
+
+            let app = unsafe { &(*app_ptr) };
+            if app.id != NVFW_FALCON_APPIF_ID_DMEMMAPPER {
+                continue;
             }
 
-            for i in 0..(*hdr).cnt {
-                let app: *const nvfw_falcon_appif_v1 = (hdr as *const u8).offset(((*hdr).hdr + i * (*hdr).len) as isize) as *const nvfw_falcon_appif_v1;
+            let dmemmap_ptr: *mut nvfw_falcon_appif_dmemmapper_v3 = unsafe { dmem.offset(app.dmem_base as isize) as *mut nvfw_falcon_appif_dmemmapper_v3 };
+            let mut dmemmap = unsafe { &mut (*dmemmap_ptr) };
+            dmemmap.init_cmd = init_cmd;
 
-                if (*app).id != NVFW_FALCON_APPIF_ID_DMEMMAPPER {
-                    continue;
-                }
+            let frtscmd_ptr: *mut FwsecFrtsCmd = unsafe { dmem.offset(dmemmap.cmd_in_buffer_offset as isize) as *mut FwsecFrtsCmd };
+            let mut frtscmd = unsafe { &mut (*frtscmd_ptr) };
 
-                let dmemmap: *mut nvfw_falcon_appif_dmemmapper_v3 = dmem.offset((*app).dmem_base as isize) as *mut nvfw_falcon_appif_dmemmapper_v3;
-                (*dmemmap).init_cmd = init_cmd;
+            frtscmd.read_vbios.ver = 1;
+            frtscmd.read_vbios.hdr = core::mem::size_of::<read_vbios>() as u32;
+            frtscmd.read_vbios.addr = 0;
+            frtscmd.read_vbios.size = 0;
+            frtscmd.read_vbios.flags = 2;
 
-                let frtscmd: *mut FwsecFrtsCmd = dmem.offset((*dmemmap).cmd_in_buffer_offset as isize) as *mut FwsecFrtsCmd;
-                (*frtscmd).read_vbios.ver = 1;
-                (*frtscmd).read_vbios.hdr = core::mem::size_of::<read_vbios>() as u32;
-                (*frtscmd).read_vbios.addr = 0;
-                (*frtscmd).read_vbios.size = 0;
-                (*frtscmd).read_vbios.flags = 2;
-
-                if init_cmd == NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS {
-                    (*frtscmd).frts_region.ver = 1;
-                    (*frtscmd).frts_region.hdr = core::mem::size_of::<frts_region>() as u32;
-                    (*frtscmd).frts_region.addr = (frts_addr >> 12) as u32;
-                    (*frtscmd).frts_region.size = (frts_size >> 12) as u32;
-                    (*frtscmd).frts_region.ftype = NVFW_FRTS_CMD_REGION_TYPE_FB;
-                }
-                break;
+            if init_cmd == NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS {
+                frtscmd.frts_region.ver = 1;
+                frtscmd.frts_region.hdr = core::mem::size_of::<frts_region>() as u32;
+                frtscmd.frts_region.addr = (frts_addr >> 12) as u32;
+                frtscmd.frts_region.size = (frts_size >> 12) as u32;
+                frtscmd.frts_region.ftype = NVFW_FRTS_CMD_REGION_TYPE_FB;
             }
+            break;
         }
         Ok(())
     }
 
-    pub(crate) fn fill_falcon_fw_info_v2(fwinfo: &mut FalconFwInfo, ucode_desc: *const FalconUCodeDesc) {
-        unsafe {
-            fwinfo.nmem_base = (*ucode_desc).v2.IMEMPhysBase;
-            fwinfo.nmem_size = (*ucode_desc).v2.IMEMLoadSize - (*ucode_desc).v2.IMEMSecSize;
-            fwinfo.imem_base = (*ucode_desc).v2.IMEMSecBase;
-            fwinfo.imem_size = (*ucode_desc).v2.IMEMSecSize;
-            fwinfo.dmem_base_img = (*ucode_desc).v2.DMEMOffset;
-            fwinfo.dmem_base = (*ucode_desc).v2.DMEMPhysBase;
-            fwinfo.dmem_size = (*ucode_desc).v2.DMEMLoadSize;
-        }
+    pub(crate) fn fill_falcon_fw_info_v2(fwinfo: &mut FalconFwInfo, v2_desc: &FalconUCodeDescV2) {
+        fwinfo.nmem_base = v2_desc.IMEMPhysBase;
+        fwinfo.nmem_size = v2_desc.IMEMLoadSize - v2_desc.IMEMSecSize;
+        fwinfo.imem_base = v2_desc.IMEMSecBase;
+        fwinfo.imem_size = v2_desc.IMEMSecSize;
+        fwinfo.dmem_base_img = v2_desc.DMEMOffset;
+        fwinfo.dmem_base = v2_desc.DMEMPhysBase;
+        fwinfo.dmem_size = v2_desc.DMEMLoadSize;
     }
 
-    pub(crate) fn fill_falcon_fw_info_v3(fwinfo: &mut FalconFwInfo, ucode_desc: *const FalconUCodeDesc) {
-        unsafe {
-            fwinfo.imem_base = (*ucode_desc).v3.IMEMPhysBase;
-            fwinfo.imem_size = (*ucode_desc).v3.IMEMLoadSize;
-            fwinfo.dmem_base_img = (*ucode_desc).v3.IMEMLoadSize;
-            fwinfo.dmem_base = (*ucode_desc).v3.DMEMPhysBase;
-            fwinfo.dmem_size = align((*ucode_desc).v3.DMEMLoadSize as usize, 256) as u32;
-            fwinfo.dmem_sign = (*ucode_desc).v3.PKCDataOffset;
-            fwinfo.fuse_ver = (*ucode_desc).v3.SignatureVersions as u32;
-            fwinfo.ucode_id = (*ucode_desc).v3.UcodeId as u32;
-            fwinfo.engine_id = (*ucode_desc).v3.EngineIdMask as u32;
-        }
+    pub(crate) fn fill_falcon_fw_info_v3(fwinfo: &mut FalconFwInfo, v3_desc: &FalconUCodeDescV3) {
+        fwinfo.imem_base = v3_desc.IMEMPhysBase;
+        fwinfo.imem_size = v3_desc.IMEMLoadSize;
+        fwinfo.dmem_base_img = v3_desc.IMEMLoadSize;
+        fwinfo.dmem_base = v3_desc.DMEMPhysBase;
+        fwinfo.dmem_size = align(v3_desc.DMEMLoadSize as usize, 256) as u32;
+        fwinfo.dmem_sign = v3_desc.PKCDataOffset;
+        fwinfo.fuse_ver = v3_desc.SignatureVersions as u32;
+        fwinfo.ucode_id = v3_desc.UcodeId as u32;
+        fwinfo.engine_id = v3_desc.EngineIdMask as u32;
     }
 
     pub(crate) fn new_from_bios(gpu_base: &GpuBase, gsp_falcon: &GspFalcon, init_cmd: u32, frts_addr: u64, frts_size: u64, bl: &Option<BLFirmware>) -> Result<Self>
@@ -215,38 +214,42 @@ impl Fwsec {
 
         let ucodedesc: *const FalconUCodeDesc = ucode_ptr as *const FalconUCodeDesc;
 
-        unsafe {
-            let offset_ptr = gpu_base.bios.ptr(offset as isize).offset_from(gpu_base.bios.ptr(0));
-            let vers = ((*ucodedesc).v2.Hdr & 0xff00) >> 8;
-            let size = ((*ucodedesc).v2.Hdr & 0xffff0000) >> 16;
-            ucode_data_start = (offset_ptr + size as isize) as usize;
+        let v2desc = unsafe { &((*ucodedesc).v2) };
 
-            match vers {
-                2 => {
-                    ucode_len = ((*ucodedesc).v2.IMEMLoadSize + (*ucodedesc).v2.DMEMLoadSize) as usize;
-                    sigs = Default::default();
-                    Self::fill_falcon_fw_info_v2(&mut fwinfo, ucodedesc);
-                    ioffset = (*ucodedesc).v2.InterfaceOffset;
+        let offset_ptr = unsafe { gpu_base.bios.ptr(offset as isize).offset_from(gpu_base.bios.ptr(0)) };
+        let vers = (v2desc.Hdr & 0xff00) >> 8;
+        let size = (v2desc.Hdr & 0xffff0000) >> 16;
 
-                    let bl = bl.as_ref().unwrap();
-                    fwinfo.boot_addr = bl.boot_addr;
-                    fwinfo.boot_size = bl.boot_size;
-                    fwinfo.boot.reserve(bl.boot_size as usize, GFP_KERNEL)?;
-                    core::ptr::copy_nonoverlapping(bl.fw.data().as_ptr().byte_offset(bl.offset as isize), fwinfo.boot.as_mut_ptr(), fwinfo.boot_size as usize);
+        ucode_data_start = (offset_ptr + size as isize) as usize;
+
+        match vers {
+            2 => {
+                ucode_len = (v2desc.IMEMLoadSize + v2desc.DMEMLoadSize) as usize;
+                sigs = Default::default();
+                Self::fill_falcon_fw_info_v2(&mut fwinfo, v2desc);
+                ioffset = v2desc.InterfaceOffset;
+
+                let bl = bl.as_ref().unwrap();
+                fwinfo.boot_addr = bl.boot_addr;
+                fwinfo.boot_size = bl.boot_size;
+                fwinfo.boot.reserve(bl.boot_size as usize, GFP_KERNEL)?;
+                unsafe {
+                    core::ptr::copy_nonoverlapping(bl.fw.data().as_ptr().byte_offset(bl.offset as isize), fwinfo.boot.as_mut_ptr(), fwinfo.boot_size as usize) ;
                     fwinfo.boot.set_len(fwinfo.boot_size as usize);
                 }
-                3 => {
-                    ucode_len = ((*ucodedesc).v3.IMEMLoadSize + (*ucodedesc).v3.DMEMLoadSize) as usize;
-                    sigs = FalconFwSign::new(((*ucodedesc).v3.IMEMLoadSize + (*ucodedesc).v3.PKCDataOffset) as usize,
-                                             96 * 4,
-                                             (*ucodedesc).v3.SignatureCount as usize,
-                                             (offset_ptr + 0x2c) as usize,
-                                             &gpu_base.bios.bios_vec)?;
-                    Self::fill_falcon_fw_info_v3(&mut fwinfo, ucodedesc);
-                    ioffset = (*ucodedesc).v3.InterfaceOffset;
-                }
-                _ => { panic!(); }
             }
+            3 => {
+                let v3desc = unsafe { &((*ucodedesc).v3) };
+                ucode_len = (v3desc.IMEMLoadSize + v3desc.DMEMLoadSize) as usize;
+                sigs = FalconFwSign::new((v3desc.IMEMLoadSize + v3desc.PKCDataOffset) as usize,
+                                         96 * 4,
+                                         v3desc.SignatureCount as usize,
+                                         (offset_ptr + 0x2c) as usize,
+                                         &gpu_base.bios.bios_vec)?;
+                Self::fill_falcon_fw_info_v3(&mut fwinfo, v3desc);
+                ioffset = v3desc.InterfaceOffset;
+            }
+            _ => { panic!(); }
         }
         let nv_fw = NvkmFirmware::new("fwsec", DmaObject::new_from_data(&gpu_base.dev,
                                                                         gpu_base.bios.get_range(ucode_data_start..ucode_data_start + ucode_len).unwrap(), "fwsec")?);
