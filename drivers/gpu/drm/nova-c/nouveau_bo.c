@@ -48,7 +48,6 @@ static void
 nouveau_bo_del_ttm(struct ttm_buffer_object *bo)
 {
 	struct nouveau_drm *drm = nouveau_bdev(bo->bdev);
-	struct drm_device *dev = &drm->dev;
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 
 	WARN_ON(nvbo->bo.pin_count > 0);
@@ -480,7 +479,7 @@ nouveau_bo_sync_for_device(struct nouveau_bo *nvbo)
 
 			++num_pages;
 		}
-		dma_sync_single_for_device(drm->dev.dev,
+		dma_sync_single_for_device(drm->dev->dev,
 					   ttm_dma->dma_address[i],
 					   num_pages * PAGE_SIZE, DMA_TO_DEVICE);
 		i += num_pages;
@@ -517,7 +516,7 @@ nouveau_bo_sync_for_cpu(struct nouveau_bo *nvbo)
 			++num_pages;
 		}
 
-		dma_sync_single_for_cpu(drm->dev.dev, ttm_dma->dma_address[i],
+		dma_sync_single_for_cpu(drm->dev->dev, ttm_dma->dma_address[i],
 					num_pages * PAGE_SIZE, DMA_FROM_DEVICE);
 		i += num_pages;
 	}
@@ -679,7 +678,7 @@ nouveau_bo_move_m2mf(struct ttm_buffer_object *bo, int evict,
 	if (ret)
 		return ret;
 
-	if (drm_drv_uses_atomic_modeset(&drm->dev))
+	if (drm_drv_uses_atomic_modeset(drm->dev))
 		mutex_lock(&cli->mutex);
 	else
 		mutex_lock_nested(&cli->mutex, SINGLE_DEPTH_NESTING);

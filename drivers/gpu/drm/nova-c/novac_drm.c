@@ -46,8 +46,8 @@ nouveau_cli_work(struct work_struct *w)
 			list_del(&work->head);
 			work->func(work);
 		}
-	}	
-	mutex_unlock(&cli->lock);	
+	}
+	mutex_unlock(&cli->lock);
 }
 
 static void
@@ -117,7 +117,7 @@ nouveau_cli_init(struct nouveau_drm *drm, const char *sname,
 		NV_PRINTK(err, cli, "MMU allocation failed: %d\n", ret);
 		goto done;
 	}
-	
+
 	ret = nouveau_vmm_init(cli, &cli->vmm);
 	if (ret) {
 		NV_PRINTK(err, cli, "VMM allocation failed: %d\n", ret);
@@ -142,7 +142,7 @@ nouveau_cli_init(struct nouveau_drm *drm, const char *sname,
 done:
 	if (ret)
 		nouveau_cli_fini(cli);
-	return ret;	
+	return ret;
 }
 
 static void
@@ -150,7 +150,7 @@ nouveau_accel_ce_fini(struct nouveau_drm *drm)
 {
 	nouveau_channel_idle(drm->cechan);
 	nova_core_chan_free_object(&drm->ttm.copy);
-	nouveau_channel_del(&drm->cechan);	
+	nouveau_channel_del(&drm->cechan);
 }
 
 static void
@@ -171,14 +171,14 @@ nouveau_accel_ce_init(struct nouveau_drm *drm)
 
 	ret = nouveau_channel_new(&drm->cli, false, runm, &drm->cechan);
 	if (ret)
-		NV_ERROR(drm, "failed to create ce channel, %d\n", ret);	
+		NV_ERROR(drm, "failed to create ce channel, %d\n", ret);
 }
 
 static void
 nouveau_accel_gr_fini(struct nouveau_drm *drm)
 {
   	nouveau_channel_idle(drm->channel);
-	nouveau_channel_del(&drm->channel); 
+	nouveau_channel_del(&drm->channel);
 }
 
 static void
@@ -200,7 +200,7 @@ nouveau_accel_gr_init(struct nouveau_drm *drm)
 		NV_ERROR(drm, "failed to create kernel channel, %d\n", ret);
 		nouveau_accel_gr_fini(drm);
 		return;
-	}	
+	}
 }
 
 static void
@@ -209,7 +209,7 @@ nouveau_accel_fini(struct nouveau_drm *drm)
 	nouveau_accel_ce_fini(drm);
 	nouveau_accel_gr_fini(drm);
 	if (drm->fence)
-		nouveau_fence(drm)->dtor(drm);	
+		nouveau_fence(drm)->dtor(drm);
 	nouveau_channels_fini(drm);
 	nova_core_unmap_user(drm->auxdev, &drm->user);
 }
@@ -259,7 +259,7 @@ nouveau_drm_device_fini(struct nouveau_drm *drm)
 	struct nouveau_cli *cli, *temp_cli;
 
 	nouveau_debugfs_fini(drm);
-	
+
 	nouveau_accel_fini(drm);
 	nouveau_ttm_fini(drm);
 
@@ -299,19 +299,19 @@ nouveau_drm_device_init(struct nouveau_drm *drm)
 	ret = nouveau_cli_init(drm, "DRM", &drm->cli);
 	if (ret)
 		goto fail_wq;
-	
+
 	INIT_LIST_HEAD(&drm->clients);
 	mutex_init(&drm->clients_lock);
 
 	ret = nouveau_ttm_init(drm);
 	if (ret)
-		goto fail_ttm;	
+		goto fail_ttm;
 
 	nouveau_accel_init(drm);
 
 	nouveau_debugfs_init(drm);
 
-	ret = drm_dev_register(&drm->dev, 0);
+	ret = drm_dev_register(drm->dev, 0);
 	if (ret) {
 		nouveau_drm_device_fini(drm);
 		return ret;
@@ -324,21 +324,50 @@ fail_wq:
 	return ret;
 }
 
+static void
+nouveau_drm_device_del(struct nouveau_drm *drm)
+{
+        if (drm->dev)
+                drm_dev_put(drm->dev);
+
+        kfree(drm);
+}
+
 static struct nouveau_drm *
 nouveau_drm_device_new(const struct drm_driver *drm_driver,
 		       struct auxiliary_device *parent)
 {
 	struct nouveau_drm *drm;
+	int ret = 0;
 
-	drm = devm_drm_dev_alloc(parent->dev.parent, drm_driver, typeof(*drm), dev);
-	if (IS_ERR(drm))
-		return drm;
-	drm->dev.dev_private = drm;
+	drm = kzalloc(sizeof(*drm), GFP_KERNEL);
+	if (!drm)
+		return ERR_PTR(-ENOMEM);
 
-	return drm;
+
+	drm->auxdev = parent;
+
+	drm->dev = drm_dev_alloc(drm_driver, parent->dev.parent);
+	if (IS_ERR(drm->dev)) {
+		ret = PTR_ERR(drm->dev);
+		goto done;
+	}
+
+	drm->dev->dev_private = drm;
+	auxiliary_set_drvdata(parent, drm);
+
+	nova_core_fill_info(parent, &drm->info);
+	printk(KERN_ERR "boot0 is %016llx\n", drm->info.boot0);
+
+done:
+	if (ret) {
+		nouveau_drm_device_del(drm);
+		drm = NULL;
+	}
+	return ret ? ERR_PTR(ret) : drm;
 }
 
-		       
+
 static struct drm_driver driver_stub;
 
 static int
@@ -346,35 +375,31 @@ nouveau_drm_probe(struct auxiliary_device *auxdev, const struct auxiliary_device
 {
 	struct nouveau_drm *drm;
 	int ret;
-	
+
 	drm = nouveau_drm_device_new(&driver_stub, auxdev);
 	if (IS_ERR(drm)) {
 		ret = PTR_ERR(drm);
 		goto fail_nvkm;
 	}
 
-	auxiliary_set_drvdata(auxdev, &drm->dev);
-
-	drm->auxdev = auxdev;
-	nova_core_fill_info(auxdev, &drm->info);
-	printk(KERN_ERR "boot0 is %016llx\n", drm->info.boot0);
 	ret = nouveau_drm_device_init(drm);
 	if (ret)
 		return ret;
 
 	return 0;
 fail_nvkm:
+	nouveau_drm_device_del(drm);
 	return ret;
 }
 static void
 nouveau_drm_remove(struct auxiliary_device *auxdev)
 {
-	struct drm_device *dev = auxiliary_get_drvdata(auxdev);
-	struct nouveau_drm *drm = nouveau_drm(dev);
+	struct nouveau_drm *drm = auxiliary_get_drvdata(auxdev);
 
-	drm_dev_unplug(dev);
+	drm_dev_unplug(drm->dev);
 
 	nouveau_drm_device_fini(drm);
+	nouveau_drm_device_del(drm);
 
 }
 static int
@@ -399,9 +424,9 @@ nouveau_drm_open(struct drm_device *dev, struct drm_file *fpriv)
 	ret = nouveau_cli_init(drm, name, cli);
 	if (ret)
 		goto done;
-	
+
 	fpriv->driver_priv = cli;
-	
+
 	mutex_lock(&drm->clients_lock);
 	list_add(&cli->head, &drm->clients);
 	mutex_unlock(&drm->clients_lock);
@@ -409,7 +434,7 @@ done:
 	if (ret && cli) {
 		nouveau_cli_fini(cli);
 		kfree(cli);
-	}	
+	}
 	return ret;
 }
 
@@ -419,7 +444,7 @@ nouveau_drm_postclose(struct drm_device *dev, struct drm_file *fpriv)
 	struct nouveau_cli *cli = nouveau_cli(fpriv);
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	int dev_index;
-	
+
 	/*
 	 * The device is gone, and as it currently stands all clients are
 	 * cleaned up in the removal codepath. In the future this may change
@@ -438,15 +463,15 @@ nouveau_drm_postclose(struct drm_device *dev, struct drm_file *fpriv)
 	list_del(&cli->head);
 	mutex_unlock(&drm->clients_lock);
 
-	nouveau_cli_fini(cli);	
+	nouveau_cli_fini(cli);
 	kfree(cli);
-	drm_dev_exit(dev_index);	
+	drm_dev_exit(dev_index);
 }
 
-  
+
 static const struct drm_ioctl_desc
 nouveau_ioctls[] = {
-	DRM_IOCTL_DEF_DRV(NOUVEAU_SETPARAM, drm_invalid_op, DRM_AUTH|DRM_MASTER|DRM_ROOT_ONLY),	
+	DRM_IOCTL_DEF_DRV(NOUVEAU_SETPARAM, drm_invalid_op, DRM_AUTH|DRM_MASTER|DRM_ROOT_ONLY),
 	DRM_IOCTL_DEF_DRV(NOUVEAU_GETPARAM, nouveau_abi16_ioctl_getparam, DRM_RENDER_ALLOW),
 
 	DRM_IOCTL_DEF_DRV(NOUVEAU_CHANNEL_ALLOC, nouveau_abi16_ioctl_channel_alloc, DRM_RENDER_ALLOW),

@@ -141,7 +141,7 @@ u_memcpya(uint64_t user, unsigned int nmemb, unsigned int size)
 }
 
 struct nouveau_drm {
-	struct drm_device dev;
+	struct drm_device *dev;
 
 	struct auxiliary_device *auxdev;
 	struct nouveau_cli cli;
@@ -213,11 +213,11 @@ nouveau_drm_use_coherent_gpu_mapping(struct nouveau_drm *drm)
 
 #define NV_PRINTK(l,c,f,a...) do {                                             \
 	struct nouveau_cli *_cli = (c);                                        \
-	dev_##l(_cli->drm->dev.dev, "%s: "f, _cli->name, ##a);                 \
+	dev_##l(_cli->drm->dev->dev, "%s: "f, _cli->name, ##a);                 \
 } while(0)
 
 #define NV_PRINTK_(l,drm,f,a...) do {          \
-	dev_##l(drm->dev.dev, "drm: "f, ##a);  \
+	dev_##l(drm->dev->dev, "drm: "f, ##a);  \
 } while(0)
 #define NV_FATAL(drm,f,a...) NV_PRINTK_(crit, (drm), f, ##a)
 #define NV_ERROR(drm,f,a...) NV_PRINTK_(err, (drm), f, ##a)
