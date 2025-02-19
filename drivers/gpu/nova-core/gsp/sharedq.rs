@@ -216,18 +216,17 @@ pub(crate) struct GSPSharedQueues {
 #[versions(GSP)]
 impl GSPSharedQueues::ver {
 
-    fn fill_cmdq(cmdq: *mut CmdQ, cmdq_size: usize) {
-        unsafe {
-            (*cmdq).tx.version = 0;
-            (*cmdq).tx.size = cmdq_size as u32;
-            (*cmdq).tx.entry_off = GSP_PAGE_SIZE;
-            (*cmdq).tx.msg_size = GSP_PAGE_SIZE;
-            (*cmdq).tx.msg_count = ((cmdq_size - GSP_PAGE_SIZE as usize) / GSP_PAGE_SIZE as usize) as u32;
-            (*cmdq).tx.write_ptr = 0;
-            (*cmdq).tx.flags = 1;
+    fn fill_cmdq(cmdq: &mut CmdQ, cmdq_size: usize) {
 
-            (*cmdq).tx.rx_hdr_off = (core::mem::offset_of!(CmdQ, rx) + core::mem::offset_of!(MsgQRxHeader, read_ptr)) as u32;
-        }
+        cmdq.tx.version = 0;
+        cmdq.tx.size = cmdq_size as u32;
+        cmdq.tx.entry_off = GSP_PAGE_SIZE;
+        cmdq.tx.msg_size = GSP_PAGE_SIZE;
+        cmdq.tx.msg_count = ((cmdq_size - GSP_PAGE_SIZE as usize) / GSP_PAGE_SIZE as usize) as u32;
+        cmdq.tx.write_ptr = 0;
+        cmdq.tx.flags = 1;
+
+        cmdq.tx.rx_hdr_off = (core::mem::offset_of!(CmdQ, rx) + core::mem::offset_of!(MsgQRxHeader, read_ptr)) as u32;
     }
 
     pub(crate) fn new(shm: &mut DmaObject, cmdq_size: u32, msgq_size: u32, ptes_size: u32, ptes_nr: u32) -> Result<Self> {
@@ -238,13 +237,14 @@ impl GSPSharedQueues::ver {
             let msgq_raw_ptr: *mut u8 = shm.dma.start_ptr_mut().offset(ptes_size as isize + cmdq_size as isize);
             let cmdq_ptr: *mut CmdQ = cmdq_raw_ptr as *mut CmdQ;
             let msgq_ptr: *mut CmdQ = msgq_raw_ptr as *mut CmdQ;
+            let mut cmdq_ref = unsafe { &mut (*cmdq_ptr) };
 
-            Self::fill_cmdq(cmdq_ptr, cmdq_size as usize);
-            cmdq = GSPSharedq::new(cmdq_size, (*cmdq_ptr).tx.msg_count,
+            Self::fill_cmdq(&mut cmdq_ref, cmdq_size as usize);
+            cmdq = GSPSharedq::new(cmdq_size, cmdq_ref.tx.msg_count,
                                    core::ptr::addr_of_mut!((*cmdq_ptr).tx.write_ptr),
                                    core::ptr::addr_of_mut!((*msgq_ptr).rx.read_ptr),
                                    cmdq_raw_ptr as *mut u8);
-            msgq = GSPSharedq::new(msgq_size, (*cmdq_ptr).tx.msg_count,
+            msgq = GSPSharedq::new(msgq_size, cmdq_ref.tx.msg_count,
                                    core::ptr::addr_of_mut!((*msgq_ptr).tx.write_ptr),
                                    core::ptr::addr_of_mut!((*cmdq_ptr).rx.read_ptr),
                                    msgq_raw_ptr as *mut u8);
