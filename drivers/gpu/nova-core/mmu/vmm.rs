@@ -85,7 +85,7 @@ pub(crate) struct VmmPt {
 }
 
 impl VmmPt {
-    pub(crate) fn new(desc: &VmmDescType, sparse: bool, lvl: usize, page: Option<&VmmPage>) -> Result<Self> {
+    fn new(desc: &VmmDescType, sparse: bool, lvl: usize, page: Option<&VmmPage>) -> Result<Self> {
         let pten = 1_u32.wrapping_shl(desc.bits() as u32);
 
         pr_info!("new {} {}\n", pten, desc.bits() );
@@ -153,7 +153,7 @@ impl Drop for VmmPt {
     }
 }
 
-pub(crate) trait VmmDescFunc {
+trait VmmDescFunc {
     fn invalid(_pt: &mut MmuPt, _ptei: u32, _ptes: u32) -> Result<()> {
         Err(EINVAL)
     }
@@ -187,7 +187,7 @@ pub(crate) trait VmmDescFunc {
     fn pfn_unmap(&mut self, pt: &MmuPt, ptei: u32, ptes: u32) {}
 }
 
-pub(crate) enum VmmDescType {
+enum VmmDescType {
     Empty(VmmDescNone),
     PgdPd0(VmmDescPd0),
     PgdPd1(VmmDescPd1),
@@ -368,7 +368,7 @@ macro_rules! bit_u64 {
     }
 }
 
-pub(crate) struct VmmDesc {
+struct VmmDesc {
     bits: u8,
     size: u8,
     align: u32,
@@ -410,14 +410,14 @@ impl VmmDesc {
     }
 }
 
-pub(crate) struct VmmDescNone {
+struct VmmDescNone {
     base: VmmDesc,
 }
 
 impl VmmDescFunc for VmmDescNone {
 }
 
-pub(crate) struct VmmDescSPT {
+struct VmmDescSPT {
     base: VmmDesc,
 }
 
@@ -515,7 +515,7 @@ impl VmmDescFunc for VmmDescSPT {
     }
 }
 
-pub(crate) struct VmmDescLPT {
+struct VmmDescLPT {
     base: VmmDesc,
 }
 
@@ -544,7 +544,7 @@ impl VmmDescFunc for VmmDescLPT {
     }
 }
 
-pub(crate) struct VmmDescPd0 {
+struct VmmDescPd0 {
     base: VmmDesc,
 }
 
@@ -615,7 +615,7 @@ impl VmmDescFunc for VmmDescPd0 {
     }
 }
 
-pub(crate) struct VmmDescPd1 {
+struct VmmDescPd1 {
     base: VmmDesc,
 }
 
@@ -712,7 +712,7 @@ struct VmmManaged {
 
 const NVKM_VMA_PAGE_NONE: u8 = 0x07;
 
-pub(crate) struct VmaMutable {
+struct VmaMutable {
     size_addr: SizeAddr,
     page: u8,
     refd: u8,
@@ -1611,7 +1611,7 @@ impl VmmInner {
         }
     }
 
-    pub(crate) fn tail(&mut self, vma: &Vma, tail: u64, part: bool) -> Result<Arc<Vma>> {
+    fn tail(&mut self, vma: &Vma, tail: u64, part: bool) -> Result<Arc<Vma>> {
         let newvma = Vma::split_new(vma, tail, part)?;
         vma.sub_size(tail);
 
@@ -1620,7 +1620,7 @@ impl VmmInner {
         Ok(res)
     }
 
-    pub(crate) fn node_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
+    fn node_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
         self.root.try_create_and_insert(vma.addr(), vma, GFP_KERNEL)?;
         Ok(())
     }
@@ -1629,13 +1629,13 @@ impl VmmInner {
         self.root.remove(&vma.addr());
     }
 
-    pub(crate) fn node_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
+    fn node_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
         self.node_remove(&vma);
         unsafe { self.list.remove(vma.as_ref()) };
         Ok(())
     }
 
-    pub(crate) fn free_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
+    fn free_insert(&mut self, vma: Arc<Vma>) -> Result<()> {
         self.free.try_create_and_insert(SizeAddr { size: vma.size(), addr: vma.addr() }, vma, GFP_KERNEL)?;
         Ok(())
     }
@@ -1644,13 +1644,13 @@ impl VmmInner {
         self.free.remove(&SizeAddr { size: vma.size(), addr: vma.addr() });
     }
 
-    pub(crate) fn free_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
+    fn free_delete(&mut self, vma: Arc<Vma>) -> Result<()> {
         self.free_remove(&vma);
         unsafe { self.list.remove(vma.as_ref()) };
         Ok(())
     }
 
-    pub(crate) fn node_search(&mut self, addr: u64) -> Result<Arc<Vma>> {
+    fn node_search(&mut self, addr: u64) -> Result<Arc<Vma>> {
         match self.root.get(&addr) {
             None => Err(ENOENT),
             Some(vma) => Ok(vma.clone())
@@ -1663,7 +1663,7 @@ impl VmmInner {
         Ok(())
     }
 
-    pub(crate) fn put_region(&mut self, vma: Arc<Vma>) -> Result<()> {
+    fn put_region(&mut self, vma: Arc<Vma>) -> Result<()> {
 
         let prev = Self::node_prev(&mut self.list, vma.clone());
         let next = Self::node_next(&mut self.list, vma.clone());
@@ -1828,7 +1828,7 @@ impl Vmm {
         Err(EINVAL)
     }
 
-    pub(crate) fn in_managed_range(&self, start: u64, size: u64) -> bool {
+    fn in_managed_range(&self, start: u64, size: u64) -> bool {
         let mgd = match &self.managed {
             None => { return false; }
             Some(m) => m

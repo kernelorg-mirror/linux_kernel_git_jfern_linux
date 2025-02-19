@@ -61,21 +61,21 @@ const MAX_GPC_COUNT: u32 = 32;
 
 #[versions(GSP)]
 #[allow(unused)]
-pub(crate) struct GSPSharedMemObjects {
-    pub libos: DmaObject,
-    pub loginit: DmaObject,
-    pub logintr: DmaObject,
-    pub logrm: DmaObject,
-    pub rmargs: DmaObject,
-    pub kern: Option<DmaObject>,
-    pub shm: DmaObject,
-    pub wpr_meta: DmaObject,
-    pub queues: GSPSharedQueues::ver,
+struct GSPSharedMemObjects {
+    libos: DmaObject,
+    loginit: DmaObject,
+    logintr: DmaObject,
+    logrm: DmaObject,
+    rmargs: DmaObject,
+    kern: Option<DmaObject>,
+    shm: DmaObject,
+    wpr_meta: DmaObject,
+    queues: GSPSharedQueues::ver,
 }
 
 #[versions(GSP)]
-pub(crate) struct GSPSharedMemObjectsOuter {
-    pub inner: Pin<KBox<Mutex<GSPSharedMemObjects::ver>>>
+struct GSPSharedMemObjectsOuter {
+    inner: Pin<KBox<Mutex<GSPSharedMemObjects::ver>>>
 }
 
 #[versions(GSP)]
@@ -131,7 +131,7 @@ impl VfnHandler for GSPSharedMemObjectsOuter::ver {
 #[versions(GSP)]
 impl GSPSharedMemObjects::ver {
 
-    pub(crate) fn fill_shm_ptes(dma: &mut DmaObject, nr_ptes: usize) {
+    fn fill_shm_ptes(dma: &mut DmaObject, nr_ptes: usize) {
         unsafe {
             let ptes : *mut u64 = dma.dma.start_ptr_mut().offset(0) as *mut u64;
             for i in 0..nr_ptes {
@@ -140,7 +140,7 @@ impl GSPSharedMemObjects::ver {
         }
     }
 
-    pub(crate) fn new(gpu_base: &GpuBase) -> Result<Self> {
+    fn new(gpu_base: &GpuBase) -> Result<Self> {
         let cmdq_size = 0x40000;
         let msgq_size = 0x40000;
         let mut ptes_nr = (cmdq_size + msgq_size) >> GSP_PAGE_SHIFT;
@@ -809,7 +809,7 @@ impl GspManager::ver {
         Ok(())
     }
 
-    pub(crate) fn setup_ctx_buf_info(gr_ctx_bufs: KVec<CtxBufSize>) -> Result<KVec<CtxBufInfo>> {
+    fn setup_ctx_buf_info(gr_ctx_bufs: KVec<CtxBufSize>) -> Result<KVec<CtxBufInfo>> {
 
         let mut buf_info = KVec::new();
         for i in 0..gr_ctx_bufs.len() {

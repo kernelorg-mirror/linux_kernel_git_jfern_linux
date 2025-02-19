@@ -315,7 +315,7 @@ impl Falcon {
 	Ok(())
     }
 
-    pub(crate) fn wait_for_reg_bits_clear(&self, offset: u32, mask: u32, timeout_us: u64) -> Result<()> {
+    fn wait_for_reg_bits_clear(&self, offset: u32, mask: u32, timeout_us: u64) -> Result<()> {
 	let bar = self.base.bar.try_access().ok_or(ENXIO)?;
 	let _init_val = bar.try_readl((self.addr + offset) as usize)?;
 	if (timer_usec!({
@@ -347,8 +347,8 @@ impl Falcon {
 	Ok(temp)
     }
     
-    pub(crate) fn dma_init(&self, dma_addr: dma_addr_t, xfer_len: u32, sec: bool,
-		    mem_type: FalconMem, cmd: &mut u32) -> Result<()> {
+    fn dma_init(&self, dma_addr: dma_addr_t, xfer_len: u32, sec: bool,
+		mem_type: FalconMem, cmd: &mut u32) -> Result<()> {
 	*cmd = (xfer_len.ilog2() - 2) << 8;
 	if mem_type == FalconMem::IMEM {
 	    *cmd |= 0x00000010;
@@ -362,13 +362,13 @@ impl Falcon {
 	Ok(())
     }
 
-    pub(crate) fn dma_xfer(&self, mem_base: u32, dma_base: u32, cmd: u32) -> Result<()> {
+    fn dma_xfer(&self, mem_base: u32, dma_base: u32, cmd: u32) -> Result<()> {
 	self.wr32(0x114, mem_base)?;
 	self.wr32(0x11c, dma_base)?;
 	self.wr32(0x118, cmd)
     }
 
-    pub(crate) fn dma_done(&self) -> Result<()> {
+    fn dma_done(&self) -> Result<()> {
 	self.wait_for_reg_bits_set(0x118, 0x2, 50000)
     }
 
@@ -402,12 +402,12 @@ impl Falcon {
 	Ok(())
     }
 
-    pub(crate) fn pio_imem_wr_init(&self, port: u8, sec: bool, imem_base: u32) -> Result<()> {
+    fn pio_imem_wr_init(&self, port: u8, sec: bool, imem_base: u32) -> Result<()> {
 	let sec_val = if sec { 1 << 28 } else { 0 };
 	self.wr32(0x180 as u32 + (port as u32 * 0x10) as u32, sec_val | (1 << 24) | imem_base)
     }
 
-    pub(crate) fn pio_imem_wr(&self, port: u8, img: &[u8], tag: u16) -> Result<()> {
+    fn pio_imem_wr(&self, port: u8, img: &[u8], tag: u16) -> Result<()> {
 	let mut remain = img.len();
 	let mut offset = 0;
 	pr_info!("imem_wr: remain {} {} {} {:#x}", port, img.len(), tag, img.as_ptr() as *const u8 as u64);
@@ -422,11 +422,11 @@ impl Falcon {
 	Ok(())
     }
 
-    pub(crate) fn pio_dmem_wr_init(&self, port: u8, _sec: bool, dmem_base: u32) -> Result<()> {
+    fn pio_dmem_wr_init(&self, port: u8, _sec: bool, dmem_base: u32) -> Result<()> {
 	self.wr32(0x1c0 as u32 + (port as u32 * 8) as u32, (1 << 24) | dmem_base)
     }
 
-    pub(crate) fn pio_dmem_wr(&self, port: u8, img: &[u8]) -> Result<()> {
+    fn pio_dmem_wr(&self, port: u8, img: &[u8]) -> Result<()> {
 	let mut remain = img.len();
 	let mut offset = 0;
 	pr_info!("dmem_wr: remain {} {} {:#x}", port, img.len(), img.as_ptr() as *const u8 as u64);
@@ -440,8 +440,8 @@ impl Falcon {
     }
 
 
-    pub(crate) fn pio_wr(&self, img: &[u8],
-		  mem_type: FalconMem, mem_base: u32, tag: u16, sec: bool) -> Result<()> {
+    fn pio_wr(&self, img: &[u8],
+	      mem_type: FalconMem, mem_base: u32, tag: u16, sec: bool) -> Result<()> {
 	let port = 0;
 	match mem_type {
 	    FalconMem::IMEM => {
@@ -487,11 +487,11 @@ impl Falcon {
 	Ok(())
     }
 
-    pub(crate) fn tu102_riscv_active(&self) -> Result<bool> {
+    fn tu102_riscv_active(&self) -> Result<bool> {
 	Ok((self.rd32(self.addr2 + 0x240)? & 0x00000001) != 0)
     }
 
-    pub(crate) fn ga102_riscv_active(&self) -> Result<bool> {
+    fn ga102_riscv_active(&self) -> Result<bool> {
 	Ok((self.rd32(self.addr2 + 0x388)? & 0x00000080) != 0)
     }
 
@@ -528,13 +528,13 @@ impl Falcon {
 	self.reset_wait_mem_scrubbing()
     }
 
-    pub(crate) fn tu102_reset_wait_mem_scrubbing(&self) -> Result<()> {
+    fn tu102_reset_wait_mem_scrubbing(&self) -> Result<()> {
 	self.mask(0x40, 0x0, 0x0)?;
 
 	self.wait_for_reg_bits_clear(0x10c, 0x6, 10000)
     }
 
-    pub(crate) fn ga102_reset_wait_mem_scrubbing(&self) -> Result<()> {
+    fn ga102_reset_wait_mem_scrubbing(&self) -> Result<()> {
 	self.mask(0x40, 0x0, 0x0)?;
 
 	self.wait_for_reg_bits_clear(0xf4, 0x1000, 20000)

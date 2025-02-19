@@ -205,9 +205,9 @@ impl BLFirmware {
 
 #[allow(unused)]
 pub(crate) struct Radix3 {
-    pub lvl2: SGObject,
-    pub lvl1: DmaObject,
-    pub lvl0: DmaObject,
+    lvl2: SGObject,
+    lvl1: DmaObject,
+    lvl0: DmaObject,
 }
 
 impl Radix3 {
@@ -268,14 +268,18 @@ impl Radix3 {
             lvl0
         })
     }
+
+    pub(crate) fn lvl0_addr(&self) -> u64 {
+	self.lvl0.dma.dma_handle()
+    }
 }
 
 #[allow(unused)]
 pub(crate) struct RadixFirmware {
-    pub sg_obj: SGObject,
+    sg_obj: SGObject,
     pub radix3: Radix3,
     pub len: usize,
-    pub name: &'static str,
+    name: &'static str,
 }
 
 impl RadixFirmware {

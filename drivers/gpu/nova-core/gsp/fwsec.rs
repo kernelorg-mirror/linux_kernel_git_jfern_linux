@@ -17,8 +17,8 @@ use crate::dma::DmaObject;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct FalconUCodeDescV2 {
-    pub(crate) Hdr: u32,
+struct FalconUCodeDescV2 {
+    Hdr: u32,
     StoredSize: u32,
     UncompressedSize: u32,
     VirtualEntry: u32,
@@ -38,7 +38,7 @@ pub(crate) struct FalconUCodeDescV2 {
 #[allow(non_snake_case)]
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct FalconUCodeDescV3 {
+struct FalconUCodeDescV3 {
     Hdr: u32,
     StoredSize: u32,
     PKCDataOffset: u32,
@@ -56,9 +56,9 @@ pub(crate) struct FalconUCodeDescV3 {
 }
 
 #[repr(C)]
-pub(crate) union FalconUCodeDesc {
-    pub(crate) v2: FalconUCodeDescV2,
-    pub(crate) v3: FalconUCodeDescV3,
+union FalconUCodeDesc {
+    v2: FalconUCodeDescV2,
+    v3: FalconUCodeDescV3,
 }
 
 const NVFW_FALCON_APPIF_ID_DMEMMAPPER: u32 = 0x4;
@@ -115,7 +115,7 @@ struct frts_region {
 
 const NVFW_FRTS_CMD_REGION_TYPE_FB: u32 = 2;
 #[repr(C)]
-pub(crate) struct FwsecFrtsCmd {
+struct FwsecFrtsCmd {
     read_vbios: read_vbios,
     frts_region: frts_region,
 }
@@ -130,13 +130,13 @@ struct nvfw_falcon_appif_hdr_v1 {
 }
 
 pub(crate) struct Fwsec {
-    pub fw: GspFalconFw,
+    fw: GspFalconFw,
     init_cmd: u32,
 }
 
 impl Fwsec {
 
-    pub(crate) fn patch(fw: &mut FalconFw, if_offset: u32, init_cmd: u32, frts_addr: u64, frts_size: u64) -> Result<()> {
+    fn patch(fw: &mut FalconFw, if_offset: u32, init_cmd: u32, frts_addr: u64, frts_size: u64) -> Result<()> {
         let hdr_ptr: *const nvfw_falcon_appif_hdr_v1 = unsafe { fw.fw.dma.dma.start_ptr().offset((fw.info.dmem_base_img + if_offset) as isize) as *const nvfw_falcon_appif_hdr_v1 };
 
         let hdr = unsafe { &(*hdr_ptr) };
@@ -178,7 +178,7 @@ impl Fwsec {
         Ok(())
     }
 
-    pub(crate) fn fill_falcon_fw_info_v2(fwinfo: &mut FalconFwInfo, v2_desc: &FalconUCodeDescV2) {
+    fn fill_falcon_fw_info_v2(fwinfo: &mut FalconFwInfo, v2_desc: &FalconUCodeDescV2) {
         fwinfo.nmem_base = v2_desc.IMEMPhysBase;
         fwinfo.nmem_size = v2_desc.IMEMLoadSize - v2_desc.IMEMSecSize;
         fwinfo.imem_base = v2_desc.IMEMSecBase;
@@ -188,7 +188,7 @@ impl Fwsec {
         fwinfo.dmem_size = v2_desc.DMEMLoadSize;
     }
 
-    pub(crate) fn fill_falcon_fw_info_v3(fwinfo: &mut FalconFwInfo, v3_desc: &FalconUCodeDescV3) {
+    fn fill_falcon_fw_info_v3(fwinfo: &mut FalconFwInfo, v3_desc: &FalconUCodeDescV3) {
         fwinfo.imem_base = v3_desc.IMEMPhysBase;
         fwinfo.imem_size = v3_desc.IMEMLoadSize;
         fwinfo.dmem_base_img = v3_desc.IMEMLoadSize;

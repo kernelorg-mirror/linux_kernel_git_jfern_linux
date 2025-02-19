@@ -59,7 +59,7 @@ const LIBOS3_CARVEOUT: u64 = {
 #[versions(GSP)]
 impl Wpr::ver {
 
-pub(crate) fn calc_wpr_heap(spec: &GpuSpec, fb_size_fb: u64) -> u64 {
+fn calc_wpr_heap(spec: &GpuSpec, fb_size_fb: u64) -> u64 {
     let carveout = if chipsets_after!(&spec.chipset, GA102) {
         LIBOS3_CARVEOUT::ver
     } else {
@@ -99,7 +99,7 @@ pub(crate) fn fill_rmargs(args: *mut u8, shm_addr: u64, ptes_nr: u32, cmdq_offse
     msg.bDmemStack(1);
 }
 
-pub(crate) const fn get_wpr_meta_size() -> usize {
+const fn get_wpr_meta_size() -> usize {
     fw::ver::gen::s_GspFwWprMeta::str_size()
 }
 
@@ -148,7 +148,7 @@ pub(crate) fn fill_wpr_meta(wpr_meta: *mut u8,
     let _wpr = fw::ver::gen::s_GspFwWprMeta::new(wpr_meta)
 	.magic(fw::ver::gen::GSP_FW_WPR_META_MAGIC)
 	.revision(fw::ver::gen::GSP_FW_WPR_META_REVISION as u64)
-	.sysmemAddrOfRadix3Elf(gsp_radix3.lvl0.dma.dma_handle())
+	.sysmemAddrOfRadix3Elf(gsp_radix3.lvl0_addr())
 	.sizeOfRadix3Elf(fb_addr_info.elf.size)
 	.sysmemAddrOfBootloader(bootloader_fw.fw.dma.dma.dma_handle())
 	.sizeOfBootloader(bootloader_fw.fw.dma.len as u64)
@@ -181,7 +181,7 @@ pub(crate) fn fill_sr_meta(sr_meta: *mut u8,
     let _sr = fw::ver::gen::s_GspFwSRMeta::new(sr_meta)
 	.magic(fw::ver::gen::GSP_FW_SR_META_MAGIC)
 	.revision(fw::ver::gen::GSP_FW_SR_META_REVISION as u64)
-	.sysmemAddrOfSuspendResumeData(sr_radix3.lvl0.dma.dma_handle())
+	.sysmemAddrOfSuspendResumeData(sr_radix3.lvl0_addr())
 	.sizeOfSuspendResumeData(len);
 }
 	    

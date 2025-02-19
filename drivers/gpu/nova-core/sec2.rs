@@ -36,7 +36,7 @@ pub(crate) struct Sec2Fw {
 }
 
 impl Sec2Fw {
-    pub(crate) fn fill_falcon_fw_info_tu102(fwinfo: &mut FalconFwInfo, load_hdr_v2: &HsLoadHeader_v2, loc: u32) {
+    fn fill_falcon_fw_info_tu102(fwinfo: &mut FalconFwInfo, load_hdr_v2: &HsLoadHeader_v2, loc: u32) {
 	fwinfo.nmem_base = load_hdr_v2.os_code_offset;
 	fwinfo.nmem_size = load_hdr_v2.os_code_size;
 	fwinfo.imem_base_img = load_hdr_v2.os_code_size;
@@ -144,7 +144,7 @@ impl Sec2Fw {
 	})
     }
 
-    pub(crate) fn ga102_fw_signature(fw: &FalconFw) -> Result<u32> {
+    fn ga102_fw_signature(fw: &FalconFw) -> Result<u32> {
 	let bar = fw.falcon.base.bar.try_access().ok_or(ENXIO)?;
 	let mut reg_fuse_version;
 	let idx : u32;

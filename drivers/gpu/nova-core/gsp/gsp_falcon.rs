@@ -9,8 +9,8 @@ use kernel::sync::Arc;
 
 pub(crate) struct GspFalcon {
     pub falcon: Arc<Falcon>,
-    pub libos_addr: u64,
-    pub app_version: u32,
+    libos_addr: u64,
+    app_version: u32,
 }
 
 pub(crate) struct GspFalconFw {
@@ -65,7 +65,7 @@ impl GspFalcon {
 }
 
 impl GspFalconFw {
-    pub(crate) fn ga102_fw_signature(fw: &FalconFw) -> Result<u32> {
+    fn ga102_fw_signature(fw: &FalconFw) -> Result<u32> {
         let bar = fw.falcon.base.bar.try_access().ok_or(ENXIO)?;
         let mut sig_fuse_version = fw.info.fuse_ver;
         let mut reg_fuse_version : u32 = 0;
