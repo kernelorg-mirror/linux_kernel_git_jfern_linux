@@ -679,7 +679,7 @@ impl VmmPage {
     }
 
     fn get_desc_bits(&self, offset: usize) -> u8 {
-        unsafe { self.get_desc(offset).bits() }
+        self.get_desc(offset).bits()
     }
 
     fn find_pair_desc(me: &VmmPage) -> &VmmDescType {
