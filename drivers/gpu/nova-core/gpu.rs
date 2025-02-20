@@ -390,19 +390,19 @@ impl Firmware {
         let bootloader = firmware::Firmware::request(&fw_bootloader_path, &dev)?;
         let gsp = firmware::Firmware::request(&fw_gsp_path, &dev)?;
 
-        let mut bl = None;
-        if gpu_base.spec.gpu_consts.need_bl_fw {
-            bl = Some(firmware::Firmware::request(&fw_bl_path.unwrap(), &dev)?);
-        }
+        let bl = match fw_bl_path {
+            Some(fw_path) => Some(firmware::Firmware::request(&fw_path, &dev)?),
+            None => None,
+        };
 
         let bootloader_fw = RiscvFw::new_from_fw(&dev, &bootloader, "bootloader")?;
         let loader_fw = Sec2Fw::new(&dev, &sec2.falcon, &booter_load, "booter-load")?;
         let unload_fw = Sec2Fw::new(&dev, &sec2.falcon, &booter_unload, "booter-unload")?;
 
-        let mut bl_fw = None;
-        if !bl.is_none() {
-            bl_fw = Some(BLFirmware::new(bl.unwrap()));
-        }
+        let bl_fw = match bl {
+            Some(fw) => Some(BLFirmware::new(fw)),
+            None => None
+        };
 
         let gspvec : VVec<u8> = gsp.copy(GFP_KERNEL)?;
         let elf = Elf::from_bytes(gspvec.as_slice())?;
@@ -608,19 +608,18 @@ impl Gpu {
             pr_info!("Trying to load fw {}", fw_ver);
             let res = Firmware::new(pdev.as_dev(), &base, &sec2, fw_ver);
 
-            match res {
+            fw = match res {
                 Err(_) => { continue; }
-                _ => {}
-            }
-            fw = Some(res.unwrap());
+                Ok(x) => Some(x)
+            };
             picked_ver = fw_ver;
             break;
         }
-        if fw.is_none() {
-            return Err(EINVAL);
-        }
 
-        let fw = fw.unwrap();
+        let fw = match fw {
+            None => { return Err(EINVAL) }
+            Some(fw) => fw,
+        };
 
         let mut vram_mm = MemRange::new(1)?;
 
