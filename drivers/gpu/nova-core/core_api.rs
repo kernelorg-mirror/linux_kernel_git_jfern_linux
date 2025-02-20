@@ -149,15 +149,15 @@ pub unsafe extern "C" fn nova_core_free_gsp_client(client: *mut bindings::nova_c
     let ncclient = unsafe { &mut (*client) };
 
     if ncclient.gsp_device != core::ptr::null_mut() {
-	let gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
-	/* ensure the gpu device gets dropped before the client */
-	drop(gpu_device);
-	ncclient.gsp_device = core::ptr::null_mut();
+        let gpu_device : Arc<GpuDevice> = unsafe { Arc::from_foreign(ncclient.gsp_device) };
+        /* ensure the gpu device gets dropped before the client */
+        drop(gpu_device);
+        ncclient.gsp_device = core::ptr::null_mut();
     }
 
     if ncclient.gsp_client != core::ptr::null_mut() {
-	let _gpu_client : Arc<GpuClient> = unsafe { Arc::from_foreign(ncclient.gsp_client) };
-	ncclient.gsp_client = core::ptr::null_mut();
+        let _gpu_client : Arc<GpuClient> = unsafe { Arc::from_foreign(ncclient.gsp_client) };
+        ncclient.gsp_client = core::ptr::null_mut();
     }
 }
 
@@ -638,15 +638,17 @@ pub unsafe extern "C" fn nova_core_alloc_chan(auxdev: *mut bindings::auxiliary_d
 /// Free a channel on the client
 pub unsafe extern "C" fn nova_core_free_chan(chan: *mut bindings::nova_core_chan) {
     unsafe {
-        if (*chan).gr_ctx_arc != core::ptr::null_mut() {
-            let gr_ctx_arc : Arc<GrCtx> = Arc::from_foreign((*chan).gr_ctx_arc);
-            gr_ctx_arc.free_ctx();
-            (*chan).gr_ctx_arc = core::ptr::null_mut();
-        }
         if (*chan).arc != core::ptr::null_mut() {
             let chan_arc : Arc<Channel> = Arc::from_foreign((*chan).arc);
             chan_arc.free();
             (*chan).arc = core::ptr::null_mut();
+        }
+
+        // this will cause gr ctx buffers to get unmapped after channel teardown
+        if (*chan).gr_ctx_arc != core::ptr::null_mut() {
+            let gr_ctx_arc : Arc<GrCtx> = Arc::from_foreign((*chan).gr_ctx_arc);
+            gr_ctx_arc.free_ctx();
+            (*chan).gr_ctx_arc = core::ptr::null_mut();
         }
     }
 }
