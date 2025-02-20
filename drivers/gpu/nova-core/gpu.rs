@@ -483,7 +483,7 @@ pub(crate) struct GpuClient {
 impl Drop for GpuClient {
     fn drop(&mut self) {
 
-        self.allocator.free(self.gsp.get_client_handle().unwrap() & 0xffff);
+        self.allocator.free(self.gsp.get_client_handle() & 0xffff);
         let _ = self.mgr.free_client(&self.gsp);
 
     }

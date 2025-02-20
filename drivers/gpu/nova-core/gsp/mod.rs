@@ -217,8 +217,8 @@ pub(crate) struct GspChannel {
 }
 
 impl GspClient {
-    pub(crate) fn get_client_handle(&self) -> Result<u32> {
-        Ok(self.object.handle)
+    pub(crate) fn get_client_handle(&self) -> u32 {
+        self.object.handle
     }
 }
 

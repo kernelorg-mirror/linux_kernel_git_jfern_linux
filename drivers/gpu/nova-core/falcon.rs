@@ -159,8 +159,9 @@ impl FalconFw {
 	// GM200+
 	self.falcon.wr32(0x40, mbox0)?;
 
-	if !mbox1.is_none() {
-	    self.falcon.wr32(0x44, mbox1.unwrap())?;
+	match mbox1 {
+	    Some(mbox1) => { self.falcon.wr32(0x44, mbox1)? },
+	    None => {}
 	}
 
 	self.falcon.wr32(0x104, self.info.boot_addr)?;

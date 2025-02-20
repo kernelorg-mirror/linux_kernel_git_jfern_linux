@@ -133,7 +133,7 @@ unsafe extern "C" fn get_gsp_client_handle(client: *mut bindings::nvidia_vgpu_gs
     let cli_borrow: ArcBorrow<'_, GpuClient> = unsafe { Arc::borrow((*client).gsp_client) };
 
     pr_info!("get GSP client handle\n");
-    cli_borrow.gsp.clone().get_client_handle().unwrap()
+    cli_borrow.gsp.clone().get_client_handle()
 }
 
 unsafe extern "C" fn free_fbmem(base: *mut bindings::nvidia_vgpu_mem) {
