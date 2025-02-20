@@ -372,11 +372,12 @@ impl GSPSharedQueues::ver {
             Ok(x) => { x }
         };
 
-        if peeklen != None {
-            let peek_val = peeklen.unwrap();
-
-            *peek_val = RpcMsg::ver::get_rpc_length_from_ptr(lq.msgq.get_slot_ptr(rptr));
-            return Ok(0);
+        match peeklen {
+            Some(peek_val) => {
+                *peek_val = RpcMsg::ver::get_rpc_length_from_ptr(lq.msgq.get_slot_ptr(rptr));
+                return Ok(0);
+            },
+            None => {}
         }
 
         let size = align(repc as usize + RpcMsg::ver::get_gsp_msg_hdr_size() as usize, GSP_PAGE_SIZE as usize);
@@ -461,11 +462,10 @@ impl GSPSharedQueues::ver {
 
             let msg = self.msgq_recv(lq, msg_length, repc, &mut time)?;
 
-            if msg.is_none() {
-                return Err(EINVAL);
-            }
-
-            let mut msg = msg.unwrap();
+            let mut msg = match msg {
+                Some(m) => m,
+                None => { return Err(EINVAL); }
+            };
 
             let (recv_rpc_fn, rpc_result) = RpcMsg::ver::get_rpc_result(&mut msg);
 
