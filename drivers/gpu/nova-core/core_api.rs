@@ -2,6 +2,7 @@
 use kernel::{
     bindings,
     container_of,
+    pci,
     prelude::*,
     sync::{Arc, ArcBorrow},
 };
@@ -23,19 +24,10 @@ use crate::accel::fifo::Channel;
 use crate::driver::NovaCoreData;
 use crate::mmu::vmm::VMM_TU102;
 
-#[no_mangle]
-#[allow(dead_code)]
-/// Fill the device info structure for the upper level driver.
-pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_device,
-                                             info: *mut bindings::nova_core_info) {
-    pr_info!("core: {:?} {:?}\n", auxdev, info);
-    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
-
-    let gpu = unsafe { &(*core_driver).gpu };
-    let pdev = unsafe { &(*core_driver).pdev };
-    let ncinfo = unsafe { &mut (*info) };
+fn fill_core_info(ncinfo: &mut bindings::nova_core_info,
+                  gpu: &Gpu,
+                  pdev: &pci::Device) -> Result<()> {
     let base = &gpu.base;
-
 
     ncinfo.boot0 = base.spec.boot0;
 
@@ -46,16 +38,15 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
     ncinfo.mthdbuf_size = gpu.gsp.get_mthdbuf_size();
     ncinfo.chipset = Chipset::val(&base.spec.chipset);
 
-    ncinfo.resource_addr[0] = pdev.resource_start(0).unwrap();
-    ncinfo.resource_addr[1] = pdev.resource_start(1).unwrap();
-    ncinfo.resource_addr[2] = pdev.resource_start(3).unwrap();
-    ncinfo.resource_size[0] = pdev.resource_len(0).unwrap();
-    ncinfo.resource_size[1] = pdev.resource_len(1).unwrap();
-    ncinfo.resource_size[2] = pdev.resource_len(3).unwrap();
+    ncinfo.resource_addr[0] = pdev.resource_start(0)?;
+    ncinfo.resource_addr[1] = pdev.resource_start(1)?;
+    ncinfo.resource_addr[2] = pdev.resource_start(3)?;
+    ncinfo.resource_size[0] = pdev.resource_len(0)?;
+    ncinfo.resource_size[1] = pdev.resource_len(1)?;
+    ncinfo.resource_size[2] = pdev.resource_len(3)?;
     (ncinfo.pci_vendor_id, ncinfo.pci_device_id) = pdev.device_vendor_id();
 
-    pr_info!("got here\n");
-    ncinfo.ram_user = (gpu.instmem.vram_mm.size(0).unwrap() as u64) << NVKM_MM_PAGE_SHIFT;
+    ncinfo.ram_user = (gpu.instmem.vram_mm.size(0)? as u64) << NVKM_MM_PAGE_SHIFT;
 
     let mut runlidx = 0;
     let runl = gpu.gsp.get_runlist();
@@ -99,6 +90,22 @@ pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_de
         runlidx += 1;
     }
     ncinfo.runl_nr = runl.entries.len() as u8;
+    Ok(())
+}
+
+#[no_mangle]
+#[allow(dead_code)]
+/// Fill the device info structure for the upper level driver.
+pub unsafe extern "C" fn nova_core_fill_info(auxdev: *mut bindings::auxiliary_device,
+                                             info: *mut bindings::nova_core_info) {
+    pr_info!("core: {:?} {:?}\n", auxdev, info);
+    let core_driver = unsafe { container_of!(auxdev, NovaCoreData, auxdev) };
+
+    let gpu = unsafe { &(*core_driver).gpu };
+    let pdev = unsafe { &(*core_driver).pdev };
+    let ncinfo = unsafe { &mut (*info) };
+
+    let _ = fill_core_info(ncinfo, gpu, pdev);
 }
 
 #[no_mangle]
