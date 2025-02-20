@@ -183,6 +183,9 @@ nouveau_abi16_obj_find(struct nouveau_abi16 *abi16, u64 object)
 static void
 nouveau_abi16_obj_del(struct nouveau_abi16_obj *obj)
 {
+	if (obj->type == ENGOBJ)
+		nova_core_chan_free_object(&obj->obj);
+	
 	list_del(&obj->head);
 	kfree(obj);
 }
@@ -512,8 +515,6 @@ nouveau_abi16_ioctl_del(struct nouveau_abi16 *abi16, struct nvif_ioctl_v0 *ioctl
 
 	obj = nouveau_abi16_obj_find(abi16, ioctl->object);
 	if (obj) {
-		if (obj->type == ENGOBJ)
-			nova_core_chan_free_object(&obj->obj);
 		nouveau_abi16_obj_del(obj);
 	}
 
