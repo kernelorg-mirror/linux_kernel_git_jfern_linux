@@ -289,6 +289,9 @@ impl Bios {
         image.itype = pcir.image_type;
         image.last = pcir.last;
 
+        // Joel (todo): NPDE might be unnecessary because PCIR data structure alone should be
+        // sufficient to determine both the image size and whether it's the last image,
+        // regardless of the image type. Check OpenRM.
         if pcir.image_type != 0x70 {
             let mut npde: BiosNpdeT = Default::default();
             let data = Self::npde_tp(bios, image.base as isize, &mut npde)?;
@@ -315,16 +318,24 @@ impl Bios {
         let bar = bar.try_access().ok_or(ENXIO)?;	
         /* just do PROM probe */
         /* hardcoded lots */
+
+        // Joel: Enable ROM shadowing so the ROM is accessible on the BAR.
+        // 0x88000 is where the configuration space starts, per Noveau
+        // code 0x88000 to 0x8900 is PCI configuration space (see
+        // pciConfigMirrorBase in Novueau).
         let mut data = bar.readl(0x88000 + 0x50);
         data &= !0x00000001;
         bar.writel(data, 0x88000 + 0x50);
 
-	let mut image: BiosImage = Default::default();
+        // Joel: Creates a default BiosImage struct with all fields set to 0.
+        let mut image: BiosImage = Default::default();
         let mut idx = 0;
         let mut first_e0_done = false;
 
 	loop {
+            // Joel: First fetch only 4096 bytes to check the header.
             Self::fetch(&mut self.bios_vec, &bar, image.base, image.base + 4096)?;
+
             let mut imaged_addr = self.imaged_addr;
             self.imaged_addr = 0;
             if Self::imagen(&self, &mut image)? == false {
