@@ -1,0 +1,34 @@
++----------------------------------------------------------------------------------------------------------+
+|                            TYPE 0x70 NBSI IMAGE STRUCTURE                                                 |
++----------------------------------------------------------------------------------------------------------+
+| +--------------------+                                                                                    |
+| | ROM HEADER         |                                                                                    |
+| | Signature: 0xAA55  |                                                                                    |
+| +--------------------+                                                                                    |
+| | PCI DATA STRUCTURE |                                                                                    |
+| | Image Type: 0x70   | ← NBSI specific type                                                               |
+| | Last Image: 0x??   | ← Forced to TRUE in code regardless of actual flag value                           |
+| +--------------------+                                                                                    |
+|                                                                                                          |
+| +-------------------------------------------------------------------------------------------+            |
+| |                                                                                           |            |
+| |                                  NBSI DATA SECTION                                        |            |
+| |                                                                                           |            |
+| | +----------------------+                                                                  |            |
+| | | NBSI Signature       | "NBSIsig" pattern                                                |            |
+| | +----------------------+                                                                  |            |
+| | | NBSI Header          | Structure information                                            |            |
+| | +----------------------+                                                                  |            |
+| | | OEM Configuration    | Vendor-specific customizations                                   |            |
+| | | Data                 |                                                                  |            |
+| | +----------------------+                                                                  |            |
+| | | Factory Calibration  | Hardware-specific calibration values                             |            |
+| | | Values               |                                                                  |            |
+| | +----------------------+                                                                  |            |
+| |                                                                                           |            |
+| | * Primarily contains data rather than executable code                                     |            |
+| | * Used for NVIDIA factory settings and OEM customizations                                 |            |
+| |                                                                                           |            |
+| +-------------------------------------------------------------------------------------------+            |
+|                                                                                                          |
++----------------------------------------------------------------------------------------------------------+

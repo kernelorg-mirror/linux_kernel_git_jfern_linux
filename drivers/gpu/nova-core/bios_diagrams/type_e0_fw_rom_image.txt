@@ -1,0 +1,90 @@
++----------------------------------------------------------------------------------------------------------+
+|       TYPE 0xE0 FIRMWARE IMAGE SEQUENTIAL STRUCTURE     (this is fwsec aka firmware section)             |
++----------------------------------------------------------------------------------------------------------+
+| OFFSET 0x0000                                                                                             |
+| +--------------------+                                                                                    |
+| | ROM HEADER         |                                                                                    |
+| | Signature: 0xAA55  |                                                                                    |
+| +--------------------+                                                                                    |
+|        ↓                                                                                                 |
+| OFFSET 0x0002 + PCI Data Structure Pointer                                                                |
+| +--------------------+                                                                                    |
+| | PCI DATA STRUCTURE |                                                                                    |
+| | Signature: "PCIR"  |                                                                                    |
+| | Image Type: 0xE0   | ← Special firmware image type                                                      |
+| | Image Length: X    | (Total size in 512-byte blocks)                                                    |
+| | Last Image: 0/1    |                                                                                    |
+| +--------------------+                                                                                    |
+|        ↓                                                                                                 |
+| OFFSET PCI Data Structure End (16-byte aligned)                                                           |
+| +--------------------+                                                                                    |
+| | NPDE (Optional)    |                                                                                    |
+| | Signature: "NPDE"  |                                                                                    |
+| | Subimage Length    |                                                                                    |
+| | Last Image Override|                                                                                    |
+| +--------------------+                                                                                    |
+|        ↓                                                                                                 |
+| OFFSET Image Data Start                                                                                   |
+| +--------------------+                                                                                    |
+| | PMU Table Header   |                                                                                    |
+| | Entry Count        |                                                                                    |
+| | Format Version     |                                                                                    |
+| +--------------------+                                                                                    |
+|        ↓                                                                                                 |
+| +--------------------+                                                                                    |
+| | PMU Entry 0        |                                                                                    |
+| | Type: 0x??         |                                                                                    |
+| | Data Offset: →→→→→→+→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→+                               |
+| | Size               |                                        |                               |
+| +--------------------+                                        |                               |
+|        ↓                                                      |                               |
+| +--------------------+                                        |                               |
+| | PMU Entry 1        |                                        |                               |
+| | Type: 0x??         |                                        |                               |
+| | Data Offset: →→→→→→+→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→+        |                               |
+| | Size               |                               |        |                               |
+| +--------------------+                               |        |                               |
+|        ↓                                             |        |                               |
+| +--------------------+                               |        |                               |
+| | PMU Entry 2        |                               |        |                               |
+| | Type: 0x85         | ← FALCON Firmware Entry       |        |                               |
+| | Data Offset: →→→→→→+→→→→→→→→→→→→→→→→→→→→→→+        |        |                               |
+| | Size               |                      |        |        |                               |
+| +--------------------+                      |        |        |                               |
+|        ↓                                    |        |        |                               |
+| +--------------------+                      |        |        |                               |
+| | More PMU Entries   |                      |        |        |                               |
+| | (if present)       |                      |        |        |                               |
+| +--------------------+                      |        |        |                               |
+|                                             |        |        |                               |
+|                                             ↓        ↓        ↓                               |
+| OFFSET Data Area (After PMU Entry Table)                                                      |
+| +--------------------+                                                                        |
+| | Firmware Data 2    |                                                                        |
+| | (Type 0x85)        |                                                                        |
+| | +--------------+   |                                                                        |
+| | | FALCON Desc  |   | ← Header with firmware metadata                                        |
+| | | Header       |   |                                                                        |
+| | +--------------+   |                                                                        |
+| | | Firmware     |   | ← Actual binary code for FALCON processor                                   |
+| | | Binary       |   |                                                                             |
+| | +--------------+   |                                                                             |
+| +--------------------+                                                                             |
+|                                                                                                    |
+| +--------------------+                                                                             |
+| | Firmware Data 1    |                                                                             |
+| | (Type from Entry 1)|                                                                             |
+| +--------------------+                                                                             |
+|                                                                                                    |
+| +--------------------+                                                                             |
+| | Firmware Data 0    |                                                                             |
+| | (Type from Entry 0)|                                                                             |
+| +--------------------+                                                                             |
+|                                                                                                    |
+| * The PMU Entry Table forms an index that points to corresponding firmware sections                |
+| * Each entry has a type field that identifies the purpose of the firmware                          |
+| * Type 0x85 is specifically looked for as it contains FALCON processor firmware                    |
+| * The exact layout of firmware data sections may vary, but each is referenced by its PMU entry     |
+| * PMU Entries are scanned by pmu_ep() in find_fwsec_offset()                                       | 
+|                                                                                                    |
++----------------------------------------------------------------------------------------------------+

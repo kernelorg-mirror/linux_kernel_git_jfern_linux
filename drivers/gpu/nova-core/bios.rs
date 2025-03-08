@@ -9,6 +9,21 @@ use kernel::{
 
 use crate::driver::Bar0;
 
+/*
+ * Acronyms:
+ * PCIR: PCI Image Region
+ * NPDE: Nvidia PCI Data Extension
+ */
+
+ /*
+  * References in other drivers:
+  * OpenRM: validateVbiosImage (drivers/resman/src/physical/gpu/devinit/objvbios.c)
+  */
+
+/*
+ * For diagrams, see the bios_diagrams folder.
+ */
+
 const PROM_OFFSET: usize = 0x300000;
 
 #[repr(C)]

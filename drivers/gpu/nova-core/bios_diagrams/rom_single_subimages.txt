@@ -1,0 +1,141 @@
+
+This is the ROM format for a single ROM image and multiple subimages (chained using NPDE):
++----------------------------------------------------------------------------------------------------------+
+|                                     SUPER IMAGE STRUCTURE WITH NPDE                                       |
++----------------------------------------------------------------------------------------------------------+
+| OFFSET: 0                                                                                                 |
++---------------------+                                                                                     |
+| PCI EXPANSION       |                                                                                     |
+| ROM HEADER          |                                                                                     |
+|                     |                                                                                     |
+| +---------------+   |                                                                                     |
+| | Signature     |   | 0x55AA (2 bytes)                                                                    |
+| | (0xAA55)      |   |                                                                                     |
+| +---------------+   |                                                                                     |
+| | PCI Data      |   | Offset to PCI Data Structure (2 bytes)                                              |
+| | Structure Ptr |---+--+                                                                                  |
+| +---------------+   |  |                                                                                  |
+| | ...           |   |  |                                                                                  |
+| +---------------+   |  |                                                                                  |
++---------------------+  |                                                                                  |
+|                        v                                                                                  |
+| OFFSET: pciBlck        +---------------------+                                                            |
++------------------------|                     |                                                            |
+| PCI DATA STRUCTURE     | +---------------+   |                                                            |
+|                        | | Signature     |   | "PCIR" (4 bytes)                                           |
+|                        | | ("PCIR")      |   |                                                            |
+|                        | +---------------+   |                                                            |
+|                        | | Vendor ID     |   | e.g., 0x10DE for NVIDIA (2 bytes)                          |
+|                        | +---------------+   |                                                            |
+|                        | | Device ID     |   | Specific to the GPU model (2 bytes)                        |
+|                        | +---------------+   |                                                            |
+|                        | | ...           |   |                                                            |
+|                        | +---------------+   |                                                            |
+|                        | | Image Length  |   | SUPER IMAGE LENGTH in 512-byte blocks (2 bytes)            |
+|                        | |               |   | (Covers ALL subimages contained in this super image)       |
+|                        | +---------------+   |                                                            |
+|                        | | PCI Data      |   | Size of PCI Data Structure (2 bytes)                       |
+|                        | | Structure Len |   |                                                            |
+|                        | +---------------+   |                                                            |
+|                        | | Code Type     |   | Type of image (1 byte)                                     |
+|                        | +---------------+   |                                                            |
+|                        | | Last Image    |   | 0x80 if this is the last image, 0x00 otherwise             |
+|                        | +---------------+   |                                                            |
+|                        | | Class Code    |   | 3 bytes (0x03 for display controller, etc.)                |
+|                        | +---------------+   |                                                            |
+|                        | | ...           |   |                                                            |
+|                        | +---------------+   |                                                            |
++------------------------+---------------------+                                                            |
+|                                              |                                                            |
+| OPTIONAL PCI DATA EXTENSION (NPDE)           |   ◄── IMPORTANT TO SUPER IMAGE FUNCTIONALITY               |
+| (16-byte aligned after PCI Data Structure)   |                                                            |
++----------------------+---------------------+ |                                                            |
+| OFFSET: nvPciDataExtAt                     | |                                                            |
++----------------------|                     | |                                                            |
+|                      | +---------------+   | |                                                            |
+|                      | | Signature     |   | | NV_PCI_DATA_EXT_SIG (4 bytes) - "NPDE"                     |
+|                      | +---------------+   | |                                                            |
+|                      | | Revision      |   | | e.g., 0x10 or 0x11 (2 bytes)                               |
+|                      | +---------------+   | |                                                            |
+|                      | | Length        |   | | Size of extension structure (2 bytes)                      |
+|                      | +---------------+   | |                                                            |
+|                      | | Subimage Len  |   | | FIRST SUBIMAGE LENGTH in 512-byte blocks (2 bytes)         |
+|                      | |               |   | | (Smaller than the super image length)                      |
+|                      | +---------------+   | |                                                            |
+|                      | | Last Image    |   | | Override for PCI Data's Last Image flag                    |
+|                      | |               |   | | (Set to 0 to allow logical subimages)                      |
+|                      | +---------------+   | |                                                            |
+|                      | | Flags         |   | | Special options (e.g., disable checksum)                   |
+|                      | +---------------+   | |                                                            |
++----------------------+---------------------+ |                                                            |
+|                                              |                                                            |
+|                    ┌───────────────────────────────────────────────────────────────┐                     |
+|                    │                     SUPER IMAGE DATA                          │                     |
+|                    │                                                               │                     |
+| +------------------v--------------------------------------------------------+      │                     |
+| |                   LOGICAL SUBIMAGE 1                                      |      │                     |
+| | +---------------+-----------------------------------------------------+   |      │                     |
+| | | IMAGE DATA    |                                                     |   |      │                     |
+| | | OFFSET:       |                                                     |   |      │                     |
+| | | imgDataOffset |                                                     |   |      │                     |
+| | +---------------+                                                     |   |      │                     |
+| |                                                                       |   |      │                     |
+| |                 Actual VBIOS code and data for Subimage 1             |   |      │                     |
+| |                 (May include pointers/references to other subimages)  |   |      │                     |
+| |                                                                       |   |      │                     |
+| +-----------------------------------------------------------------------+   |      │                     |
+| |                                                                           |      │                     |
+| |  (Size determined by Subimage Length from NPDE = X blocks)                |      │                     |
+| |                                                                           |      │                     |
+| +---------------------------------------------------------------------------+      │                     |
+| |                                                                           |      │                     |
+| |                     LOGICAL SUBIMAGE 2                                    |      │                     |
+| |                                                                           |      │                     |
+| | +------------------------------------------------------------------+     |      │                     |
+| | | INTERNAL SUBIMAGE HEADER                                         |     |      │                     |
+| | | (Proprietary NVIDIA Format)                                      |     |      │                     |
+| | |                                                                  |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Signature/Magic  | Identifies this block as a subimage         |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Subimage Size    | Size of this subimage in bytes or blocks    |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Subimage Type    | Purpose/type of this subimage data          |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Next Subimage    | Offset to next subimage (relative to super  |-----|------|-----------------+   |
+| | | | Offset           | image start or to this subimage)            |     |      │                 |   |
+| | | +------------------+                                             |     |      │                 |   |
+| | |                                                                  |     |      │                 |   |
+| | +------------------------------------------------------------------+     |      │                 |   |
+| |                                                                          |      │                 |   |
+| | Actual data for Subimage 2                                               |      │                 |   |
+| | (Can be referenced by the main VBIOS code in Subimage 1)                 |      │                 |   |
+| |                                                                          |      │                 |   |
+| +--------------------------------------------------------------------------+      │                 |   |
+| |                                                                          |      │                 |   |
+| |                     LOGICAL SUBIMAGE 3                                   |      │                 |   |
+| |                                                                          |      │                 |   |
+| | +------------------------------------------------------------------+     |      │                 |   |
+| | | INTERNAL SUBIMAGE HEADER                                         |<----|------|-----------------+   |
+| | | (Proprietary NVIDIA Format)                                      |     |      │                     |
+| | |                                                                  |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Signature/Magic  | Identifies this block as a subimage         |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Subimage Size    | Size of this subimage in bytes or blocks    |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Subimage Type    | Purpose/type of this subimage data          |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | | | Next Subimage    | Offset to next subimage (or 0 if last)      |     |      │                     |
+| | | | Offset           |                                             |     |      │                     |
+| | | +------------------+                                             |     |      │                     |
+| | |                                                                  |     |      │                     |
+| | +------------------------------------------------------------------+     |      │                     |
+| |                                                                          |      │                     |
+| | Actual data for Subimage 3                                               |      │                     |
+| |                                                                          |      │                     |
+| +--------------------------------------------------------------------------+      │                     |
+|                                                                                   │                     |
+|                    └──────────────────────────────────────────────────────────────┘                     |
+|                                                                                                         |
++---------------------------------------------------------------------------------------------------------+
