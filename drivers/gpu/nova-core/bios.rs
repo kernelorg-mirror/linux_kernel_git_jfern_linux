@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use kernel::{devres::Devres, kvec, prelude::*, revocable::RevocableGuard};
+use kernel::{devres::Devres, prelude::*};
 
-use crate::driver::Bar0;
+use crate::{driver::Bar0, falcon::FalconUCodeDescV3};
 
 const PROM_OFFSET: usize = 0x300000;
 
@@ -47,6 +47,7 @@ struct BiosImage {
     last: bool,
 }
 
+#[derive(Default)]
 pub(crate) struct Bios {
     image0_size: isize,
     imaged_addr: usize,
@@ -58,16 +59,6 @@ pub(crate) struct Bios {
 }
 
 impl Bios {
-    pub(crate) fn new() -> Self {
-        Self {
-            image0_size: 0,
-            imaged_addr: 0,
-            bmp_offset: 0,
-            bit_offset: 0,
-            bios_vec: Default::default(),
-        }
-    }
-
     fn rd32(&self, offset: isize) -> u32 {
         let mut addr = offset;
         if addr >= self.image0_size && self.imaged_addr != 0 {
@@ -107,7 +98,7 @@ impl Bios {
         (self.bios_vec.as_ptr() as usize + addr as usize) as *const u8
     }
 
-    fn findbytes(&self, needle: &KVec<u8>) -> usize {
+    fn findbytes(&self, needle: &[u8]) -> usize {
         for i in 0..self.bios_vec.len() - needle.len() {
             let mut found = false;
             for j in 0..needle.len() {
@@ -309,12 +300,7 @@ impl Bios {
         Ok(true)
     }
 
-    fn fetch(
-        vec: &mut KVec<u8>,
-        bar: &RevocableGuard<'_, Bar0>,
-        offset: usize,
-        length: usize,
-    ) -> Result<()> {
+    fn fetch(vec: &mut KVec<u8>, bar: &Bar0, offset: usize, length: usize) -> Result<()> {
         vec.extend_with(offset + length, 0, GFP_KERNEL)?;
         for i in (offset..offset + length).step_by(4) {
             let ptr: *mut u32 = vec.as_mut_ptr() as *mut u32;
@@ -325,29 +311,36 @@ impl Bios {
         Ok(())
     }
 
-    pub(crate) fn probe(&mut self, bar: &Devres<Bar0>) -> Result<()> {
-        let bar = bar.try_access().ok_or(ENXIO)?;
+    pub(crate) fn probe(bar: &Devres<Bar0>) -> Result<Self> {
+        let mut bios: Bios = Default::default();
         /* just do PROM probe */
         /* hardcoded lots */
-        let mut data = bar.readl(0x88000 + 0x50);
-        data &= !0x00000001;
-        bar.writel(data, 0x88000 + 0x50);
+        with_bar!(bar, |b| {
+            let mut data = b.readl(0x88000 + 0x50);
+            data &= !0x00000001;
+            b.writel(data, 0x88000 + 0x50);
+        })?;
 
         let mut image: BiosImage = Default::default();
         let mut idx = 0;
         let mut first_e0_done = false;
 
         loop {
-            Self::fetch(&mut self.bios_vec, &bar, image.base, image.base + 4096)?;
-            let mut imaged_addr = self.imaged_addr;
-            self.imaged_addr = 0;
-            if Self::imagen(&self, &mut image)? == false {
-                self.imaged_addr = imaged_addr;
+            with_bar_res!(bar, |b| Self::fetch(
+                &mut bios.bios_vec,
+                b,
+                image.base,
+                image.base + 4096
+            ))?;
+            let mut imaged_addr = bios.imaged_addr;
+            bios.imaged_addr = 0;
+            if Self::imagen(&bios, &mut image)? == false {
+                bios.imaged_addr = imaged_addr;
                 break;
             }
-            self.imaged_addr = imaged_addr;
+            bios.imaged_addr = imaged_addr;
             if idx == 0 {
-                self.image0_size = image.size as isize;
+                bios.image0_size = image.size as isize;
             }
 
             if image.size > 0x100000 {
@@ -355,12 +348,17 @@ impl Bios {
             }
 
             if image.itype == 0xe0 && first_e0_done == false {
-                self.imaged_addr = image.base;
-                imaged_addr = self.imaged_addr;
+                bios.imaged_addr = image.base;
+                imaged_addr = bios.imaged_addr;
                 first_e0_done = true;
             }
 
-            Self::fetch(&mut self.bios_vec, &bar, image.base, image.size)?;
+            with_bar_res!(bar, |b| Self::fetch(
+                &mut bios.bios_vec,
+                &b,
+                image.base,
+                image.size
+            ))?;
 
             pr_info!(
                 "Bios image.size {:#x} {:#x} {} {} {:#x}",
@@ -368,12 +366,12 @@ impl Bios {
                 image.itype,
                 image.size,
                 first_e0_done,
-                self.imaged_addr
+                bios.imaged_addr
             );
 
             if image.last {
                 if !first_e0_done {
-                    self.imaged_addr = imaged_addr;
+                    bios.imaged_addr = imaged_addr;
                 }
                 break;
             }
@@ -385,24 +383,24 @@ impl Bios {
             idx += 1;
         }
 
-        pr_info!("Imaged addr {:#x}", self.imaged_addr);
+        pr_info!("Imaged addr {:#x}", bios.imaged_addr);
 
-        let bmp_vec = kvec![0xff, 0x7f, 0x78, 0x86, 0x00]?;
-        self.bmp_offset = self.findbytes(&bmp_vec);
+        const BMP_VEC: [u8; 5] = [0xff, 0x7f, 0x78, 0x86, 0x00];
+        bios.bmp_offset = bios.findbytes(&BMP_VEC);
 
-        let bit_vec: KVec<u8> = kvec![0xff, 0xb8, b'B', b'I', b'T']?;
-        self.bit_offset = self.findbytes(&bit_vec);
+        const BIT_VEC: [u8; 5] = [0xff, 0xb8, b'B', b'I', b'T'];
+        bios.bit_offset = bios.findbytes(&BIT_VEC);
 
         let mut bit_entry: BitEntry = Default::default();
 
-        Bios::bit_entry(self, b'i', &mut bit_entry)?;
+        Bios::bit_entry(&bios, b'i', &mut bit_entry)?;
 
         if bit_entry.length >= 4 {
-            let major = self.rd08((bit_entry.offset + 3) as isize);
-            let chip = self.rd08((bit_entry.offset + 2) as isize);
-            let minor = self.rd08((bit_entry.offset + 1) as isize);
-            let micro = self.rd08((bit_entry.offset + 0) as isize);
-            let patch = self.rd08((bit_entry.offset + 4) as isize);
+            let major = bios.rd08((bit_entry.offset + 3) as isize);
+            let chip = bios.rd08((bit_entry.offset + 2) as isize);
+            let minor = bios.rd08((bit_entry.offset + 1) as isize);
+            let micro = bios.rd08((bit_entry.offset + 0) as isize);
+            let patch = bios.rd08((bit_entry.offset + 4) as isize);
 
             pr_info!(
                 "version {:x}:{:x}:{:x}:{:x}:{:x}\n",
@@ -413,7 +411,7 @@ impl Bios {
                 patch
             );
         }
-        Ok(())
+        Ok(bios)
     }
 
     pub(crate) fn get_range(&self, range: core::ops::Range<usize>) -> Option<&[u8]> {
@@ -429,7 +427,6 @@ impl Bios {
         let mut ver = 0;
         let mut hdr = 0;
         let mut pmue: BiosPmuE = Default::default();
-        let mut found: i8 = -1;
         loop {
             let data = Self::pmu_ep(self, idx, &mut ver, &mut hdr, &mut pmue)?;
             if data == 0 {
@@ -439,30 +436,46 @@ impl Bios {
             pr_info!("pmue {:#x}", pmue.pmutype);
 
             if pmue.pmutype == 0x85 {
-                found = idx as i8;
-                break;
+                return Ok(pmue.data);
             }
             idx += 1;
         }
 
-        match found {
-            -1 => {
-                return Err(EINVAL);
-            }
-            _ => {
-                pr_info!("pmu found idx {}\n", found);
-            }
+        Err(EINVAL)
+    }
+}
+
+impl Bios {
+    pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
+        let fwsec_offset = self.find_fwsec_offset()? as usize;
+
+        let hdr = self.rd32(fwsec_offset as isize);
+        let ver = (hdr & 0xff00) >> 8;
+
+        if ver != 3 {
+            pr_err!("invalid fwsec firmware version\n");
+            return Err(EINVAL);
         }
 
-        let desc_hdr = self.rd32(pmue.data as isize);
-        pr_info!(
-            "flcn {:#x} {:#x} {} {}\n",
-            pmue.data,
-            desc_hdr,
-            (desc_hdr & 0xffff0000) >> 16,
-            (desc_hdr & 0xff00) >> 8
-        );
+        if fwsec_offset + core::mem::size_of::<FalconUCodeDescV3>() > self.bios_vec.len() {
+            pr_err!("fwsec-frts header not contained within BIOS bounds\n");
+            return Err(ERANGE);
+        }
 
-        Ok(pmue.data)
+        Ok(unsafe { &*(self.ptr(fwsec_offset as isize) as *const FalconUCodeDescV3) })
+    }
+
+    pub(crate) fn fwsec_ucode_data_offset(&self, v3_desc: &FalconUCodeDescV3) -> usize {
+        let fwsec_offset = unsafe { (v3_desc as *const _ as *const u8).offset_from(self.ptr(0)) };
+
+        fwsec_offset as usize + v3_desc.size()
+    }
+
+    pub(crate) fn fwsec_ucode(&self, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
+        let ucode_data_offset = self.fwsec_ucode_data_offset(v3_desc);
+        let size = (v3_desc.imem_load_size + v3_desc.dmem_load_size) as usize;
+
+        self.get_range(ucode_data_offset..ucode_data_offset + size)
+            .ok_or(ERANGE)
     }
 }
