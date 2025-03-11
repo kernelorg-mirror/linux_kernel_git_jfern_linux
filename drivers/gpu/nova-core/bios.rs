@@ -1,11 +1,6 @@
 #![allow(dead_code)]
 
-use kernel::{
-    devres::Devres,
-    prelude::*,
-    kvec,
-    revocable::RevocableGuard,
-};
+use kernel::{devres::Devres, kvec, prelude::*, revocable::RevocableGuard};
 
 use crate::driver::Bar0;
 
@@ -62,20 +57,17 @@ pub(crate) struct Bios {
     pub bios_vec: KVec<u8>,
 }
 
-
 impl Bios {
-    pub(crate) fn new() -> Self
-    {
+    pub(crate) fn new() -> Self {
         Self {
-            image0_size : 0,
-            imaged_addr : 0,
-            bmp_offset : 0,
-            bit_offset : 0,
+            image0_size: 0,
+            imaged_addr: 0,
+            bmp_offset: 0,
+            bit_offset: 0,
             bios_vec: Default::default(),
         }
     }
 
-    
     fn rd32(&self, offset: isize) -> u32 {
         let mut addr = offset;
         if addr >= self.image0_size && self.imaged_addr != 0 {
@@ -115,9 +107,8 @@ impl Bios {
         (self.bios_vec.as_ptr() as usize + addr as usize) as *const u8
     }
 
-    fn findbytes(&self, needle: &KVec<u8>) -> usize
-    {
-        for i in 0..self.bios_vec.len()-needle.len() {
+    fn findbytes(&self, needle: &KVec<u8>) -> usize {
+        for i in 0..self.bios_vec.len() - needle.len() {
             let mut found = false;
             for j in 0..needle.len() {
                 if self.bios_vec[i + j] != needle[j] {
@@ -126,7 +117,7 @@ impl Bios {
                 if j == needle.len() - 1 {
                     found = true;
                 }
-            };
+            }
             if found {
                 return i;
             }
@@ -134,13 +125,16 @@ impl Bios {
         0
     }
 
-    fn bit_entry(bios: &Bios, id: u8, bit_entry: &mut BitEntry) -> Result<()>
-    {
+    fn bit_entry(bios: &Bios, id: u8, bit_entry: &mut BitEntry) -> Result<()> {
         let mut entries = bios.rd08((bios.bit_offset + 0x0a) as isize);
         let rec_size = bios.rd08((bios.bit_offset + 0x09) as isize);
         let mut entry = (bios.bit_offset + 0x0c) as isize;
 
-        while { let tmp = entries; entries -= 1; tmp != 0 } {
+        while {
+            let tmp = entries;
+            entries -= 1;
+            tmp != 0
+        } {
             let idx = bios.rd08(entry);
             if idx == id {
                 bit_entry.id = bios.rd08(entry);
@@ -154,8 +148,7 @@ impl Bios {
         Err(EINVAL)
     }
 
-    fn pmu_te(bios: &Bios, ver: &mut u8, hdr: &mut u8, cnt: &mut u8, len: &mut u8) -> Result<u32>
-    {
+    fn pmu_te(bios: &Bios, ver: &mut u8, hdr: &mut u8, cnt: &mut u8, len: &mut u8) -> Result<u32> {
         let mut bit_p: BitEntry = Default::default();
 
         let mut data = 0;
@@ -177,8 +170,7 @@ impl Bios {
         Ok(data)
     }
 
-    fn pmu_ee(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8) -> Result<u32>
-    {
+    fn pmu_ee(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8) -> Result<u32> {
         let mut cnt: u8 = 0;
         let mut len: u8 = 0;
         let mut data = Self::pmu_te(bios, ver, hdr, &mut cnt, &mut len)?;
@@ -190,8 +182,13 @@ impl Bios {
         Ok(0)
     }
 
-    fn pmu_ep(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8, info: &mut BiosPmuE) -> Result<u32>
-    {
+    fn pmu_ep(
+        bios: &Bios,
+        idx: u8,
+        ver: &mut u8,
+        hdr: &mut u8,
+        info: &mut BiosPmuE,
+    ) -> Result<u32> {
         let data = Self::pmu_ee(bios, idx, ver, hdr)?;
         if data != 0 {
             info.pmutype = bios.rd08(data as isize);
@@ -200,8 +197,7 @@ impl Bios {
         Ok(data as u32)
     }
 
-    fn pcir_te(bios: &Bios, offset: isize, ver: &mut u8, hdr: &mut u16) -> Result<u32>
-    {
+    fn pcir_te(bios: &Bios, offset: isize, ver: &mut u8, hdr: &mut u16) -> Result<u32> {
         let mut data = bios.rd16(offset + 0x18) as u32;
         if data != 0 {
             data += offset as u32;
@@ -211,8 +207,11 @@ impl Bios {
                     *ver = bios.rd08((data + 0x0c) as isize);
                 }
                 _ => {
-                    pr_info!("{:#x} Unknown PCIR signature {:#x}\n",
-                              data, bios.rd32(data as isize));
+                    pr_info!(
+                        "{:#x} Unknown PCIR signature {:#x}\n",
+                        data,
+                        bios.rd32(data as isize)
+                    );
                     *hdr = 0;
                     *ver = 0;
                     return Err(EINVAL);
@@ -222,8 +221,13 @@ impl Bios {
         Ok(data as u32)
     }
 
-    fn pcir_tp(bios: &Bios, offset: isize, ver: &mut u8, hdr: &mut u16, info: &mut BiosPcirT) -> Result<u32>
-    {
+    fn pcir_tp(
+        bios: &Bios,
+        offset: isize,
+        ver: &mut u8,
+        hdr: &mut u16,
+        info: &mut BiosPcirT,
+    ) -> Result<u32> {
         let data = Self::pcir_te(bios, offset, ver, hdr)?;
         if data != 0 {
             info.vendor_id = bios.rd16((data + 0x04) as isize);
@@ -238,8 +242,7 @@ impl Bios {
         Ok(data as u32)
     }
 
-    fn npde_te(bios: &Bios, offset: isize) -> Result<u32>
-    {
+    fn npde_te(bios: &Bios, offset: isize) -> Result<u32> {
         let mut pcir: BiosPcirT = Default::default();
         let mut ver: u8 = 0;
         let mut hdr: u16 = 0;
@@ -249,8 +252,11 @@ impl Bios {
             match bios.rd32(data as isize) {
                 0x4544504e => {}
                 _ => {
-                    pr_info!("{:#x} Unknown NPDE signature {:#x}\n",
-                             data, bios.rd32(data as isize));
+                    pr_info!(
+                        "{:#x} Unknown NPDE signature {:#x}\n",
+                        data,
+                        bios.rd32(data as isize)
+                    );
                     data = 0;
                 }
             }
@@ -258,8 +264,7 @@ impl Bios {
         Ok(data)
     }
 
-    fn npde_tp(bios: &Bios, offset: isize, info: &mut BiosNpdeT) -> Result<u32>
-    {
+    fn npde_tp(bios: &Bios, offset: isize, info: &mut BiosNpdeT) -> Result<u32> {
         let data = Self::npde_te(bios, offset)?;
         if data != 0 {
             info.image_size = (bios.rd16((data + 0x08) as isize) as u32) * 512;
@@ -268,13 +273,15 @@ impl Bios {
         Ok(data)
     }
 
-    fn imagen(bios: &Bios, image: &mut BiosImage) -> Result<bool>
-    {
+    fn imagen(bios: &Bios, image: &mut BiosImage) -> Result<bool> {
         let data = bios.rd16(image.base as isize);
 
         match data {
             0xaa55 | 0xbb77 | 0x4e56 => {}
-            x => { pr_info!("{:#x}: ROM signature unknown {:#x}", image.base, x); return Ok(false); }
+            x => {
+                pr_info!("{:#x}: ROM signature unknown {:#x}", image.base, x);
+                return Ok(false);
+            }
         };
 
         let mut pcir: BiosPcirT = Default::default();
@@ -302,28 +309,35 @@ impl Bios {
         Ok(true)
     }
 
-    fn fetch(vec: &mut KVec<u8>, bar: &RevocableGuard<'_, Bar0>, offset: usize, length: usize) -> Result<()> {
+    fn fetch(
+        vec: &mut KVec<u8>,
+        bar: &RevocableGuard<'_, Bar0>,
+        offset: usize,
+        length: usize,
+    ) -> Result<()> {
         vec.resize(offset + length, 0, GFP_KERNEL)?;
-        for i in (offset..offset+length).step_by(4) {
+        for i in (offset..offset + length).step_by(4) {
             let ptr: *mut u32 = vec.as_mut_ptr() as *mut u32;
-            unsafe { *(ptr.offset((i / 4) as isize)) = bar.try_readl(PROM_OFFSET + i)?; }
+            unsafe {
+                *(ptr.offset((i / 4) as isize)) = bar.try_readl(PROM_OFFSET + i)?;
+            }
         }
-	Ok(())
+        Ok(())
     }
 
     pub(crate) fn probe(&mut self, bar: &Devres<Bar0>) -> Result<()> {
-        let bar = bar.try_access().ok_or(ENXIO)?;	
+        let bar = bar.try_access().ok_or(ENXIO)?;
         /* just do PROM probe */
         /* hardcoded lots */
         let mut data = bar.readl(0x88000 + 0x50);
         data &= !0x00000001;
         bar.writel(data, 0x88000 + 0x50);
 
-	let mut image: BiosImage = Default::default();
+        let mut image: BiosImage = Default::default();
         let mut idx = 0;
         let mut first_e0_done = false;
 
-	loop {
+        loop {
             Self::fetch(&mut self.bios_vec, &bar, image.base, image.base + 4096)?;
             let mut imaged_addr = self.imaged_addr;
             self.imaged_addr = 0;
@@ -348,7 +362,14 @@ impl Bios {
 
             Self::fetch(&mut self.bios_vec, &bar, image.base, image.size)?;
 
-            pr_info!("Bios image.size {:#x} {:#x} {} {} {:#x}", image.base, image.itype, image.size, first_e0_done, self.imaged_addr);
+            pr_info!(
+                "Bios image.size {:#x} {:#x} {} {} {:#x}",
+                image.base,
+                image.itype,
+                image.size,
+                first_e0_done,
+                self.imaged_addr
+            );
 
             if image.last {
                 if !first_e0_done {
@@ -372,7 +393,7 @@ impl Bios {
         let bit_vec: KVec<u8> = kvec![0xff, 0xb8, b'B', b'I', b'T']?;
         self.bit_offset = self.findbytes(&bit_vec);
 
-        let mut bit_entry:  BitEntry = Default::default();
+        let mut bit_entry: BitEntry = Default::default();
 
         Bios::bit_entry(self, b'i', &mut bit_entry)?;
 
@@ -383,14 +404,19 @@ impl Bios {
             let micro = self.rd08((bit_entry.offset + 0) as isize);
             let patch = self.rd08((bit_entry.offset + 4) as isize);
 
-            pr_info!("version {:x}:{:x}:{:x}:{:x}:{:x}\n",
-                     major, chip, minor, micro, patch);
+            pr_info!(
+                "version {:x}:{:x}:{:x}:{:x}:{:x}\n",
+                major,
+                chip,
+                minor,
+                micro,
+                patch
+            );
         }
         Ok(())
     }
 
-    pub(crate) fn get_range(&self, range: core::ops::Range<usize>) -> Option<&[u8]>
-    {
+    pub(crate) fn get_range(&self, range: core::ops::Range<usize>) -> Option<&[u8]> {
         if range.end <= self.bios_vec.len() {
             Some(&self.bios_vec[range])
         } else {
@@ -402,7 +428,7 @@ impl Bios {
         let mut idx = 0;
         let mut ver = 0;
         let mut hdr = 0;
-        let mut pmue : BiosPmuE = Default::default();
+        let mut pmue: BiosPmuE = Default::default();
         let mut found: i8 = -1;
         loop {
             let data = Self::pmu_ep(self, idx, &mut ver, &mut hdr, &mut pmue)?;
@@ -420,15 +446,22 @@ impl Bios {
         }
 
         match found {
-            -1 => { return Err(EINVAL); }
+            -1 => {
+                return Err(EINVAL);
+            }
             _ => {
                 pr_info!("pmu found idx {}\n", found);
             }
         }
 
         let desc_hdr = self.rd32(pmue.data as isize);
-        pr_info!("flcn {:#x} {:#x} {} {}\n", pmue.data, desc_hdr, (desc_hdr & 0xffff0000) >> 16,
-                 (desc_hdr & 0xff00) >> 8);
+        pr_info!(
+            "flcn {:#x} {:#x} {} {}\n",
+            pmue.data,
+            desc_hdr,
+            (desc_hdr & 0xffff0000) >> 16,
+            (desc_hdr & 0xff00) >> 8
+        );
 
         Ok(pmue.data)
     }
