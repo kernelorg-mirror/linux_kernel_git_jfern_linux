@@ -14,6 +14,7 @@ mod macros {
     }
 }
 
+mod bios;
 mod driver;
 mod falcon;
 mod firmware;
