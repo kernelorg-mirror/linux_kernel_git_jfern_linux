@@ -315,7 +315,7 @@ impl Bios {
         offset: usize,
         length: usize,
     ) -> Result<()> {
-        vec.resize(offset + length, 0, GFP_KERNEL)?;
+        vec.extend_with(offset + length, 0, GFP_KERNEL)?;
         for i in (offset..offset + length).step_by(4) {
             let ptr: *mut u32 = vec.as_mut_ptr() as *mut u32;
             unsafe {
