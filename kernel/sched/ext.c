@@ -3479,7 +3479,7 @@ static s32 scx_select_cpu_dfl(struct task_struct *p, s32 prev_cpu,
 {
 	const struct cpumask *llc_cpus = NULL;
 	const struct cpumask *numa_cpus = NULL;
-	s32 cpu;
+	s32 cpu = smp_processor_id();
 
 	*found = false;
 
@@ -3508,21 +3508,19 @@ static s32 scx_select_cpu_dfl(struct task_struct *p, s32 prev_cpu,
 	}
 
 	/*
+	 * If the waker's CPU is cache affine and prev_cpu is idle, then avoid
+	 * a migration.
+	 */
+	if (cpus_share_cache(cpu, prev_cpu) &&
+		test_and_clear_cpu_idle(prev_cpu)) {
+		cpu = prev_cpu;
+		goto cpu_found;
+	}
+
+	/*
 	 * If WAKE_SYNC, try to migrate the wakee to the waker's CPU.
 	 */
 	if (wake_flags & SCX_WAKE_SYNC) {
-		cpu = smp_processor_id();
-
-		/*
-		 * If the waker's CPU is cache affine and prev_cpu is idle,
-		 * then avoid a migration.
-		 */
-		if (cpus_share_cache(cpu, prev_cpu) &&
-		    test_and_clear_cpu_idle(prev_cpu)) {
-			cpu = prev_cpu;
-			goto cpu_found;
-		}
-
 		/*
 		 * If the waker's local DSQ is empty, and the system is under
 		 * utilized, try to wake up @p to the local DSQ of the waker.
