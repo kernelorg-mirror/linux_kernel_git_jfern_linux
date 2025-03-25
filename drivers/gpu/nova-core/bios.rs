@@ -74,6 +74,11 @@ pub(crate) struct Bios {
     bmp_offset: usize,
     bit_offset: usize,
 
+    // Joel: The bios_vec is expanded via the fetch method, which resizes the vector to
+    // accommodate new BIOS image data. In the probe method, the expansion happens in two
+    // stages for each image: first, it fetches just 4096 bytes to check the header, and if
+    // the image is valid, it fetches the entire image. Eventually all images (type 0, e0 etc)
+    // are concatenated into bios_vec.
     pub bios_vec: KVec<u8>,
 }
 
@@ -149,6 +154,8 @@ impl Bios {
         0
     }
 
+    // BIT (Bios Information Table) is a type in the type 0 legacy boot rom Image.
+    // It is not Nvidia specific, and contains id, version, length, and offset fields.
     fn bit_entry(bios: &Bios, id: u8, bit_entry: &mut BitEntry) -> Result<()>
     {
         let mut entries = bios.rd08((bios.bit_offset + 0x0a) as isize);
@@ -169,6 +176,8 @@ impl Bios {
         Err(EINVAL)
     }
 
+    // PMU table entry: Converts BIT entry (which is in type 0 image) to PMU table header pointer
+    // in type E0 image.
     fn pmu_te(bios: &Bios, ver: &mut u8, hdr: &mut u8, cnt: &mut u8, len: &mut u8) -> Result<u32>
     {
         let mut bit_p: BitEntry = Default::default();
@@ -192,6 +201,8 @@ impl Bios {
         Ok(data)
     }
 
+    // PMU entry element: Converts an index into the PMU table to the data offset of the PMU entry
+    // in the PMU entry table (not the data payload pointed to by the PMU entry).
     fn pmu_ee(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8) -> Result<u32>
     {
         let mut cnt: u8 = 0;
@@ -205,6 +216,8 @@ impl Bios {
         Ok(0)
     }
 
+    // PMU entry parser: Given a PMU entry index, reads the PMU entry from the PMU entry table
+    // and returns the data for PMU entry record in the table (not the data pointed to by entry).
     fn pmu_ep(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8, info: &mut BiosPmuE) -> Result<u32>
     {
         let data = Self::pmu_ee(bios, idx, ver, hdr)?;
@@ -383,6 +396,7 @@ impl Bios {
                 break;
             }
 
+            // Joel: Increment the address to the next image.
             image.base += image.size;
             if image.base > 0x100000 {
                 break;
@@ -424,6 +438,9 @@ impl Bios {
         }
     }
 
+    // Goes through the PMU table and finds the PMU entry with type 0x85 which
+    // is the firmware section PMU entry pointing to the firmware data in the
+    // type E0 image.
     pub(crate) fn find_fwsec_offset(&self) -> Result<u32> {
         let mut idx = 0;
         let mut ver = 0;

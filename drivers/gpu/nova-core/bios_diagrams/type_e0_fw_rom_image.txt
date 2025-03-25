@@ -24,16 +24,16 @@
 | | Last Image Override|                                                                                    |
 | +--------------------+                                                                                    |
 |        ↓                                                                                                 |
-| OFFSET Image Data Start                                                                                   |
-| +--------------------+                                                                                    |
-| | PMU Table Header   |                                                                                    |
+| OFFSET Image Data Start      <---- NOTE: This is also pointed to directly by BIT entry in type 0 image.  |
+| +--------------------+                   This BIT -> Parsing PMU table header is done in pmu_te() func  |
+| | PMU Table Header   |                   where pmu_te stands for 'PMU table entry'                      |
 | | Entry Count        |                                                                                    |
 | | Format Version     |                                                                                    |
 | +--------------------+                                                                                    |
 |        ↓                                                                                                 |
-| +--------------------+                                                                                    |
-| | PMU Entry 0        |                                                                                    |
-| | Type: 0x??         |                                                                                    |
+| +--------------------+      <--- NOTE: pmu_ee() takes a PMU entry idx, and converts to the memory offset of|
+| | PMU Entry 0        |                 the PMU entry in this table (not the data).                         |
+| | Type: 0x??         |                                                                                     |
 | | Data Offset: →→→→→→+→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→+                               |
 | | Size               |                                        |                               |
 | +--------------------+                                        |                               |
