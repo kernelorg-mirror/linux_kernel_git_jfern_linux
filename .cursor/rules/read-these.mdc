@@ -1,0 +1,13 @@
+---
+description: Read these documents
+globs: 
+alwaysApply: false
+---
+
+This repo is used for development of the NOVA-core driver. This is a new rust driver. It is based on Dave's hacked up tree to get basic GPU support working.
+
+I am initially tasked with developing the BIOS Firmware parser. Refer to the following directories for documentation and ongoing development:
+
+drivers/gpu/nova-core/
+drivers/gpu/nova-core/bios_diagrams/
+drivers/gpu/nova-core/patches/
