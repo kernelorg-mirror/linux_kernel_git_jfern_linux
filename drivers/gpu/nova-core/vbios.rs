@@ -10,43 +10,92 @@ pub fn u16_from_u8s(high: u8, low: u8) -> u16 {
     ((high as u16) << 8) | (low as u16)
 }
 
+/// The offset of the VBIOS ROM in the BAR0 space
+const ROM_OFFSET: usize = 0x300000;
+
 /// VBIOS data structure
-#[derive(Default)]
-pub struct Bios {
-    /// Size of the VBIOS image in bytes
-    pub size: usize,
-    /// Whether the VBIOS has been successfully initialized
-    pub initialized: bool,
-    /// VBIOS version
+pub struct Vbios<'a> {
+    pub bar0: &'a Devres<Bar0>,
     pub version: u16,
     /// VBIOS data
-    pub data: Option<KVec<u8>>,
+    pub data: KVec<u8>,
 }
 
-impl Bios {
+impl<'a> Vbios<'a> {
     /// Enable ROM shadowing to access VBIOS ROM
     ///
     /// This enables ROM shadowing by clearing bit 0 of the ROM shadow register,
     /// allowing the VBIOS to be accessible through BAR0.
-    fn enable_rom_shadow(bar0: &Devres<Bar0>) -> Result {
-        with_bar!(bar0, |b| {
+    fn enable_rom_shadow(&self) -> Result {
+        with_bar!(self.bar0, |bar0| {
             // Clear LSB of ROM shadow register
-            let reg = RomShadow::read(b);
+            let reg = RomShadow::read(bar0);
             reg.set_val(reg.val() & !0x00000001);
-            reg.write(b);
+            reg.write(bar0);
         })
     }
 
+    /// Read bytes from the ROM at the current end of the data vector
+    pub fn read_more(&mut self, bytes: u32) -> Result {
+        with_bar!(self.bar0, |bar0| {
+            // Get current length
+            let current_len = self.data.len();
+
+            // Read ROM data bytes push directly to vector
+            for i in 0..bytes as usize {
+                // Read a byte from the VBIOS ROM and push it to the data vector
+                let rom_addr = ROM_OFFSET + current_len + i;
+                let byte = bar0.readb(rom_addr);
+                self.data.push(byte, GFP_KERNEL)?;
+            }
+
+            Ok(())
+        })?
+    }
+
+    /// Read bytes at a specific offset, filling any gap
+    pub fn read_more_at_offset(&mut self, offset: u32, bytes: u32) -> Result {
+        // If offset is beyond current data size, fill the gap first
+        let current_len = self.data.len();
+
+        if offset as usize > current_len {
+            // Calculate bytes to read to fill the gap
+            let gap_bytes = offset as usize - current_len;
+            self.read_more(gap_bytes as u32)?;
+        }
+
+        // Now read the requested bytes at the offset
+        self.read_more(bytes)
+    }
+
     /// Probe for VBIOS extraction
-    pub(crate) fn probe(bar0: &Devres<Bar0>) -> Result<Self> {
-        let mut bios: Bios = Default::default();
+    pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
+        let mut vbios = Self { bar0, version: 0,  data: KVec::new() };
 
         // Enable ROM shadowing so the ROM is accessible on the BAR
-        Self::enable_rom_shadow(bar0)?;
+        pr_info!("Enabling ROM shadowing\n");
+        vbios.enable_rom_shadow()?;
+        pr_info!("ROM shadowing enabled\n");
 
-        bios.initialized = true;
+        // Read the first 32 bytes into the KVec
+        vbios.read_more(32)?;
 
-        Ok(bios)
+        // Print the bytes from the KVec to verify they match
+        pr_info!("ROM header bytes from KVec (first 32 bytes):\n");
+        for row in 0..2 {
+            let base = row * 16;
+            if base + 15 < vbios.data.len() {
+                pr_info!("  {:08x}: {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}\n",
+                    base,
+                    vbios.data[base],     vbios.data[base + 1], vbios.data[base + 2], vbios.data[base + 3],
+                    vbios.data[base + 4], vbios.data[base + 5], vbios.data[base + 6], vbios.data[base + 7],
+                    vbios.data[base + 8], vbios.data[base + 9], vbios.data[base + 10], vbios.data[base + 11],
+                    vbios.data[base + 12], vbios.data[base + 13], vbios.data[base + 14], vbios.data[base + 15]
+                );
+            }
+        }
+
+        Ok(vbios)
     }
 }
 

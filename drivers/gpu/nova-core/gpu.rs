@@ -5,6 +5,7 @@ use kernel::{
 };
 
 use crate::bios::Bios;
+use crate::vbios::Vbios;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::falcon::FalconBromParams;
@@ -250,6 +251,8 @@ impl Gpu {
         let frts_addr = vga_base - frts_size;
 
         let bios = Bios::probe(&bar)?;
+
+        let vbios = Vbios::probe(&bar)?;
 
         // TODO: should we write 0x0 back when we drop this object?
         let sysmem_flush = DmaObject::new(pdev, 0x1000, "sysmem flush page")?;
