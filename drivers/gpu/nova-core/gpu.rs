@@ -4,7 +4,7 @@ use kernel::{
     bindings, device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString,
 };
 
-use crate::bios::Bios;
+use crate::vbios::Vbios;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::falcon::FalconBromParams;
@@ -249,7 +249,7 @@ impl Gpu {
         let frts_size = 0x100000;
         let frts_addr = vga_base - frts_size;
 
-        let bios = Bios::probe(&bar)?;
+        let vbios = Vbios::probe(&bar)?;
 
         // TODO: should we write 0x0 back when we drop this object?
         let sysmem_flush = DmaObject::new(pdev, 0x1000, "sysmem flush page")?;
@@ -268,7 +268,7 @@ impl Gpu {
 
         // Now let's load.
 
-        let fwsec_frts = load_fwsec_frts(pdev, &bar, &bios, frts_addr, frts_size)?;
+        let fwsec_frts = load_fwsec_frts(pdev, &bar, &vbios, frts_addr, frts_size)?;
 
         gsp_falcon.reset(&bar, &timer)?;
         gsp_falcon.dma_load(&bar, &timer, &fwsec_frts)?;
@@ -406,12 +406,12 @@ impl FalconFirmware for FwsecFrtsFirmware {
 fn load_fwsec_frts(
     pdev: &pci::Device,
     bar: &Devres<Bar0>,
-    bios: &Bios,
+    vbios: &Vbios,
     frts_addr: u64,
     frts_size: u64,
 ) -> Result<FwsecFrtsFirmware> {
-    let v3_desc = bios.fwsec_header()?;
-    let ucode = bios.fwsec_ucode(v3_desc)?;
+    let v3_desc = vbios.fwsec_header()?;
+    let ucode = vbios.fwsec_ucode()?;
 
     let mut ucode_dma = DmaObject::from_data(pdev, ucode, "fwsec-frts")?;
     crate::falcon::patch_fw(
@@ -427,11 +427,7 @@ fn load_fwsec_frts(
         // TODO: then this can be moved into the bios module, as part of the FW extraction
         // process... Actually signatures can be extracted at the same time as the header since
         // they are right after?
-        let fwsec_offset =
-            unsafe { (v3_desc as *const _ as *const u8).offset_from(bios.ptr(0)) } as usize;
-        let signatures_offset = fwsec_offset + core::mem::size_of::<FalconUCodeDescV3>();
-        &bios.bios_vec
-            [signatures_offset..signatures_offset + (v3_desc.signature_count as usize * SIG_SIZE)]
+        &ucode[0..(v3_desc.signature_count as usize * SIG_SIZE)]
     };
     let sig_base_img = (v3_desc.imem_load_size + v3_desc.pkc_data_offset) as usize;
 

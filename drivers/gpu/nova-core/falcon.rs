@@ -146,7 +146,7 @@ pub(crate) enum FalconMem {
 pub(crate) struct FalconUCodeDescV3 {
     pub(crate) hdr: u32,
     pub(crate) stored_size: u32,
-    pub(crate) pkc_data_offset: u32,
+    pub(crate) pkc_data_offset: u32, // dmem address for copying signatures
     pub(crate) interface_offset: u32,
     pub(crate) imem_phys_base: u32,
     pub(crate) imem_load_size: u32,
