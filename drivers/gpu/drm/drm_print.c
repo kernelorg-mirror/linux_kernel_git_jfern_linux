@@ -42,15 +42,24 @@
 unsigned long __drm_debug;
 EXPORT_SYMBOL(__drm_debug);
 
-MODULE_PARM_DESC(debug, "Enable debug output, where each bit enables a debug category.\n"
-"\t\tBit 0 (0x01)  will enable CORE messages (drm core code)\n"
-"\t\tBit 1 (0x02)  will enable DRIVER messages (drm controller code)\n"
-"\t\tBit 2 (0x04)  will enable KMS messages (modesetting code)\n"
-"\t\tBit 3 (0x08)  will enable PRIME messages (prime code)\n"
-"\t\tBit 4 (0x10)  will enable ATOMIC messages (atomic code)\n"
-"\t\tBit 5 (0x20)  will enable VBL messages (vblank code)\n"
-"\t\tBit 7 (0x80)  will enable LEASE messages (leasing code)\n"
-"\t\tBit 8 (0x100) will enable DP messages (displayport code)");
+/* The detailed description in MODULE_PARM_DESC was causing issues with depmod
+ * because the lines without module name prefix were included in the modinfo
+ * section which depmod couldn't parse properly. Comment it out and provide
+ * a simpler description.
+ */
+MODULE_PARM_DESC(debug, "Enable debug output, where each bit enables a debug category.");
+/*
+ * Original description was:
+ * MODULE_PARM_DESC(debug, "Enable debug output, where each bit enables a debug category.\n"
+ * "\t\tBit 0 (0x01)  will enable CORE messages (drm core code)\n"
+ * "\t\tBit 1 (0x02)  will enable DRIVER messages (drm controller code)\n"
+ * "\t\tBit 2 (0x04)  will enable KMS messages (modesetting code)\n"
+ * "\t\tBit 3 (0x08)  will enable PRIME messages (prime code)\n"
+ * "\t\tBit 4 (0x10)  will enable ATOMIC messages (atomic code)\n"
+ * "\t\tBit 5 (0x20)  will enable VBL messages (vblank code)\n"
+ * "\t\tBit 7 (0x80)  will enable LEASE messages (leasing code)\n"
+ * "\t\tBit 8 (0x100) will enable DP messages (displayport code)");
+ */
 
 #if !defined(CONFIG_DRM_USE_DYNAMIC_DEBUG)
 module_param_named(debug, __drm_debug, ulong, 0600);
