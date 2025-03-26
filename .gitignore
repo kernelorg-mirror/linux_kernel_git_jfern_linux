@@ -181,3 +181,5 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
+
+drivers/gpu/nova-core/DOCS/
