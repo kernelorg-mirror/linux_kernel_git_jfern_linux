@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::{
-    device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString,
+    bindings, device, devres::Devres, error::code::*, firmware, fmt, pci, prelude::*, str::CString,
 };
 
+use crate::bios::Bios;
+use crate::dma::DmaObject;
 use crate::driver::Bar0;
-use crate::falcon::{GspFalcon, Sec2Falcon};
-use crate::regs;
+use crate::falcon::FalconBromParams;
+use crate::falcon::{
+    self, gsp::GspFalcon, FalconFirmware, FalconLoadTarget, FalconUCodeDescV3, Sec2Falcon,
+    NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
+};
 use crate::timer::Timer;
 use crate::util;
+use crate::{devinit, regs};
 use core::fmt;
 use core::time::Duration;
 
@@ -70,6 +76,12 @@ define_chipset!({
     AD106 = 0x196,
     AD107 = 0x197,
 });
+
+impl Default for Chipset {
+    fn default() -> Self {
+        Self::TU102
+    }
+}
 
 impl Chipset {
     pub(crate) fn arch(&self) -> Architecture {
@@ -183,6 +195,7 @@ pub(crate) struct Gpu {
     bar: Devres<Bar0>,
     fw: Firmware,
     timer: Timer,
+    sysmem_flush: DmaObject,
 }
 
 impl Gpu {
@@ -190,6 +203,7 @@ impl Gpu {
         let spec = Spec::new(&bar)?;
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
+        pr_info!("-------------------------\n");
         dev_info!(
             pdev.as_ref(),
             "NVIDIA (Chipset: {}, Architecture: {:?}, Revision: {})\n",
@@ -198,8 +212,10 @@ impl Gpu {
             spec.revision
         );
 
+        with_bar!(bar, |b| b.writel(0x40, 0x110004))?;
+
         let timer = Timer::new();
-        let _gsp_falcon = GspFalcon::new(
+        let gsp_falcon = GspFalcon::new(
             pdev,
             spec.chipset,
             &bar,
@@ -212,11 +228,93 @@ impl Gpu {
 
         let _sec2_falcon = Sec2Falcon::new(pdev, spec.chipset, &bar, false)?;
 
+        let display_disabled = with_bar!(bar, |b| devinit::display_disabled(b, spec.chipset))?;
+        let fb_size = with_bar_res!(bar, |b| devinit::vidmem_size(b, spec.chipset))?;
+        let vga_base = with_bar!(bar, |b| devinit::vga_workspace_addr(
+            &b,
+            fb_size,
+            display_disabled
+        ))?;
+
+        let vga_size = fb_size - vga_base;
+        dev_info!(
+            pdev.as_ref(),
+            "Display disabled: {}, FB size: 0x{:x}, VGA base: 0x{:x}, VGA size: 0x{:x}",
+            display_disabled,
+            fb_size,
+            vga_base,
+            vga_size,
+        );
+        // TODO: make this a constant.
+        let frts_size = 0x100000;
+        let frts_addr = vga_base - frts_size;
+
+        let bios = Bios::probe(&bar)?;
+
+        // TODO: should we write 0x0 back when we drop this object?
+        let sysmem_flush = DmaObject::new(pdev, 0x1000, "sysmem flush page")?;
+        with_bar!(bar, |b| {
+            let handle = sysmem_flush.dma.dma_handle();
+
+            regs::PfbNisoFlushSysmemAddr::default()
+                .set_adr_39_08((handle >> 8) as u32)
+                .write(b);
+            if spec.chipset >= Chipset::GA102 {
+                regs::PfbNisoFlushSysmemAddrHi::default()
+                    .set_adr_63_40((handle >> 40) as u32)
+                    .write(b);
+            }
+        })?;
+
+        // Now let's load.
+
+        let fwsec_frts = load_fwsec_frts(pdev, &bar, &bios, frts_addr, frts_size)?;
+
+        gsp_falcon.reset(&bar, &timer)?;
+        gsp_falcon.dma_load(&bar, &timer, &fwsec_frts)?;
+
+        let (mbox0, _) = gsp_falcon.boot(&bar, &timer, Some(0), None)?;
+        if mbox0 != 0 {
+            pr_err!("FWSEC firmware returned error {}\n", mbox0);
+            return Err(EINVAL);
+        }
+
+        let (scratch_e, wpr2_lo, wpr2_hi) = with_bar!(bar, |b| {
+            let scratch_e = regs::PbusSwScratche::read(&*b).field() >> 16;
+            let wpr2_lo = (regs::PfbPriMmuWpr2AddrLo::read(&*b).lo_val() as u64) << 12;
+            let wpr2_hi = (regs::PfbPriMmuWpr2AddrHi::read(&*b).hi_val() as u64) << 12;
+
+            (scratch_e, wpr2_lo, wpr2_hi)
+        })?;
+        pr_info!("scratch_e: {:#x}\n", scratch_e);
+        dev_info!(pdev.as_ref(), "WPR2: {:#x}-{:#x}\n", wpr2_lo, wpr2_hi);
+
+        if wpr2_hi == 0 {
+            dev_err!(
+                pdev.as_ref(),
+                "WPR2 region not created after running FWSEC-FRTS\n"
+            );
+
+            return Err(ENOTTY);
+        }
+
+        if wpr2_lo != frts_addr {
+            dev_err!(
+                pdev.as_ref(),
+                "WPR2 region created at unexpected address {:#x} ; expected {:#x}\n",
+                wpr2_lo,
+                frts_addr,
+            );
+        }
+
+        pr_info!("GPU instance built!\n");
+
         Ok(pin_init!(Self {
             spec,
             bar,
             fw,
             timer,
+            sysmem_flush,
         }))
     }
 
@@ -262,4 +360,141 @@ impl Gpu {
 
         Ok(())
     }
+}
+
+pub(crate) struct FwsecFrtsFirmware {
+    v3_desc: FalconUCodeDescV3,
+    ucode_dma: DmaObject,
+}
+
+impl FalconFirmware for FwsecFrtsFirmware {
+    type Target = falcon::gsp::Gsp;
+
+    fn dma_handle(&self) -> bindings::dma_addr_t {
+        self.ucode_dma.dma.dma_handle()
+    }
+
+    fn imem_load(&self) -> FalconLoadTarget {
+        FalconLoadTarget {
+            src_start: 0,
+            dst_start: self.v3_desc.imem_phys_base,
+            len: self.v3_desc.imem_load_size,
+        }
+    }
+
+    fn dmem_load(&self) -> FalconLoadTarget {
+        fn align_up(value: u32, align: u32) -> u32 {
+            (value + align - 1) & !(align - 1)
+        }
+
+        FalconLoadTarget {
+            src_start: self.v3_desc.imem_load_size,
+            dst_start: self.v3_desc.dmem_phys_base,
+            len: align_up(self.v3_desc.dmem_load_size, 256),
+        }
+    }
+
+    fn brom_params(&self) -> FalconBromParams {
+        FalconBromParams {
+            pkc_data_offset: self.v3_desc.pkc_data_offset,
+            engine_id_mask: self.v3_desc.engine_id_mask,
+            ucode_id: self.v3_desc.ucode_id,
+        }
+    }
+}
+
+fn load_fwsec_frts(
+    pdev: &pci::Device,
+    bar: &Devres<Bar0>,
+    bios: &Bios,
+    frts_addr: u64,
+    frts_size: u64,
+) -> Result<FwsecFrtsFirmware> {
+    let v3_desc = bios.fwsec_header()?;
+    let ucode = bios.fwsec_ucode(v3_desc)?;
+
+    let mut ucode_dma = DmaObject::from_data(pdev, ucode, "fwsec-frts")?;
+    crate::falcon::patch_fw(
+        &mut ucode_dma,
+        v3_desc,
+        NVFW_FALCON_APPIF_DMEMMAPPER_CMD_FRTS,
+        frts_addr,
+        frts_size,
+    )?;
+
+    const SIG_SIZE: usize = 96 * 4;
+    let signatures = {
+        // TODO: then this can be moved into the bios module, as part of the FW extraction
+        // process... Actually signatures can be extracted at the same time as the header since
+        // they are right after?
+        let fwsec_offset =
+            unsafe { (v3_desc as *const _ as *const u8).offset_from(bios.ptr(0)) } as usize;
+        let signatures_offset = fwsec_offset + core::mem::size_of::<FalconUCodeDescV3>();
+        &bios.bios_vec
+            [signatures_offset..signatures_offset + (v3_desc.signature_count as usize * SIG_SIZE)]
+    };
+    let sig_base_img = (v3_desc.imem_load_size + v3_desc.pkc_data_offset) as usize;
+
+    if v3_desc.signature_count != 0 {
+        // Some more patching...
+        let idx = {
+            let mut sig_fuse_version = v3_desc.signature_versions as u32;
+
+            pr_info!(
+                "brom: {:#x} {:#x}\n",
+                v3_desc.engine_id_mask,
+                v3_desc.ucode_id
+            );
+            pr_info!("sig_fuse_version: {}\n", sig_fuse_version);
+
+            let mut reg_fuse_version = if v3_desc.engine_id_mask & 0x00000400 != 0 {
+                bar.try_access()
+                    .ok_or(ENXIO)
+                    .and_then(|b| b.try_readl(0x8241c0 + ((v3_desc.ucode_id - 1) as usize * 4)))?
+            } else {
+                pr_warn!("unexpected engine_id_mask {:#x}", v3_desc.engine_id_mask);
+                return Err(EINVAL);
+            };
+
+            reg_fuse_version = 1 << (32 - reg_fuse_version.leading_zeros());
+            pr_info!("reg_fuse_version: {:#x}\n", reg_fuse_version);
+            if (reg_fuse_version & sig_fuse_version) == 0 {
+                pr_warn!(
+                    "no matching signature: {:#x} {:#x}\n",
+                    reg_fuse_version,
+                    v3_desc.signature_versions
+                );
+                return Err(EINVAL);
+            }
+
+            let mut idx = 0;
+            while (reg_fuse_version & sig_fuse_version & 1) == 0 {
+                idx += sig_fuse_version & 1;
+                reg_fuse_version >>= 1;
+                sig_fuse_version >>= 1;
+            }
+
+            idx
+        };
+
+        pr_info!("patching signature with idx {}\n", idx);
+        let signature_start = idx as usize * SIG_SIZE;
+        let signature = &signatures[signature_start..signature_start + SIG_SIZE];
+        // SAFETY: we are the only user of this object, so there cannot be any race.
+        let dst = unsafe { ucode_dma.dma.as_slice_mut(sig_base_img, signature.len()) }?;
+        pr_info!(
+            "ready to copy: {} {} {} {}\n",
+            signature.len(),
+            dst.len(),
+            ucode_dma.len,
+            sig_base_img + SIG_SIZE
+        );
+        // SAFETY: `signature` and `dst` have the same length, so this cannot panic.
+        dst.copy_from_slice(signature);
+    }
+
+    Ok(FwsecFrtsFirmware {
+        v3_desc: v3_desc.clone(),
+        ucode_dma,
+    })
 }

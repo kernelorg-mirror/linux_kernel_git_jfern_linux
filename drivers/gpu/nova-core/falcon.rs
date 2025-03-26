@@ -2,9 +2,6 @@
 
 //! Falcon microprocessor base support
 
-// TODO: remove this once this module is actively used.
-#![allow(dead_code)]
-
 use core::hint::unreachable_unchecked;
 use core::marker::PhantomData;
 use core::time::Duration;

@@ -208,3 +208,27 @@ register_rel!(RiscvBcrCtrl@0x00001668;
     4:4     core_select => as_bit RiscvCoreSelect;
     8:8     br_fetch => as_bit bool;
 );
+
+/* TODO: this is an array of 64 registers */
+register!(PbusSwScratch@0x00001400;
+    31:0    field => as u32
+);
+
+register!(PbusSwScratche@0x00001438;
+    31:0    field => as u32
+);
+
+register!(PfbNisoFlushSysmemAddr@0x00100c10;
+    31:0    adr_39_08 => as u32
+);
+register!(PfbNisoFlushSysmemAddrHi@0x00100c40;
+    23:0    adr_63_40 => as u32
+);
+
+register!(PfbPriMmuWpr2AddrLo@0x001fa824;
+    31:4    lo_val => as u32
+);
+
+register!(PfbPriMmuWpr2AddrHi@0x001fa828;
+    31:4    hi_val => as u32
+);

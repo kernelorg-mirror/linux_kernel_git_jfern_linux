@@ -12,6 +12,12 @@ mod macros {
             $bar.try_access_with($closure).ok_or(ENXIO)
         };
     }
+
+    macro_rules! with_bar_res {
+        ($bar:expr, $closure:expr) => {
+            $bar.try_access_with($closure).ok_or(ENXIO).and_then(|r| r)
+        };
+    }
 }
 
 mod bios;
