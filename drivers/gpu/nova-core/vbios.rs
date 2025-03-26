@@ -1,9 +1,53 @@
 use kernel::prelude::*;
 use core::convert::TryFrom;
+use crate::driver::Bar0;
+use kernel::error::Result;
+use kernel::devres::Devres;
+use crate::regs::RomShadow;
 
 /// Helper function to create u16 from two u8 values (little-endian)
 pub fn u16_from_u8s(high: u8, low: u8) -> u16 {
     ((high as u16) << 8) | (low as u16)
+}
+
+/// VBIOS data structure
+#[derive(Default)]
+pub struct Bios {
+    /// Size of the VBIOS image in bytes
+    pub size: usize,
+    /// Whether the VBIOS has been successfully initialized
+    pub initialized: bool,
+    /// VBIOS version
+    pub version: u16,
+    /// VBIOS data
+    pub data: Option<KVec<u8>>,
+}
+
+impl Bios {
+    /// Enable ROM shadowing to access VBIOS ROM
+    ///
+    /// This enables ROM shadowing by clearing bit 0 of the ROM shadow register,
+    /// allowing the VBIOS to be accessible through BAR0.
+    fn enable_rom_shadow(bar0: &Devres<Bar0>) -> Result {
+        with_bar!(bar0, |b| {
+            // Clear LSB of ROM shadow register
+            let reg = RomShadow::read(b);
+            reg.set_val(reg.val() & !0x00000001);
+            reg.write(b);
+        })
+    }
+
+    /// Probe for VBIOS extraction
+    pub(crate) fn probe(bar0: &Devres<Bar0>) -> Result<Self> {
+        let mut bios: Bios = Default::default();
+
+        // Enable ROM shadowing so the ROM is accessible on the BAR
+        Self::enable_rom_shadow(bar0)?;
+
+        bios.initialized = true;
+
+        Ok(bios)
+    }
 }
 
 /// PCI Data Structure as defined in PCI Firmware Specification
