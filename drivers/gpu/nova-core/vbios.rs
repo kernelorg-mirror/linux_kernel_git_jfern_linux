@@ -157,6 +157,16 @@ impl PcirStruct {
     pub fn is_last(&self) -> bool {
         self.last_image & 0x80 != 0
     }
+
+    /// Calculate image size in bytes
+    pub fn image_size_bytes(&self) -> Result<usize> {
+        if self.image_size > 0 {
+            // Image size is in 512-byte blocks
+            Ok(self.image_size as usize * 512)
+        } else {
+            Err(EINVAL)
+        }
+    }
 }
 
 /// BIOS Information Table (BIT) Header
@@ -207,6 +217,7 @@ impl TryFrom<&[u8]> for BitHeader {
     }
 }
 
+/*
 impl BitHeader {
     /// Verify BIT header checksum
     pub fn verify_checksum(&self, data: &[u8]) -> bool {
@@ -221,6 +232,7 @@ impl BitHeader {
         sum == 0
     }
 }
+*/
 
 /// BIT Token Entry
 #[derive(Debug, Clone, Copy)]
@@ -272,3 +284,229 @@ impl BitEntry {
         Err(ENOENT)
     }
 }
+
+/// PCI ROM Expansion Header as defined in PCI Firmware Specification
+#[derive(Debug, Clone, Copy)]
+pub struct PciRomHeader {
+    /// Signature (0xAA55)
+    pub signature: u16,
+    /// Offset to PCI Data Structure
+    pub pcir_offset: u16,
+}
+
+impl TryFrom<&[u8]> for PciRomHeader {
+    type Error = Error;
+
+    fn try_from(data: &[u8]) -> Result<Self> {
+        if data.len() < 4 {
+            return Err(EINVAL);
+        }
+
+        let signature = u16_from_u8s(data[1], data[0]);
+
+        // Signature should be 0xAA55
+        if signature != 0xAA55 {
+            return Err(EINVAL);
+        }
+
+        Ok(PciRomHeader {
+            signature,
+            pcir_offset: u16_from_u8s(data[3], data[2]),
+        })
+    }
+}
+
+// Replace the simple BiosImage enum with a more powerful version
+pub enum BiosImage<'a> {
+    PciAt(PciAtBiosImage<'a>),
+    Efi(EfiBiosImage<'a>),
+    Nbsi(NbsiBiosImage<'a>),
+    FwSec(FwSecBiosImage<'a>),
+}
+
+// The indiviaul image types, when adding a new type, add it
+// also to the BiosImage::base() method.
+pub struct PciAtBiosImage<'a> {
+    base: BiosImageBase<'a>,
+    bit_header: Option<BitHeader>,
+}
+
+pub struct EfiBiosImage<'a> {
+    base: BiosImageBase<'a>,
+    // EFI-specific fields can be added here in the future.
+}
+
+pub struct NbsiBiosImage<'a> {
+    base: BiosImageBase<'a>,
+    // NBSI-specific fields can be added here in the future.
+}
+
+pub struct FwSecBiosImage<'a> {
+    base: BiosImageBase<'a>,
+    // FWSEC-specific fields can be added here in the future.
+}
+
+// Implementation for BiosImage to provide common access methods
+impl<'a> BiosImage<'a> {
+    /// Get a reference to the common BIOS image data regardless of type
+    pub fn base(&self) -> &BiosImageBase<'a> {
+        match self {
+            Self::PciAt(img) => &img.base,
+            Self::Efi(img) => &img.base,
+            Self::Nbsi(img) => &img.base,
+            Self::FwSec(img) => &img.base,
+        }
+    }
+    
+    /// Check if this is the last image
+    pub fn is_last(&self) -> bool {
+        self.base().pcir.is_last()
+    }
+    
+    /// Get the image size in bytes
+    pub fn image_size_bytes(&self) -> Result<usize> {
+        self.base().pcir.image_size_bytes()
+    }
+}
+
+// Convert from BiosImageBase to BiosImage
+impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
+    type Error = Error;
+
+    fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
+        match base.pcir.code_type {
+            0x00 => {
+                Ok(BiosImage::PciAt(base.try_into()?))
+            },
+            0x03 => Ok(BiosImage::Efi(EfiBiosImage { base })),
+            0x70 => Ok(BiosImage::Nbsi(NbsiBiosImage { base })),
+            0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base })),
+            _ => Err(EINVAL),
+        }
+    }
+}
+
+// BiosImage creation from a byte slice
+impl<'a> TryFrom<&'a [u8]> for BiosImage<'a> {
+    type Error = Error;
+
+    fn try_from(data: &'a [u8]) -> Result<Self> {
+        let base = BiosImageBase::try_from(data)?;
+        base.to_image()
+    }
+}
+
+/// BIOS Image structure containing various headers and references
+/// fields base to all BIOS images.
+pub struct BiosImageBase<'a> {
+    /// PCI ROM Expansion Header
+    pub rom_header: PciRomHeader,
+    /// PCI Data Structure (pointed to by rom_header.pcir_offset)
+    pub pcir: PcirStruct,
+    /// Slice of the image data (includes ROM header and PCIR)
+    pub data: &'a [u8],
+}
+
+impl<'a> BiosImageBase<'a> {
+    pub fn to_image(self) -> Result<BiosImage<'a>> {
+        BiosImage::try_from(self)
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
+    type Error = Error;
+
+    fn try_from(data: &'a [u8]) -> Result<Self> {
+        // Ensure we have enough data for the ROM header
+        if data.len() < 4 {
+            return Err(EINVAL);
+        }
+
+        // Parse the ROM header
+        let rom_header = PciRomHeader::try_from(&data[0..4])?;
+
+        // Parse the PCIR structure - it's required
+        if (rom_header.pcir_offset as usize) >= data.len() {
+            return Err(EINVAL);
+        }
+
+        let pcir_data = &data[rom_header.pcir_offset as usize..];
+        let pcir = PcirStruct::try_from(pcir_data)?;
+
+        Ok(BiosImageBase {
+            rom_header,
+            pcir,
+            data,
+        })
+    }
+}
+
+impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
+    type Error = Error;
+
+    fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
+        // Get the bit_header from the data
+        let bit_header = BitHeader::try_from(&base.data[base.rom_header.pcir_offset as usize..])?;
+
+        Ok(PciAtBiosImage { base, bit_header: Some(bit_header) })
+    }
+}
+
+/* TODO: Review
+/// Extension method for VBios to parse BiosImage
+impl<'a> Vbios<'a> {
+    /// Parse the VBIOS data to get a BiosImage
+    pub fn parse_bios_image(&self) -> Result<BiosImage<'_>> {
+        // Create a BiosImage from a slice of the KVec
+        BiosImage::from_slice(&self.data[..])
+    }
+
+    /// Parse the VBIOS data at a specific offset
+    pub fn parse_bios_image_at_offset(&self, offset: usize) -> Result<BiosImage<'_>> {
+        if offset >= self.data.len() {
+            return Err(EINVAL);
+        }
+        BiosImage::from_slice(&self.data[offset..])
+    }
+
+    /// Find all BIOS images in the ROM
+    pub fn find_all_bios_images(&self) -> Result<Vec<BiosImage<'_>, Global>> {
+        let mut images = Vec::try_with_capacity(4, GFP_KERNEL)?;
+        let mut offset = 0;
+
+        // Parse the first image
+        while offset < self.data.len() {
+            match self.parse_bios_image_at_offset(offset) {
+                Ok(image) => {
+                    // Calculate next offset
+                    let image_size = if image.size > 0 {
+                        image.size
+                    } else {
+                        // If size is unknown, we can't reliably find the next image
+                        images.try_push(image, GFP_KERNEL)?;
+                        break;
+                    };
+
+                    // Add the image to our collection
+                    images.try_push(image, GFP_KERNEL)?;
+
+                    // If this was the last image, we're done
+                    if images.last().unwrap().is_last() {
+                        break;
+                    }
+
+                    // Move to the next image (aligned to 512 bytes)
+                    offset += image_size;
+                    offset = (offset + 511) & !511;
+                },
+                Err(_) => break,
+            }
+        }
+
+        if images.is_empty() {
+            Err(ENOENT)
+        } else {
+            Ok(images)
+        }
+    }
+}*/
