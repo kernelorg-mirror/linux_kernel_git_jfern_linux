@@ -68,6 +68,14 @@ impl<'a> Vbios<'a> {
         self.read_more(bytes)
     }
 
+    pub fn read_bios_image_at_offset(&mut self, offset: usize, bytes: usize) -> Result<BiosImage> {
+        if offset + bytes > self.data.len() {
+            self.read_more_at_offset(offset as u32, bytes as u32)?;
+        }
+
+        BiosImage::try_from(&self.data[offset..offset + bytes])
+    }
+
     /// Probe for VBIOS extraction
     pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
         let mut vbios = Self { bar0, version: 0,  data: KVec::new() };
@@ -94,6 +102,102 @@ impl<'a> Vbios<'a> {
                 );
             }
         }
+
+        // Loop through all the BiosImage and extract relevant ones and relevant data from them
+        // let mut images = KVec::new();
+        //let mut image_offsets = Vec::new();
+        let mut cur_offset = 0;
+        let mut first_e0_done = false;
+        
+        // loop till break
+        loop {
+            // Read enough data to parse the headers (at least 1024 bytes)
+            vbios.read_more_at_offset(cur_offset as u32, 1024)?;
+            
+            // Try to parse a BIOS image at the current offset
+            // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
+            match vbios.read_bios_image_at_offset(cur_offset, 1024) {
+                Ok(image) => {
+                    // Get image size in bytes
+                    let image_size = match image.image_size_bytes() {
+                        Ok(size) => size,
+                        Err(_) => {
+                            pr_info!("Invalid image size at offset {:#x}, stopping scan\n", cur_offset);
+                            break;
+                        }
+                    };
+                    
+                    // Read the full image
+                    vbios.read_more_at_offset(cur_offset as u32, image_size as u32)?;
+                    
+                    // Create a new BiosImage with the full image data
+                    let full_image = match vbios.read_bios_image_at_offset(cur_offset, image_size) {
+                        Ok(img) => img,
+                        Err(e) => {
+                            pr_info!("Failed to parse full BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
+                            break;
+                        }
+                    };
+                    
+                    // Special handling for FwSec image (type 0xE0)
+                    if let BiosImage::FwSec(_) = &full_image {
+                        if !first_e0_done {
+                            first_e0_done = true;
+                            // Note: original code tracks imaged_addr here
+                        }
+                    }
+                    
+                    // Store the current offset for this image
+                    //image_offsets.push(cur_offset);
+                    
+                    // Add to our collection
+                    // images.push(full_image, GFP_KERNEL)?;
+                    
+                    pr_info!("Found BIOS image at offset {:#x}, size: {:#x}\n", 
+                              cur_offset, image_size);
+                    
+                    // Break if this is the last image
+                    if full_image.is_last() {
+                        break;
+                    }
+                    
+                    // Move to the next image (aligned to 512 bytes)
+                    cur_offset += image_size;
+                    cur_offset = (cur_offset + 511) & !511;
+                    
+                    // Safety check - don't go beyond 1MB
+                    if cur_offset > 0x100000 {
+                        pr_info!("Exceeded 1MB limit, stopping BIOS scan\n");
+                        break;
+                    }
+                },
+                Err(e) => {
+                    pr_info!("Failed to parse BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
+                    break;
+                }
+            }
+        }
+
+        /*
+        // Summarize the images found
+        pr_info!("Found {} images:\n", images.len());
+        for (i, (image, offset)) in images.iter().zip(image_offsets.iter()).enumerate() {
+            // Calculate data offset - in this case it's the same as the image offset
+            // because each image's data slice starts at that offset in the vbios.data KVec
+            let data_offset = offset;
+            
+            pr_info!("  Image {}: offset {:#x}, data_offset {:#x}, {:?}\n", 
+                     i, offset, data_offset, image);
+        }
+        */
+        
+        // Attempt to extract version information from BIT if available
+        // TODO: Extract version info from BIT entries similar to the original code
+        
+        // Find the BIT header by scanning for "BIT" signature
+        
+        // If BIT header found, try to find the 'i' entry for version info
+        // Look for BMP signature as in the reference code
 
         Ok(vbios)
     }
@@ -304,9 +408,13 @@ impl TryFrom<&[u8]> for PciRomHeader {
 
         let signature = u16_from_u8s(data[1], data[0]);
 
-        // Signature should be 0xAA55
-        if signature != 0xAA55 {
-            return Err(EINVAL);
+        // Check for valid ROM signatures
+        match signature {
+            0xAA55 | 0xBB77 | 0x4E56 => {},
+            _ => {
+                pr_info!("ROM signature unknown {:#x}\n", signature);
+                return Err(EINVAL);
+            }
         }
 
         Ok(PciRomHeader {
