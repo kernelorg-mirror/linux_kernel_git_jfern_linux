@@ -221,6 +221,32 @@ impl<'a> Vbios<'a> {
 }
 
 /// PCI Data Structure as defined in PCI Firmware Specification
+/*
+struct PCI_DATA_STRUCT
+{
+    u32       sig;                //  00h: Signature, the string "PCIR" or NVIDIA's alternate "NPDS"
+    u16       vendorID;           //  04h: Vendor Identification
+    u16       deviceID;           //  06h: Device Identification
+    u16       deviceListPtr;      //  08h: Device List Pointer
+    u16       pciDataStructLen;   //  0Ah: PCI Data Structure Length
+    u8        pciDataStructRev;   //  0Ch: PCI Data Structure Revision
+    u8        classCode[3];       //  0Dh: Class Code
+    u16       imageLen;           //  10h: Image Length (units of 512 bytes)
+    u16       vendorRomRev;       //  12h: Revision Level of the Vendor's ROM
+    u8        codeType;           //  14h: holds NBSI_OBJ_CODE_TYPE (0x70) and others
+    u8        lastImage;          //  15h: Last Image Indicator: bit7=1 is lastImage
+    u16       maxRunTimeImageLen; //  16h: Maximum Run-time Image Length (units of 512 bytes)
+}
+
+and here is NPDE (Nvidia PCI Data Extension to the PCI Data Structure):
+struct NV_PCI_DATA_EXT_STRUCT
+{
+    u32   signature;          //  00h: Signature, the string "NPDE"
+    u16   nvPciDataExtRev;    //  04h: NVIDIA PCI Data Extension Revision
+    u16   nvPciDataExtLen;    //  06h: NVIDIA PCI Data Extension Length
+    u16   subimageLen;        //  08h: Sub-image Length
+}
+*/
 #[derive(Debug)]
 pub(crate) struct PcirStruct {
     /// PCI Vendor ID (e.g., 0x10DE for NVIDIA)
@@ -422,6 +448,26 @@ impl BitEntry {
 
 /// PCI ROM Expansion Header as defined in PCI Firmware Specification
 #[derive(Debug, Clone, Copy)]
+// ROM Image Header (PCI Expansion ROM)
+/*
+struct PCI_EXP_ROM_STANDARD
+{
+    u16       sig;                //  00h: ROM Signature 0xaa55
+    u8        reserved [0x16];    //  02h: Reserved (processor architecture unique data)
+    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure
+    u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
+}
+
+Alternative header format used with NBSI:
+struct PCI_EXP_ROM_NBSI
+{
+    u16       sig;                //  00h: ROM Signature 0xaa55
+    u8        reserved [0x14];    //  02h: Reserved (processor architecture unique data)
+    u16       nbsiDataOffset;     //  16h: Offset from header to NBSI image
+    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure
+    u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
+}
+ */
 pub(crate) struct PciRomHeader {
     /// Signature (0xAA55)
     pub signature: u16,
@@ -464,6 +510,28 @@ pub(crate) enum BiosImage<'a> {
 // also to the BiosImage::base() method.
 pub(crate) struct PciAtBiosImage<'a> {
     base: BiosImageBase<'a>,
+    /*
+     * The BIT header (BIOS Information Table)
+     * 
+     *  struct BIT_HEADER
+     *  {
+     *      u16   id;                // Identifier
+     *      char  signature[4];      // Signature string
+     *      u16   bcd_version;       // BCD-encoded version
+     *      u8    header_size;       // Size of header
+     *      u8    token_size;        // Size of each token
+     *      u8    token_entries;     // Number of tokens
+     *      u8    checksum;          // Header checksum
+     *  }
+     *
+     *  struct BIT_TOKEN
+     *  {
+     *      u8    id;                // Token identifier
+     *      u8    data_version;      // Token data version
+     *      u16   data_size;         // Token data size
+     *      u16   data_offset;       // Offset to token data
+     *  }
+     */
     bit_header: Option<BitHeader>,
 }
 
