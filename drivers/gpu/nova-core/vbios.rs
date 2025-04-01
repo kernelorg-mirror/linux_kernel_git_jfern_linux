@@ -6,7 +6,7 @@ use kernel::devres::Devres;
 use crate::regs::RomShadow;
 
 /// Helper function to create u16 from two u8 values (little-endian)
-pub fn u16_from_u8s(high: u8, low: u8) -> u16 {
+pub(crate) fn u16_from_u8s(high: u8, low: u8) -> u16 {
     ((high as u16) << 8) | (low as u16)
 }
 
@@ -36,7 +36,7 @@ impl<'a> Vbios<'a> {
     }
 
     /// Read bytes from the ROM at the current end of the data vector
-    pub fn read_more(&mut self, bytes: u32) -> Result {
+    pub(crate) fn read_more(&mut self, bytes: u32) -> Result {
         with_bar!(self.bar0, |bar0| {
             // Get current length
             let current_len = self.data.len();
@@ -54,7 +54,7 @@ impl<'a> Vbios<'a> {
     }
 
     /// Read bytes at a specific offset, filling any gap
-    pub fn read_more_at_offset(&mut self, offset: u32, bytes: u32) -> Result {
+    pub(crate) fn read_more_at_offset(&mut self, offset: u32, bytes: u32) -> Result {
         // If offset is beyond current data size, fill the gap first
         let current_len = self.data.len();
 
@@ -68,7 +68,7 @@ impl<'a> Vbios<'a> {
         self.read_more(bytes)
     }
 
-    pub fn read_bios_image_at_offset(&mut self, offset: usize, bytes: usize) -> Result<BiosImage> {
+    pub(crate) fn read_bios_image_at_offset(&mut self, offset: usize, bytes: usize) -> Result<BiosImage<'_>> {
         if offset + bytes > self.data.len() {
             self.read_more_at_offset(offset as u32, bytes as u32)?;
         }
@@ -213,7 +213,7 @@ impl<'a> Vbios<'a> {
 
 /// PCI Data Structure as defined in PCI Firmware Specification
 #[derive(Debug)]
-pub struct PcirStruct {
+pub(crate) struct PcirStruct {
     /// PCI Data Structure signature ("PCIR")
     pub signature: [u8; 4],
     /// PCI Vendor ID (e.g., 0x10DE for NVIDIA)
@@ -266,12 +266,12 @@ impl TryFrom<&[u8]> for PcirStruct {
 
 impl PcirStruct {
     /// Check if this is the last image in the ROM
-    pub fn is_last(&self) -> bool {
+    pub(crate) fn is_last(&self) -> bool {
         self.last_image & 0x80 != 0
     }
 
     /// Calculate image size in bytes
-    pub fn image_size_bytes(&self) -> Result<usize> {
+    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
         if self.image_size > 0 {
             // Image size is in 512-byte blocks
             Ok(self.image_size as usize * 512)
@@ -283,7 +283,7 @@ impl PcirStruct {
 
 /// BIOS Information Table (BIT) Header
 #[derive(Debug, Clone, Copy)]
-pub struct BitHeader {
+pub(crate) struct BitHeader {
     /// BIT Header Identifier (0xB8FF)
     pub id: u16,
     /// BIT Header Signature ("BIT\0")
@@ -378,7 +378,7 @@ impl TryFrom<&[u8]> for BitEntry {
 
 impl BitEntry {
     /// Find a specific BitEntry by ID in a table of entries
-    pub fn from_id(data: &[u8], token_size: u8, token_entries: u8, id: u8) -> Result<Self> {
+    pub(crate) fn from_id(data: &[u8], token_size: u8, token_entries: u8, id: u8) -> Result<Self> {
         let token_size = token_size as usize;
 
         for i in 0..token_entries as usize {
@@ -399,7 +399,7 @@ impl BitEntry {
 
 /// PCI ROM Expansion Header as defined in PCI Firmware Specification
 #[derive(Debug, Clone, Copy)]
-pub struct PciRomHeader {
+pub(crate) struct PciRomHeader {
     /// Signature (0xAA55)
     pub signature: u16,
     /// Offset to PCI Data Structure
@@ -433,7 +433,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
 }
 
 // Replace the simple BiosImage enum with a more powerful version
-pub enum BiosImage<'a> {
+pub(crate) enum BiosImage<'a> {
     PciAt(PciAtBiosImage<'a>),
     Efi(EfiBiosImage<'a>),
     Nbsi(NbsiBiosImage<'a>),
@@ -442,22 +442,22 @@ pub enum BiosImage<'a> {
 
 // The indiviaul image types, when adding a new type, add it
 // also to the BiosImage::base() method.
-pub struct PciAtBiosImage<'a> {
+pub(crate) struct PciAtBiosImage<'a> {
     base: BiosImageBase<'a>,
     bit_header: Option<BitHeader>,
 }
 
-pub struct EfiBiosImage<'a> {
+pub(crate) struct EfiBiosImage<'a> {
     base: BiosImageBase<'a>,
     // EFI-specific fields can be added here in the future.
 }
 
-pub struct NbsiBiosImage<'a> {
+pub(crate) struct NbsiBiosImage<'a> {
     base: BiosImageBase<'a>,
     // NBSI-specific fields can be added here in the future.
 }
 
-pub struct FwSecBiosImage<'a> {
+pub(crate) struct FwSecBiosImage<'a> {
     base: BiosImageBase<'a>,
     // FWSEC-specific fields can be added here in the future.
 }
@@ -465,7 +465,7 @@ pub struct FwSecBiosImage<'a> {
 // Implementation for BiosImage to provide common access methods
 impl<'a> BiosImage<'a> {
     /// Get a reference to the common BIOS image data regardless of type
-    pub fn base(&self) -> &BiosImageBase<'a> {
+    pub(crate) fn base(&self) -> &BiosImageBase<'a> {
         match self {
             Self::PciAt(img) => &img.base,
             Self::Efi(img) => &img.base,
@@ -475,12 +475,12 @@ impl<'a> BiosImage<'a> {
     }
     
     /// Check if this is the last image
-    pub fn is_last(&self) -> bool {
+    pub(crate) fn is_last(&self) -> bool {
         self.base().pcir.is_last()
     }
     
     /// Get the image size in bytes
-    pub fn image_size_bytes(&self) -> Result<usize> {
+    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
         self.base().pcir.image_size_bytes()
     }
 }
@@ -502,6 +502,7 @@ impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
     }
 }
 
+
 // BiosImage creation from a byte slice
 impl<'a> TryFrom<&'a [u8]> for BiosImage<'a> {
     type Error = Error;
@@ -514,7 +515,7 @@ impl<'a> TryFrom<&'a [u8]> for BiosImage<'a> {
 
 /// BIOS Image structure containing various headers and references
 /// fields base to all BIOS images.
-pub struct BiosImageBase<'a> {
+pub(crate) struct BiosImageBase<'a> {
     /// PCI ROM Expansion Header
     pub rom_header: PciRomHeader,
     /// PCI Data Structure (pointed to by rom_header.pcir_offset)
@@ -524,7 +525,7 @@ pub struct BiosImageBase<'a> {
 }
 
 impl<'a> BiosImageBase<'a> {
-    pub fn to_image(self) -> Result<BiosImage<'a>> {
+    pub(crate) fn to_image(self) -> Result<BiosImage<'a>> {
         BiosImage::try_from(self)
     }
 }
