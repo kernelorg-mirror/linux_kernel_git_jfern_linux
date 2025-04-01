@@ -70,10 +70,22 @@ impl<'a> Vbios<'a> {
 
     pub(crate) fn read_bios_image_at_offset(&mut self, offset: usize, bytes: usize) -> Result<BiosImage<'_>> {
         if offset + bytes > self.data.len() {
-            self.read_more_at_offset(offset as u32, bytes as u32)?;
+            match self.read_more_at_offset(offset as u32, bytes as u32) {
+                Ok(_) => {},
+                Err(e) => {
+                    pr_info!("Failed to read more at offset {:#x}: {:?}\n", offset, e);
+                    return Err(e);
+                }
+            }
         }
 
-        BiosImage::try_from(&self.data[offset..offset + bytes])
+        match BiosImage::try_from(&self.data[offset..offset + bytes]) {
+            Ok(image) => Ok(image),
+            Err(e) => {
+                pr_info!("Failed to create BiosImage at offset {:#x}: {:?}\n", offset, e);
+                Err(e)
+            }
+        }
     }
 
     /// Probe for VBIOS extraction
@@ -211,52 +223,66 @@ impl<'a> Vbios<'a> {
 /// PCI Data Structure as defined in PCI Firmware Specification
 #[derive(Debug)]
 pub(crate) struct PcirStruct {
-    /// PCI Data Structure signature ("PCIR")
-    pub signature: [u8; 4],
     /// PCI Vendor ID (e.g., 0x10DE for NVIDIA)
     pub vendor_id: u16,
     /// PCI Device ID
     pub device_id: u16,
-    /// Size of this image in 512-byte blocks
-    pub image_size: u16,
-    /// Size of PCI Data Structure
-    pub structure_len: u16,
+    /// PCIR length
+    pub pcir_length: u16,
+    /// PCIR version
+    pub pcir_version: u8,
     /// ROM image type (0x00 = PC-AT compatible, 0x03 = EFI, 0x70 = NBSI)
-    pub code_type: u8,
+    pub image_type: u8,
     /// Last image indicator (0x00 = Not last image, 0x80 = Last image)
     pub last_image: u8,
+    /// Size of this image in 512-byte blocks
+    pub image_size: u16,
     /// Class code (3 bytes, 0x03 for display controller)
     pub class_code: [u8; 3],
+    /// PCI Data Structure signature ("PCIR")
+    pub signature_offset: u16, // at offset 16 from the start of the PCIR
+    pub signature: [u8; 4],
 }
 
 impl TryFrom<&[u8]> for PcirStruct {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self> {
-        if data.len() < 18 {
-            return Err(EINVAL);
-        }
-
-        let mut signature = [0u8; 4];
-        signature.copy_from_slice(&data[0..4]);
-
-        // Signature should be "PCIR"
-        if &signature != b"PCIR" {
+        if data.len() < 22 {
+            pr_info!("Not enough data for PcirStruct\n");
             return Err(EINVAL);
         }
 
         let mut class_code = [0u8; 3];
-        class_code.copy_from_slice(&data[15..18]);
+        class_code.copy_from_slice(&data[11..14]);
+
+        let mut signature_offset = u16_from_u8s(data[17], data[16]);
+        // account for the ROM signature
+        signature_offset -= 2;
+
+        let mut signature = [0u8; 4];
+
+        // BROKEN: causes out of bounds runtime panic
+        // signature.copy_from_slice(&data[signature_offset as usize..signature_offset as usize + 4]);
+
+        // Signature should be "PCIR" (0x52494350) or "RGIS" (0x53494752) or "NPDS" (0x5344504e)
+        if &signature != b"PCIR" && &signature != b"RGIS" && &signature != b"NPDS" {
+            pr_info!("Invalid signature for PcirStruct, bytes: {:02x} {:02x} {:02x} {:02x}\n", data[16], data[17], data[18], data[19]);
+            return Err(EINVAL);
+        }
+
 
         Ok(PcirStruct {
-            signature,
-            vendor_id: u16_from_u8s(data[5], data[4]),
-            device_id: u16_from_u8s(data[7], data[6]),
-            image_size: u16_from_u8s(data[11], data[10]),
-            structure_len: u16_from_u8s(data[13], data[12]),
-            code_type: data[14],
-            last_image: data[15],
+            vendor_id: u16_from_u8s(data[2], data[3]),
+            device_id: u16_from_u8s(data[4], data[5]),
+            pcir_length: u16_from_u8s(data[9], data[8]),
+            pcir_version: data[10],
+            image_type: data[12],
+            last_image: data[13],
+            image_size: u16_from_u8s(data[15], data[14]),
             class_code,
+            signature_offset,
+            signature,
         })
     }
 }
@@ -399,8 +425,6 @@ impl BitEntry {
 pub(crate) struct PciRomHeader {
     /// Signature (0xAA55)
     pub signature: u16,
-    /// Offset to PCI Data Structure
-    pub pcir_offset: u16,
 }
 
 impl TryFrom<&[u8]> for PciRomHeader {
@@ -424,7 +448,6 @@ impl TryFrom<&[u8]> for PciRomHeader {
 
         Ok(PciRomHeader {
             signature,
-            pcir_offset: u16_from_u8s(data[3], data[2]),
         })
     }
 }
@@ -487,14 +510,18 @@ impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
     type Error = Error;
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
-        match base.pcir.code_type {
+        pr_info!("BiosImageBase called with: {:?}\n", base);
+        match base.pcir.image_type {
             0x00 => {
                 Ok(BiosImage::PciAt(base.try_into()?))
             },
             0x03 => Ok(BiosImage::Efi(EfiBiosImage { base })),
             0x70 => Ok(BiosImage::Nbsi(NbsiBiosImage { base })),
             0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base })),
-            _ => Err(EINVAL),
+            _ => {
+                pr_info!("Unknown BIOS image type {:#x}\n", base.pcir.image_type);
+                Err(EINVAL)
+            }
         }
     }
 }
@@ -512,10 +539,11 @@ impl<'a> TryFrom<&'a [u8]> for BiosImage<'a> {
 
 /// BIOS Image structure containing various headers and references
 /// fields base to all BIOS images.
+#[derive(Debug)]
 pub(crate) struct BiosImageBase<'a> {
     /// PCI ROM Expansion Header
     pub rom_header: PciRomHeader,
-    /// PCI Data Structure (pointed to by rom_header.pcir_offset)
+    /// PCI Data Structure
     pub pcir: PcirStruct,
     /// Slice of the image data (includes ROM header and PCIR)
     pub data: &'a [u8],
@@ -531,22 +559,32 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
     type Error = Error;
 
     fn try_from(data: &'a [u8]) -> Result<Self> {
+        pr_info!("BiosImageBase try_from called with: {:?}\n", data);
         // Ensure we have enough data for the ROM header
         if data.len() < 4 {
+            pr_info!("Not enough data for ROM header\n");
             return Err(EINVAL);
         }
 
         // Parse the ROM header
-        let rom_header = PciRomHeader::try_from(&data[0..4])?;
+        // let rom_header = PciRomHeader::try_from(&data[0..4])?;
+        let rom_header = match PciRomHeader::try_from(&data[0..4]) {
+            Ok(rom_header) => rom_header,
+            Err(e) => {
+                pr_info!("Failed to create PciRomHeader: {:?}\n", e);
+                return Err(e);
+            }
+        };
 
-        // Parse the PCIR structure - it's required
-        if (rom_header.pcir_offset as usize) >= data.len() {
-            return Err(EINVAL);
-        }
-
-        let pcir_data = &data[rom_header.pcir_offset as usize..];
-        let pcir = PcirStruct::try_from(pcir_data)?;
-
+        let pcir_data = &data[2..];
+        // let pcir = PcirStruct::try_from(pcir_data)?;
+        let pcir = match PcirStruct::try_from(pcir_data) {
+            Ok(pcir) => pcir,
+            Err(e) => {
+                pr_info!("Failed to create PcirStruct: {:?}\n", e);
+                return Err(e);
+            }
+        };
         Ok(BiosImageBase {
             rom_header,
             pcir,
@@ -560,7 +598,7 @@ impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
         // Get the bit_header from the data
-        let bit_header = BitHeader::try_from(&base.data[base.rom_header.pcir_offset as usize..])?;
+        let bit_header = BitHeader::try_from(&base.data[2..])?;
 
         Ok(PciAtBiosImage { base, bit_header: Some(bit_header) })
     }
