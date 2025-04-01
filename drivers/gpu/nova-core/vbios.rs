@@ -43,15 +43,9 @@ impl<'a> Vbios<'a> {
 
             // Read ROM data bytes push directly to vector
             for i in 0..bytes as usize {
-
-                // ERROR: modpost: "rust_build_error" [nova_core.ko] undefined!
-                if current_len + i >= 10000000 {
-                    return Err(EINVAL);
-                }
-
                 // Read a byte from the VBIOS ROM and push it to the data vector
                 let rom_addr = ROM_OFFSET + current_len + i;
-                let byte = bar0.readb(rom_addr);
+                let byte = bar0.try_readb(rom_addr)?;
                 self.data.push(byte, GFP_KERNEL)?;
             }
 
