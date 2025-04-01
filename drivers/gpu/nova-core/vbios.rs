@@ -454,7 +454,12 @@ struct PCI_EXP_ROM_STANDARD
 {
     u16       sig;                //  00h: ROM Signature 0xaa55
     u8        reserved [0x16];    //  02h: Reserved (processor architecture unique data)
-    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure
+    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure  <--- for first image, this is 0x0170 per my dumps.
+
+    Dump of first 32 bytes of first image:
+        [542804.534235] NovaCore:   00000000: 55 aa 7f eb 4b 37 34 30 30 e9 4c 19 77 cc 56 49
+        [542804.534238] NovaCore:   00000010: 44 45 4f 20 0d 00 00 00 70 01 a5 15 00 00 49 42
+
     u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
 }
 
