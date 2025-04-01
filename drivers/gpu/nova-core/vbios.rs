@@ -153,8 +153,16 @@ impl<'a> Vbios<'a> {
                     // Add to our collection
                     // images.push(full_image, GFP_KERNEL)?;
                     
-                    pr_info!("Found BIOS image at offset {:#x}, size: {:#x}\n", 
-                              cur_offset, image_size);
+                    // Determine the image type
+                    let image_type = match &full_image {
+                        BiosImage::PciAt(_) => "PciAt",
+                        BiosImage::Efi(_) => "Efi",
+                        BiosImage::Nbsi(_) => "Nbsi",
+                        BiosImage::FwSec(_) => "FwSec",
+                    };
+                    
+                    pr_info!("Found BIOS image at offset {:#x}, size: {:#x}, type: {}\n", 
+                              cur_offset, image_size, image_type);
                     
                     // Break if this is the last image
                     if full_image.is_last() {
