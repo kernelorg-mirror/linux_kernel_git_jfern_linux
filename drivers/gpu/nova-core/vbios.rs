@@ -43,6 +43,12 @@ impl<'a> Vbios<'a> {
 
             // Read ROM data bytes push directly to vector
             for i in 0..bytes as usize {
+
+                // ERROR: modpost: "rust_build_error" [nova_core.ko] undefined!
+                if current_len + i >= 10000000 {
+                    return Err(EINVAL);
+                }
+
                 // Read a byte from the VBIOS ROM and push it to the data vector
                 let rom_addr = ROM_OFFSET + current_len + i;
                 let byte = bar0.readb(rom_addr);
@@ -111,9 +117,6 @@ impl<'a> Vbios<'a> {
         
         // loop till break
         loop {
-            // Read enough data to parse the headers (at least 1024 bytes)
-            vbios.read_more_at_offset(cur_offset as u32, 1024)?;
-            
             // Try to parse a BIOS image at the current offset
             // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
             match vbios.read_bios_image_at_offset(cur_offset, 1024) {
