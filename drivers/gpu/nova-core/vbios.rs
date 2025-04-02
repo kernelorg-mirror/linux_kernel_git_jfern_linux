@@ -331,22 +331,42 @@ impl PcirStruct {
     }
 }
 
+/*
+struct BIT_HEADER
+{
+    u16 Id;            // BMP=0x7FFF/BIT=0xB8FF
+    u32 Signature;     // 0x00544942 - BIT Data Structure Signature
+    u16 BCD_Version;   // BIT Version - 0x0100 for 1.00
+    u8 HeaderSize;    // This version is 12 bytes long
+    u8 TokenSize;     // This version has 6 byte long Tokens
+    u8 TokenEntries;  // Number of Entries
+    u8 HeaderChksum;  // 0 Checksum of the header
+};
+
+struct BIT_TOKEN
+{
+    u8 TokenId;       // Token identifier
+    u8 DataVersion;   // Version of token data
+    u16 DataSize;      // Size of token data
+    u32 DataPtr;       // Pointer to token data
+};
+ */
 /// BIOS Information Table (BIT) Header
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BitHeader {
-    /// BIT Header Identifier (0xB8FF)
+    /// 0h: BIT Header Identifier (0xB8FF)
     pub id: u16,
-    /// BIT Header Signature ("BIT\0")
+    /// 2h: BIT Header Signature ("BIT\0")
     pub signature: [u8; 4],
-    ///Binary Coded Decimal Version, ex: 0x0100 is 1.00.
+    /// 6h: Binary Coded Decimal Version, ex: 0x0100 is 1.00.
     pub bcd_version: u16,
-    /// Size of BIT Header (in bytes)
+    /// 8h: Size of BIT Header (in bytes)
     pub header_size: u8,
-    /// Size of BIT Tokens (in bytes)
+    /// 9h: Size of BIT Tokens (in bytes)
     pub token_size: u8,
-    /// Number of token entries that follow
+    /// 10h: Number of token entries that follow
     pub token_entries: u8,
-    /// BIT Header Checksum
+    /// 11h: BIT Header Checksum
     pub checksum: u8,
 }
 
@@ -740,7 +760,9 @@ impl<'a> TryFrom<&'a [u8]> for BiosImage<'a> {
     type Error = Error;
 
     fn try_from(data: &'a [u8]) -> Result<Self> {
+        pr_info!("BiosImage try_from called with data length: {:?}\n", data.len());
         let base = BiosImageBase::try_from(data)?;
+        pr_info!("BiosImageBase created successfully. Calling to_image\n");
         base.to_image()
     }
 }
@@ -823,12 +845,29 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
     }
 }
 
+impl PciAtBiosImage<'_> {
+    /// Find a byte pattern in a slice
+    fn find_byte_pattern(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        haystack.windows(needle.len())
+            .position(|window| window == needle)
+    }
+
+    fn find_bit_header(data: &[u8]) -> Result<BitHeader> {
+        let bit_pattern = [0xff, 0xb8, b'B', b'I', b'T', 0x00];
+        let bit_offset = Self::find_byte_pattern(data, &bit_pattern);
+        pr_info!("Bit offset: {}\n", bit_offset.unwrap());
+        if bit_offset.is_none() {
+            return Err(EINVAL);
+        }
+        Ok(BitHeader::try_from(&data[bit_offset.unwrap()..])?)
+    }
+}
+
 impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
     type Error = Error;
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
-        // Get the bit_header from the data
-        let bit_header = BitHeader::try_from(&base.data[2..])?;
+        let bit_header = PciAtBiosImage::find_bit_header(&base.data)?;
 
         Ok(PciAtBiosImage { base, bit_header: Some(bit_header) })
     }
