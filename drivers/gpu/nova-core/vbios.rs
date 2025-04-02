@@ -620,7 +620,7 @@ impl NpdeStruct {
 pub(crate) enum BiosImage<'a> {
     PciAt(PciAtBiosImage<'a>),
     Efi(EfiBiosImage<'a>),
-    Nbsi(NbsiBiosImage<'a>),
+    Nbsi(NbsiBiosImage<'a>),    // NBSI (Nvidia Bios System Interface)
     FwSec(FwSecBiosImage<'a>),
 }
 
