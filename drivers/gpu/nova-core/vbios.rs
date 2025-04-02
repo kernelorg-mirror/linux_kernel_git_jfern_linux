@@ -147,6 +147,13 @@ impl<'a> Vbios<'a> {
                             break;
                         }
                     };
+
+                    
+                    // Print info about the BIT entry 112 in the PciAtBiosImage
+                    if let BiosImage::PciAt(image) = &full_image {
+                        let bit_token = image.get_bit_token(112)?;
+                        pr_info!("PciAt BIOS Image BIT entry 112: {:#?}\n", bit_token);
+                    }
                     
                     // Special handling for FwSec image (type 0xE0)
                     if let BiosImage::FwSec(_) = &full_image {
@@ -195,22 +202,6 @@ impl<'a> Vbios<'a> {
                 }
             }
         }
-
-        /*
-        // Summarize the images found
-        pr_info!("Found {} images:\n", images.len());
-        for (i, (image, offset)) in images.iter().zip(image_offsets.iter()).enumerate() {
-            // Calculate data offset - in this case it's the same as the image offset
-            // because each image's data slice starts at that offset in the vbios.data KVec
-            let data_offset = offset;
-            
-            pr_info!("  Image {}: offset {:#x}, data_offset {:#x}, {:?}\n", 
-                     i, offset, data_offset, image);
-        }
-        */
-        
-        // Attempt to extract version information from BIT if available
-        // TODO: Extract version info from BIT entries similar to the original code
         
         // Find the BIT header by scanning for "BIT" signature
         
@@ -416,53 +407,53 @@ impl BitHeader {
 }
 */
 
-/// BIT Token Entry
+/// BIT Token Entry: Records in the BIT table followed by the BIT header
 #[derive(Debug, Clone, Copy)]
-pub struct BitEntry {
-    /// Unique identifier indicating data type
+pub struct BitToken {
+    /// Token identifier
     pub id: u8,
-    /// Version of the data structure
-    pub version: u8,
-    /// Size of data structure in bytes
-    pub length: u16,
-    /// Pointer (offset) to the actual data structure
-    pub offset: u16,
+    /// Version of the token data
+    pub data_version: u8,
+    /// Size of token data in bytes
+    pub data_size: u16,
+    /// Offset to the token data
+    pub data_offset: u16,
 }
 
-impl TryFrom<&[u8]> for BitEntry {
-    type Error = Error;
+impl BitToken {
+    /// Find a BIT token entry by BIT ID in a PciAtBiosImage
+    pub fn from_id<'a>(image: &'a PciAtBiosImage, token_id: u8) -> Result<Self> {
+        let header = image.bit_header.as_ref().ok_or(EINVAL)?;
+        
+        // Offset to the first token entry
+        let tokens_start = image.bit_offset.unwrap() + header.header_size as usize;
 
-    fn try_from(data: &[u8]) -> Result<Self> {
-        if data.len() < 6 {
-            return Err(EINVAL);
-        }
-
-        Ok(BitEntry {
-            id: data[0],
-            version: data[1],
-            length: u16_from_u8s(data[3], data[2]),
-            offset: u16_from_u8s(data[5], data[4]),
-        })
-    }
-}
-
-impl BitEntry {
-    /// Find a specific BitEntry by ID in a table of entries
-    pub(crate) fn from_id(data: &[u8], token_size: u8, token_entries: u8, id: u8) -> Result<Self> {
-        let token_size = token_size as usize;
-
-        for i in 0..token_entries as usize {
-            let offset = i * token_size;
-            if offset + token_size > data.len() {
+        for i in 0..header.token_entries as usize {
+            let entry_offset = tokens_start + (i * header.token_size as usize);
+            
+            // Make sure we don't go out of bounds
+            if entry_offset + header.token_size as usize > image.base.data.len() {
                 return Err(EINVAL);
             }
-
-            let entry_id = data[offset];
-            if entry_id == id {
-                return (&data[offset..offset + token_size]).try_into();
+            
+            // Check if this token has the requested ID
+            if image.base.data[entry_offset] == token_id {
+                return Ok(BitToken {
+                    id: image.base.data[entry_offset],
+                    data_version: image.base.data[entry_offset + 1],
+                    data_size: u16_from_u8s(
+                        image.base.data[entry_offset + 3],
+                        image.base.data[entry_offset + 2]
+                    ),
+                    data_offset: u16_from_u8s(
+                        image.base.data[entry_offset + 5],
+                        image.base.data[entry_offset + 4]
+                    ),
+                });
             }
         }
-
+        
+        // Token not found
         Err(ENOENT)
     }
 }
@@ -671,6 +662,7 @@ pub(crate) struct PciAtBiosImage<'a> {
      *  }
      */
     bit_header: Option<BitHeader>,
+    bit_offset: Option<usize>,
 }
 
 pub(crate) struct EfiBiosImage<'a> {
@@ -852,14 +844,22 @@ impl PciAtBiosImage<'_> {
             .position(|window| window == needle)
     }
 
-    fn find_bit_header(data: &[u8]) -> Result<BitHeader> {
+    /// Find the BIT header in the PciAtBiosImage
+    fn find_bit_header(data: &[u8]) -> Result<(BitHeader, usize)> {
         let bit_pattern = [0xff, 0xb8, b'B', b'I', b'T', 0x00];
         let bit_offset = Self::find_byte_pattern(data, &bit_pattern);
         pr_info!("Bit offset: {}\n", bit_offset.unwrap());
         if bit_offset.is_none() {
             return Err(EINVAL);
         }
-        Ok(BitHeader::try_from(&data[bit_offset.unwrap()..])?)
+
+        let bit_header = BitHeader::try_from(&data[bit_offset.unwrap()..])?;
+        Ok((bit_header, bit_offset.unwrap()))
+    }
+
+    /// Get a BIT token entry from the BIT table in the PciAtBiosImage
+    fn get_bit_token(&self, token_id: u8) -> Result<BitToken> {
+        BitToken::from_id(self, token_id)
     }
 }
 
@@ -867,67 +867,30 @@ impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
     type Error = Error;
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
-        let bit_header = PciAtBiosImage::find_bit_header(&base.data)?;
+        let (bit_header, bit_offset) = PciAtBiosImage::find_bit_header(&base.data)?;
 
-        Ok(PciAtBiosImage { base, bit_header: Some(bit_header) })
+        // print the bit header
+        pr_info!("Bit header: {:#?}\n", bit_header);
+
+        // print the bit header signature
+        pr_info!("Bit header signature: {:#?}\n", bit_header.signature);
+
+        // print the bit header bcd_version
+        pr_info!("Bit header bcd_version: {:#?}\n", bit_header.bcd_version);
+
+        // print the bit header header_size
+        pr_info!("Bit header header_size: {:#?}\n", bit_header.header_size);
+
+        // print the bit header token_size
+        pr_info!("Bit header token_size: {:#?}\n", bit_header.token_size);
+
+        // print the bit header token_entries
+        pr_info!("Bit header token_entries: {:#?}\n", bit_header.token_entries);
+
+        // print the bit header checksum
+        pr_info!("Bit header checksum: {:#?}\n", bit_header.checksum);
+
+        Ok(PciAtBiosImage { base, bit_header: Some(bit_header),
+                bit_offset: Some(bit_offset) })
     }
 }
-
-/* TODO: Review
-/// Extension method for VBios to parse BiosImage
-impl<'a> Vbios<'a> {
-    /// Parse the VBIOS data to get a BiosImage
-    pub fn parse_bios_image(&self) -> Result<BiosImage<'_>> {
-        // Create a BiosImage from a slice of the KVec
-        BiosImage::from_slice(&self.data[..])
-    }
-
-    /// Parse the VBIOS data at a specific offset
-    pub fn parse_bios_image_at_offset(&self, offset: usize) -> Result<BiosImage<'_>> {
-        if offset >= self.data.len() {
-            return Err(EINVAL);
-        }
-        BiosImage::from_slice(&self.data[offset..])
-    }
-
-    /// Find all BIOS images in the ROM
-    pub fn find_all_bios_images(&self) -> Result<Vec<BiosImage<'_>, Global>> {
-        let mut images = Vec::try_with_capacity(4, GFP_KERNEL)?;
-        let mut offset = 0;
-
-        // Parse the first image
-        while offset < self.data.len() {
-            match self.parse_bios_image_at_offset(offset) {
-                Ok(image) => {
-                    // Calculate next offset
-                    let image_size = if image.size > 0 {
-                        image.size
-                    } else {
-                        // If size is unknown, we can't reliably find the next image
-                        images.try_push(image, GFP_KERNEL)?;
-                        break;
-                    };
-
-                    // Add the image to our collection
-                    images.try_push(image, GFP_KERNEL)?;
-
-                    // If this was the last image, we're done
-                    if images.last().unwrap().is_last() {
-                        break;
-                    }
-
-                    // Move to the next image (aligned to 512 bytes)
-                    offset += image_size;
-                    offset = (offset + 511) & !511;
-                },
-                Err(_) => break,
-            }
-        }
-
-        if images.is_empty() {
-            Err(ENOENT)
-        } else {
-            Ok(images)
-        }
-    }
-}*/
