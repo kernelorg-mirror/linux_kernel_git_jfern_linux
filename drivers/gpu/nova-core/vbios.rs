@@ -175,6 +175,7 @@ impl<'a> Vbios<'a> {
                     
                     // Break if this is the last image
                     if full_image.is_last() {
+                        pr_info!("Last image found, stopping scan\n");
                         break;
                     }
                     
@@ -537,6 +538,84 @@ impl TryFrom<&[u8]> for PciRomHeader {
     }
 }
 
+/// NVIDIA PCI Data Extension Structure
+#[derive(Debug)]
+pub(crate) struct NpdeStruct {
+    /// Signature ("NPDE")
+    pub signature: [u8; 4],
+    /// NVIDIA PCI Data Extension Revision
+    pub npci_data_ext_rev: u16,
+    /// NVIDIA PCI Data Extension Length
+    pub npci_data_ext_len: u16,
+    /// Sub-image Length (in 512-byte units)
+    pub subimage_len: u16,
+    /// Last image indicator flag
+    pub last_image: u8,
+}
+
+impl TryFrom<&[u8]> for NpdeStruct {
+    type Error = Error;
+
+    fn try_from(data: &[u8]) -> Result<Self> {
+        if data.len() < 11 {
+            pr_info!("Not enough data for NpdeStruct\n");
+            return Err(EINVAL);
+        }
+
+        let mut signature = [0u8; 4];
+        signature.copy_from_slice(&data[0..4]);
+
+        // Signature should be "NPDE" (0x4544504E)
+        if &signature != b"NPDE" {
+            pr_info!("Invalid signature for NpdeStruct: {:?}\n", signature);
+            return Err(EINVAL);
+        }
+
+        Ok(NpdeStruct {
+            signature,
+            npci_data_ext_rev: u16_from_u8s(data[5], data[4]),
+            npci_data_ext_len: u16_from_u8s(data[7], data[6]),
+            subimage_len: u16_from_u8s(data[9], data[8]),
+            last_image: data[10],
+        })
+    }
+}
+
+impl NpdeStruct {
+    /// Check if this is the last image in the ROM
+    pub(crate) fn is_last(&self) -> bool {
+        self.last_image & 0x80 != 0
+    }
+
+    /// Calculate image size in bytes
+    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
+        if self.subimage_len > 0 {
+            // Image size is in 512-byte blocks
+            Ok(self.subimage_len as usize * 512)
+        } else {
+            Err(EINVAL)
+        }
+    }
+    
+    /// Try to find NPDE in the data
+    pub(crate) fn find_in_data(data: &[u8], pcir_offset: usize, pcir_len: u16) -> Option<Self> {
+        // Calculate the offset where NPDE might be located
+        // NPDE should be right after the PCIR structure, aligned to 16 bytes
+        let npde_start = (pcir_offset + pcir_len as usize + 0x0F) & !0x0F;
+        
+        // Check if we have enough data
+        if npde_start + 11 > data.len() {
+            return None;
+        }
+        
+        // Try to create NPDE from the data
+        match NpdeStruct::try_from(&data[npde_start..]) {
+            Ok(npde) => Some(npde),
+            Err(_) => None,
+        }
+    }
+}
+
 // Replace the simple BiosImage enum with a more powerful version
 pub(crate) enum BiosImage<'a> {
     PciAt(PciAtBiosImage<'a>),
@@ -603,12 +682,36 @@ impl<'a> BiosImage<'a> {
     
     /// Check if this is the last image
     pub(crate) fn is_last(&self) -> bool {
-        self.base().pcir.is_last()
+        let base = self.base();
+        
+        // For NBSI images (type == 0x70), return true as they're
+        //considered the last image
+        if matches!(self, Self::Nbsi(_)) {
+            return true;
+        }
+        
+        // For other image types, check NPDE first if available
+        if let Some(ref npde) = base.npde {
+            return npde.is_last();
+        }
+        
+        // Otherwise, fall back to checking the PCIR last_image flag
+        base.pcir.is_last()
     }
     
     /// Get the image size in bytes
     pub(crate) fn image_size_bytes(&self) -> Result<usize> {
-        self.base().pcir.image_size_bytes()
+        let base = self.base();
+        
+        // For non-NBSI images with NPDE, use the NPDE image size
+        if !matches!(self, Self::Nbsi(_)) {
+            if let Some(ref npde) = base.npde {
+                return npde.image_size_bytes();
+            }
+        }
+        
+        // Otherwise, fall back to the PCIR image size
+        base.pcir.image_size_bytes()
     }
 }
 
@@ -652,6 +755,8 @@ pub(crate) struct BiosImageBase<'a> {
     pub rom_header: PciRomHeader,
     /// PCI Data Structure
     pub pcir: PcirStruct,
+    /// NVIDIA PCI Data Extension (optional)
+    pub npde: Option<NpdeStruct>,
     /// Slice of the image data (includes ROM header and PCIR)
     pub data: &'a [u8],
 }
@@ -701,9 +806,23 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
             }
         };
 
+        // Look for NPDE structure if this is not an NBSI image (type != 0x70)
+        // TODO: Single npde is image specific, should this logic be moved to the
+        // specific BiosImage type? And ditto for is_last and image_size_bytes.
+        let npde = if pcir.code_type != 0x70 {
+            NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len)
+        } else {
+            None
+        };
+
+        if let Some(ref npde) = npde {
+            pr_info!("Found NPDE structure with sub-image length: {:#x}\n", npde.subimage_len);
+        }
+
         Ok(BiosImageBase {
             rom_header,
             pcir,
+            npde,
             data,
         })
     }
