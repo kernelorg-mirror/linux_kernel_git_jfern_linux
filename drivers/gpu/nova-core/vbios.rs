@@ -474,15 +474,23 @@ struct PCI_EXP_ROM_NBSI
 }
  */
 pub(crate) struct PciRomHeader {
-    /// Signature (0xAA55)
+    /// 00h: Signature (0xAA55)
     pub signature: u16,
+    /// 02h: Reserved bytes for processor architecture unique data (22 bytes)
+    pub reserved: [u8; 22],
+    /// 16h: NBSI Data Offset (NBSI-specific, offset from header to NBSI image)
+    pub nbsi_data_offset: Option<u16>,
+    /// 18h: Pointer to PCI Data Structure (offset from start of ROM image)
+    pub pci_data_struct_ptr: u16,
+    /// 1Ah: Size of Block (NBSI-specific)
+    pub size_of_block: Option<u32>,
 }
 
 impl TryFrom<&[u8]> for PciRomHeader {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self> {
-        if data.len() < 4 {
+        if data.len() < 26 { // Need at least 26 bytes to read pciDataStrucPtr and sizeOfBlock
             return Err(EINVAL);
         }
 
@@ -497,8 +505,34 @@ impl TryFrom<&[u8]> for PciRomHeader {
             }
         }
 
+        // Read the pointer to the PCI Data Structure at offset 0x18
+        let pci_data_struct_ptr = u16_from_u8s(data[25], data[24]);
+
+        // Try to read optional fields if enough data
+        let mut size_of_block = None;
+        let mut nbsi_data_offset = None;
+
+        if data.len() >= 30 {
+            // Read size_of_block at offset 0x1A
+            size_of_block = Some(
+                (data[29] as u32) << 24 |
+                (data[28] as u32) << 16 |
+                (data[27] as u32) << 8 |
+                (data[26] as u32)
+            );
+        }
+
+        // For NBSI images, try to read the nbsiDataOffset at offset 0x16
+        if data.len() >= 24 {
+            nbsi_data_offset = Some(u16_from_u8s(data[23], data[22]));
+        }
+
         Ok(PciRomHeader {
             signature,
+            reserved: [0u8; 22],
+            pci_data_struct_ptr,
+            size_of_block,
+            nbsi_data_offset,
         })
     }
 }
@@ -632,16 +666,15 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
     type Error = Error;
 
     fn try_from(data: &'a [u8]) -> Result<Self> {
-        pr_info!("BiosImageBase try_from called with: {:?}\n", data);
+        pr_info!("BiosImageBase try_from called with data length: {:?}\n", data.len());
         // Ensure we have enough data for the ROM header
-        if data.len() < 4 {
+        if data.len() < 26 {
             pr_info!("Not enough data for ROM header\n");
             return Err(EINVAL);
         }
 
         // Parse the ROM header
-        // let rom_header = PciRomHeader::try_from(&data[0..4])?;
-        let rom_header = match PciRomHeader::try_from(&data[0..4]) {
+        let rom_header = match PciRomHeader::try_from(&data[0..26]) {
             Ok(rom_header) => rom_header,
             Err(e) => {
                 pr_info!("Failed to create PciRomHeader: {:?}\n", e);
@@ -649,15 +682,25 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
             }
         };
 
-        let pcir_data = &data[2..];
-        // let pcir = PcirStruct::try_from(pcir_data)?;
+        pr_info!("Found ROM header with PCIR ptr: {:#x}\n", rom_header.pci_data_struct_ptr);
+
+        // Get the PCI Data Structure using the pointer from the ROM header
+        let pcir_offset = rom_header.pci_data_struct_ptr as usize;
+        if pcir_offset + 24 > data.len() {
+            pr_info!("PCIR offset {:#x} out of bounds (data length: {})\n", pcir_offset, data.len());
+            pr_info!("Consider reading more data for construction of BiosImage\n");
+            return Err(EINVAL);
+        }
+
+        let pcir_data = &data[pcir_offset..];
         let pcir = match PcirStruct::try_from(pcir_data) {
             Ok(pcir) => pcir,
             Err(e) => {
-                pr_info!("Failed to create PcirStruct: {:?}\n", e);
+                pr_info!("Failed to create PcirStruct at offset {:#x}: {:?}\n", pcir_offset, e);
                 return Err(e);
             }
         };
+
         Ok(BiosImageBase {
             rom_header,
             pcir,
