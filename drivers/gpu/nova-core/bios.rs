@@ -68,6 +68,18 @@ impl Bios {
         let ptr: *const u32 = (self.bios_vec.as_ptr() as usize + addr as usize) as *const u32;
         unsafe { core::ptr::read_unaligned(ptr) }
     }
+    
+    fn rd32_verbose(&self, offset: isize, prefix: &str) -> u32 {
+        pr_info!("{} offset: {:#x}, image0_size: {:#x}, imaged_addr: {:#x}\n", prefix, offset, self.image0_size, self.imaged_addr);
+        let mut addr = offset;
+        if addr >= self.image0_size && self.imaged_addr != 0 {
+            addr -= self.image0_size;
+            addr += self.imaged_addr as isize;
+        }
+        let ptr: *const u32 = (self.bios_vec.as_ptr() as usize + addr as usize) as *const u32;
+        pr_info!("{} addr: {:#x}, ptr: {:#x}, value: {:#x}\n", prefix, addr, ptr as usize, unsafe { core::ptr::read_unaligned(ptr) });
+        unsafe { core::ptr::read_unaligned(ptr) }
+    }
 
     fn rd16(&self, offset: isize) -> u16 {
         let mut addr = offset;
@@ -150,7 +162,8 @@ impl Bios {
         }
 
         if bit_p.version == 2 && bit_p.length >= 4 {
-            data = bios.rd32(bit_p.offset as isize);
+            pr_info!("joel reading pmu table base address at bit_p.offset {:#x} within fwsec\n", bit_p.offset);
+            data = bios.rd32_verbose(bit_p.offset as isize, "joel");
         }
         if data != 0 {
             *ver = bios.rd08(data as isize);
@@ -161,6 +174,7 @@ impl Bios {
         Ok(data)
     }
 
+    // Joel: Returns a pointer to the data for the PMU entry at index idx
     fn pmu_ee(bios: &Bios, idx: u8, ver: &mut u8, hdr: &mut u8) -> Result<u32> {
         let mut cnt: u8 = 0;
         let mut len: u8 = 0;

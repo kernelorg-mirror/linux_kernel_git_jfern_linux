@@ -149,10 +149,13 @@ impl<'a> Vbios<'a> {
                     };
 
                     
-                    // Print info about the BIT entry 112 in the PciAtBiosImage
+                    // Print info about the BIT entry BIT_TOKEN_ID_FALCON_DATA in the PciAtBiosImage
                     if let BiosImage::PciAt(image) = &full_image {
-                        let bit_token = image.get_bit_token(112)?;
-                        pr_info!("PciAt BIOS Image BIT entry 112: {:#?}\n", bit_token);
+                        if let Ok(data_ptr) = image.falcon_data_ptr() {
+                            pr_info!("PciAt BIOS Image BIT entry BIT_TOKEN_ID_FALCON_DATA: {:#x}\n", data_ptr);
+                        } else {
+                            pr_info!("Failed to get falcon data pointer for PciAt BIOS Image\n");
+                        }
                     }
                     
                     // Special handling for FwSec image (type 0xE0)
@@ -419,6 +422,9 @@ pub struct BitToken {
     /// Offset to the token data
     pub data_offset: u16,
 }
+
+// Define the token ID for the Falcon data
+pub const BIT_TOKEN_ID_FALCON_DATA: u8 = 0x70;
 
 impl BitToken {
     /// Find a BIT token entry by BIT ID in a PciAtBiosImage
@@ -697,29 +703,29 @@ impl<'a> BiosImage<'a> {
         let base = self.base();
         
         // For NBSI images (type == 0x70), return true as they're
-        //considered the last image
+        // considered the last image
         if matches!(self, Self::Nbsi(_)) {
             return true;
         }
-        
+
         // For other image types, check NPDE first if available
         if let Some(ref npde) = base.npde {
             return npde.is_last();
         }
-        
+
         // Otherwise, fall back to checking the PCIR last_image flag
         base.pcir.is_last()
     }
-    
+
     /// Get the image size in bytes
     pub(crate) fn image_size_bytes(&self) -> Result<usize> {
         let base = self.base();
-        
+
         // Prefer NPDE image size if available
         if let Some(ref npde) = base.npde {
             return npde.image_size_bytes();
         }
-        
+
         // Otherwise, fall back to the PCIR image size
         base.pcir.image_size_bytes()
     }
@@ -861,6 +867,29 @@ impl PciAtBiosImage<'_> {
     fn get_bit_token(&self, token_id: u8) -> Result<BitToken> {
         BitToken::from_id(self, token_id)
     }
+
+    /// Find the Falcon data pointer structure in the PciAtBiosImage
+    /// This is just a 4 byte structure that contains a pointer to the
+    /// Falcon data in the FWSEC image.
+    fn falcon_data_ptr(&self) -> Result<u32> {
+        let token = self.get_bit_token(BIT_TOKEN_ID_FALCON_DATA)?;
+
+        // Make sure we don't go out of bounds
+        pr_info!("Falcon data bit token data offset: {:#x}\n", token.data_offset);
+        if token.data_offset as usize + 4 > self.base.data.len() {
+            return Err(EINVAL);
+        }
+
+        // read the 4 bytes at the offset specified in the token
+        let offset = token.data_offset as usize;
+        let bytes: [u8; 4] = match self.base.data[offset..offset + 4].try_into() {
+            Ok(bytes) => bytes,
+            Err(_) => { return Err(EINVAL); }
+        };
+
+        let data_ptr = u32::from_le_bytes(bytes);
+        Ok(data_ptr)
+    }
 }
 
 impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
@@ -868,6 +897,9 @@ impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
         let (bit_header, bit_offset) = PciAtBiosImage::find_bit_header(&base.data)?;
+
+        // Find the Falcon data pointer
+        // let falcon_data_ptr = PciAtBiosImage::find_falcon_data_ptr(&bit_header)?;
 
         // print the bit header
         pr_info!("Bit header: {:#?}\n", bit_header);
