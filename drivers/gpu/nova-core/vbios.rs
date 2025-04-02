@@ -703,11 +703,9 @@ impl<'a> BiosImage<'a> {
     pub(crate) fn image_size_bytes(&self) -> Result<usize> {
         let base = self.base();
         
-        // For non-NBSI images with NPDE, use the NPDE image size
-        if !matches!(self, Self::Nbsi(_)) {
-            if let Some(ref npde) = base.npde {
-                return npde.image_size_bytes();
-            }
+        // Prefer NPDE image size if available
+        if let Some(ref npde) = base.npde {
+            return npde.image_size_bytes();
         }
         
         // Otherwise, fall back to the PCIR image size
@@ -807,12 +805,9 @@ impl<'a> TryFrom<&'a [u8]> for BiosImageBase<'a> {
         };
 
         // Look for NPDE structure if this is not an NBSI image (type != 0x70)
-        // TODO: Single npde is image specific, should this logic be moved to the
-        // specific BiosImage type? And ditto for is_last and image_size_bytes.
-        let npde = if pcir.code_type != 0x70 {
-            NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len)
-        } else {
-            None
+        let npde = match NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len) {
+            Some(npde) => Some(npde),
+            None => None,
         };
 
         if let Some(ref npde) = npde {
