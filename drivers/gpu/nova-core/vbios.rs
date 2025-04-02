@@ -249,66 +249,66 @@ struct NV_PCI_DATA_EXT_STRUCT
 */
 #[derive(Debug)]
 pub(crate) struct PcirStruct {
+    /// PCI Data Structure signature ("PCIR" or "NPDS")
+    pub signature: [u8; 4],
     /// PCI Vendor ID (e.g., 0x10DE for NVIDIA)
     pub vendor_id: u16,
     /// PCI Device ID
     pub device_id: u16,
-    /// PCIR length
-    pub pcir_length: u16,
-    /// PCIR version
-    pub pcir_version: u8,
-    /// ROM image type (0x00 = PC-AT compatible, 0x03 = EFI, 0x70 = NBSI)
-    pub image_type: u8,
-    /// Last image indicator (0x00 = Not last image, 0x80 = Last image)
-    pub last_image: u8,
-    /// Size of this image in 512-byte blocks
-    pub image_size: u16,
+    /// Device List Pointer
+    pub device_list_ptr: u16,
+    /// PCI Data Structure Length
+    pub pci_data_struct_len: u16,
+    /// PCI Data Structure Revision
+    pub pci_data_struct_rev: u8,
     /// Class code (3 bytes, 0x03 for display controller)
     pub class_code: [u8; 3],
-    /// PCI Data Structure signature ("PCIR")
-    pub signature_offset: u16, // at offset 16 from the start of the PCIR
-    pub signature: [u8; 4],
+    /// Size of this image in 512-byte blocks
+    pub image_len: u16,
+    /// Revision Level of the Vendor's ROM
+    pub vendor_rom_rev: u16,
+    /// ROM image type (0x00 = PC-AT compatible, 0x03 = EFI, 0x70 = NBSI)
+    pub code_type: u8,
+    /// Last image indicator (0x00 = Not last image, 0x80 = Last image)
+    pub last_image: u8,
+    /// Maximum Run-time Image Length (units of 512 bytes)
+    pub max_runtime_image_len: u16,
 }
 
 impl TryFrom<&[u8]> for PcirStruct {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self> {
-        if data.len() < 22 {
+        if data.len() < 24 { // Updated to match full PCI_DATA_STRUCT size
             pr_info!("Not enough data for PcirStruct\n");
             return Err(EINVAL);
         }
 
-        let mut class_code = [0u8; 3];
-        class_code.copy_from_slice(&data[11..14]);
-
-        let mut signature_offset = u16_from_u8s(data[17], data[16]);
-        // account for the ROM signature
-        signature_offset -= 2;
-
         let mut signature = [0u8; 4];
+        signature.copy_from_slice(&data[0..4]);
 
-        // BROKEN: causes out of bounds runtime panic
-        // signature.copy_from_slice(&data[signature_offset as usize..signature_offset as usize + 4]);
-
-        // Signature should be "PCIR" (0x52494350) or "RGIS" (0x53494752) or "NPDS" (0x5344504e)
-        if &signature != b"PCIR" && &signature != b"RGIS" && &signature != b"NPDS" {
-            pr_info!("Invalid signature for PcirStruct, bytes: {:02x} {:02x} {:02x} {:02x}\n", data[16], data[17], data[18], data[19]);
+        // Signature should be "PCIR" (0x52494350) or "NPDS" (0x5344504e)
+        if &signature != b"PCIR" && &signature != b"NPDS" {
+            pr_info!("Invalid signature for PcirStruct: {:?}\n", signature);
             return Err(EINVAL);
         }
 
+        let mut class_code = [0u8; 3];
+        class_code.copy_from_slice(&data[13..16]);
 
         Ok(PcirStruct {
-            vendor_id: u16_from_u8s(data[2], data[3]),
-            device_id: u16_from_u8s(data[4], data[5]),
-            pcir_length: u16_from_u8s(data[9], data[8]),
-            pcir_version: data[10],
-            image_type: data[12],
-            last_image: data[13],
-            image_size: u16_from_u8s(data[15], data[14]),
-            class_code,
-            signature_offset,
             signature,
+            vendor_id: u16_from_u8s(data[5], data[4]),
+            device_id: u16_from_u8s(data[7], data[6]),
+            device_list_ptr: u16_from_u8s(data[9], data[8]),
+            pci_data_struct_len: u16_from_u8s(data[11], data[10]),
+            pci_data_struct_rev: data[12],
+            class_code,
+            image_len: u16_from_u8s(data[17], data[16]),
+            vendor_rom_rev: u16_from_u8s(data[19], data[18]),
+            code_type: data[20],
+            last_image: data[21],
+            max_runtime_image_len: u16_from_u8s(data[23], data[22]),
         })
     }
 }
@@ -321,9 +321,9 @@ impl PcirStruct {
 
     /// Calculate image size in bytes
     pub(crate) fn image_size_bytes(&self) -> Result<usize> {
-        if self.image_size > 0 {
+        if self.image_len > 0 {
             // Image size is in 512-byte blocks
-            Ok(self.image_size as usize * 512)
+            Ok(self.image_len as usize * 512)
         } else {
             Err(EINVAL)
         }
@@ -584,7 +584,7 @@ impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
 
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
         pr_info!("BiosImageBase called with: {:?}\n", base);
-        match base.pcir.image_type {
+        match base.pcir.code_type {
             0x00 => {
                 Ok(BiosImage::PciAt(base.try_into()?))
             },
@@ -592,7 +592,7 @@ impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
             0x70 => Ok(BiosImage::Nbsi(NbsiBiosImage { base })),
             0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base })),
             _ => {
-                pr_info!("Unknown BIOS image type {:#x}\n", base.pcir.image_type);
+                pr_info!("Unknown BIOS image type {:#x}\n", base.pcir.code_type);
                 Err(EINVAL)
             }
         }
