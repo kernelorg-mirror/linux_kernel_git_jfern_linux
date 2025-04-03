@@ -252,7 +252,7 @@ impl Gpu {
 
         let bios = Bios::probe(&bar)?;
 
-        let vbios = Vbios::probe(&bar)?;
+        let _vbios = Vbios::probe(&bar)?;
 
         // TODO: should we write 0x0 back when we drop this object?
         let sysmem_flush = DmaObject::new(pdev, 0x1000, "sysmem flush page")?;

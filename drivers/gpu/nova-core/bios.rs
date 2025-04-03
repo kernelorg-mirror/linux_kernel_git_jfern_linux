@@ -101,6 +101,17 @@ impl Bios {
         unsafe { *(ptr.offset(addr)) }
     }
 
+    fn rd08_verbose(&self, offset: isize, prefix: &str) -> u8 {
+        let mut addr = offset;
+        if addr >= self.image0_size && self.imaged_addr != 0 {
+            addr -= self.image0_size;
+            addr += self.imaged_addr as isize;
+        }
+        pr_info!("{} offset: {:#x}, image0_size: {:#x}, imaged_addr: {:#x}, final addr: {:#x}\n", prefix, offset, self.image0_size, self.imaged_addr, addr);
+        let ptr: *const u8 = self.bios_vec.as_ptr() as *const u8;
+        unsafe { *(ptr.offset(addr)) }
+    }
+
     pub(crate) fn ptr(&self, offset: isize) -> *const u8 {
         let mut addr = offset;
         if addr >= self.image0_size && self.imaged_addr != 0 {
@@ -166,10 +177,11 @@ impl Bios {
             data = bios.rd32_verbose(bit_p.offset as isize, "joel");
         }
         if data != 0 {
-            *ver = bios.rd08(data as isize);
+            *ver = bios.rd08_verbose(data as isize, "pmu_te ver:");
             *hdr = bios.rd08((data + 0x01) as isize);
             *len = bios.rd08((data + 0x02) as isize);
             *cnt = bios.rd08((data + 0x03) as isize);
+            pr_info!("joel pmu_te ver: {:#x}, hdr: {:#x}, len: {:#x}, cnt: {:#x}\n", *ver, *hdr, *len, *cnt);
         }
         Ok(data)
     }
