@@ -27,6 +27,7 @@ mod falcon;
 mod firmware;
 mod gpu;
 mod gsp;
+mod nvfw;
 mod regs;
 mod util;
 mod vbios;
