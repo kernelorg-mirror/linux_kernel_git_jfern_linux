@@ -179,6 +179,9 @@ impl Bios {
         let mut cnt: u8 = 0;
         let mut len: u8 = 0;
         let mut data = Self::pmu_te(bios, ver, hdr, &mut cnt, &mut len)?;
+        pr_info!("joel pmu_ee data: {:#x}\n", data);
+        pr_info!("joel pmu_ee bios.image0_size: {:#x}\n", bios.image0_size);
+        pr_info!("joel pmu_ee bios.imaged_addr: {:#x}\n", bios.imaged_addr);
         if data != 0 && idx < cnt {
             data = data + (*hdr as u32) + ((idx as u32 * len as u32) as u32);
             *hdr = len;
@@ -195,6 +198,7 @@ impl Bios {
         info: &mut BiosPmuE,
     ) -> Result<u32> {
         let data = Self::pmu_ee(bios, idx, ver, hdr)?;
+        pr_info!("joel pmu_ee data after idx {}: {:#x}\n", idx, data);
         if data != 0 {
             info.pmutype = bios.rd08(data as isize);
             info.data = bios.rd32((data + 0x02) as isize);

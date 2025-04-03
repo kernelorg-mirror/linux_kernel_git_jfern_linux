@@ -120,90 +120,111 @@ impl<'a> Vbios<'a> {
         //let mut image_offsets = Vec::new();
         let mut cur_offset = 0;
         let mut first_e0_done = false;
+        // Instead of storing references, store the needed data
+        let mut pci_at_falcon_data_ptr: Option<u32> = None;
+        let mut pci_at_falcon_data_ptr_offset: Option<u32> = None;
+        let mut fwsec_image_found = false;
         
         // loop till break
         loop {
             // Try to parse a BIOS image at the current offset
             // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
-            match vbios.read_bios_image_at_offset(cur_offset, 1024) {
+            let image_size = match vbios.read_bios_image_at_offset(cur_offset, 1024) {
                 Ok(image) => {
                     // Get image size in bytes
-                    let image_size = match image.image_size_bytes() {
+                    match image.image_size_bytes() {
                         Ok(size) => size,
                         Err(_) => {
                             pr_info!("Invalid image size at offset {:#x}, stopping scan\n", cur_offset);
                             break;
                         }
-                    };
-                    
-                    // Read the full image
-                    vbios.read_more_at_offset(cur_offset as u32, image_size as u32)?;
-                    
-                    // Create a new BiosImage with the full image data
-                    let full_image = match vbios.read_bios_image_at_offset(cur_offset, image_size) {
-                        Ok(img) => img,
-                        Err(e) => {
-                            pr_info!("Failed to parse full BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
-                            break;
-                        }
-                    };
-
-                    
-                    // Print info about the BIT entry BIT_TOKEN_ID_FALCON_DATA in the PciAtBiosImage
-                    if let BiosImage::PciAt(image) = &full_image {
-                        if let Ok(data_ptr) = image.falcon_data_ptr() {
-                            pr_info!("PciAt BIOS Image BIT entry BIT_TOKEN_ID_FALCON_DATA: {:#x}\n", data_ptr);
-                        } else {
-                            pr_info!("Failed to get falcon data pointer for PciAt BIOS Image\n");
-                        }
-                    }
-                    
-                    // Special handling for FwSec image (type 0xE0)
-                    if let BiosImage::FwSec(_) = &full_image {
-                        if !first_e0_done {
-                            first_e0_done = true;
-                            // Note: original code tracks imaged_addr here
-                        }
-                    }
-                    
-                    // Store the current offset for this image
-                    //image_offsets.push(cur_offset);
-                    
-                    // Add to our collection
-                    // images.push(full_image, GFP_KERNEL)?;
-                    
-                    // Determine the image type
-                    let image_type = match &full_image {
-                        BiosImage::PciAt(_) => "PciAt",
-                        BiosImage::Efi(_) => "Efi",
-                        BiosImage::Nbsi(_) => "Nbsi",
-                        BiosImage::FwSec(_) => "FwSec",
-                    };
-                    
-                    pr_info!("Found BIOS image at offset {:#x}, size: {:#x}, type: {}\n", 
-                              cur_offset, image_size, image_type);
-                    
-                    // Break if this is the last image
-                    if full_image.is_last() {
-                        pr_info!("Last image found, stopping scan\n");
-                        break;
-                    }
-                    
-                    // Move to the next image (aligned to 512 bytes)
-                    cur_offset += image_size;
-                    cur_offset = (cur_offset + 511) & !511;
-                    
-                    // Safety check - don't go beyond 1MB
-                    if cur_offset > 0x100000 {
-                        pr_info!("Exceeded 1MB limit, stopping BIOS scan\n");
-                        break;
                     }
                 },
                 Err(e) => {
                     pr_info!("Failed to parse BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
                     break;
                 }
+            };
+            
+            // Read the full image
+            vbios.read_more_at_offset(cur_offset as u32, image_size as u32)?;
+            
+            // Scope for processing the image
+            {
+                // Create a new BiosImage with the full image data
+                let mut full_image = match vbios.read_bios_image_at_offset(cur_offset, image_size) {
+                    Ok(img) => img,
+                    Err(e) => {
+                        pr_info!("Failed to parse full BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
+                        break;
+                    }
+                };
+                
+                // Determine the image type
+                let image_type = match &full_image {
+                    BiosImage::PciAt(_) => "PciAt",
+                    BiosImage::Efi(_) => "Efi",
+                    BiosImage::Nbsi(_) => "Nbsi",
+                    BiosImage::FwSec(_) => "FwSec",
+                };
+                
+                pr_info!("Found BIOS image at offset {:#x}, size: {:#x}, type: {}\n", 
+                          cur_offset, image_size, image_type);
+
+                // Process PciAt image
+                if let BiosImage::PciAt(image) = &full_image {
+                    if let Ok(data_ptr) = image.falcon_data_ptr() {
+                        pr_info!("PciAt BIOS Image BIT entry BIT_TOKEN_ID_FALCON_DATA: {:#x}\n", data_ptr);
+                        pci_at_falcon_data_ptr = Some(data_ptr);
+                    } else {
+                        pr_info!("Failed to get falcon data pointer for PciAt BIOS Image\n");
+                    }
+                    
+                    if let Ok(data_ptr_offset) = image.falcon_data_ptr_offset() {
+                        pci_at_falcon_data_ptr_offset = Some(data_ptr_offset);
+                    }
+                }
+
+                // Process FwSec image
+                if let BiosImage::FwSec(fwsec_image) = &mut full_image {
+                    if !first_e0_done {
+                        first_e0_done = true;
+                        // Note: original code tracks imaged_addr here
+                    }
+                    fwsec_image.set_falcon_data_offset(pci_at_falcon_data_ptr_offset)?;
+                    fwsec_image_found = true;
+                }
+                
+                // Break if this is the last image
+                let is_last = full_image.is_last();
+                if is_last {
+                    pr_info!("Last image found, stopping scan\n");
+                    break;
+                }
             }
+            
+            // Move to the next image (aligned to 512 bytes)
+            cur_offset += image_size;
+            cur_offset = (cur_offset + 511) & !511;
+            
+            // Safety check - don't go beyond 1MB
+            if cur_offset > 0x100000 {
+                pr_info!("Exceeded 1MB limit, stopping BIOS scan\n");
+                break;
+            }
+        }
+
+        // Print information about falcon data
+        if fwsec_image_found {
+            if let (Some(data_ptr), Some(data_ptr_offset)) = (pci_at_falcon_data_ptr, pci_at_falcon_data_ptr_offset) {
+                pr_info!("PciAt falcon data ptr: {:#x} and ptr offset: {:#x}\n",
+                        data_ptr, data_ptr_offset);
+                pr_info!("FwSec BIOS Image falcon data offset: {:#x}\n", data_ptr_offset);
+            } else {
+                pr_info!("Failed to get PciAt falcon data information for FwSec image\n");
+            }
+        } else {
+            pr_info!("Failed to get FwSec image\n");
         }
         
         // Find the BIT header by scanning for "BIT" signature
@@ -683,7 +704,9 @@ pub(crate) struct NbsiBiosImage<'a> {
 
 pub(crate) struct FwSecBiosImage<'a> {
     base: BiosImageBase<'a>,
-    // FWSEC-specific fields can be added here in the future.
+    // FWSEC-specific fields
+    // The offset of the Falcon data from the start of Fwsec image
+    falcon_data_offset: Option<u32>,
 }
 
 // Implementation for BiosImage to provide common access methods
@@ -738,12 +761,10 @@ impl<'a> TryFrom<BiosImageBase<'a>> for BiosImage<'a> {
     fn try_from(base: BiosImageBase<'a>) -> Result<Self> {
         pr_info!("BiosImageBase called with: {:?}\n", base);
         match base.pcir.code_type {
-            0x00 => {
-                Ok(BiosImage::PciAt(base.try_into()?))
-            },
+            0x00 => { Ok(BiosImage::PciAt(base.try_into()?)) },
             0x03 => Ok(BiosImage::Efi(EfiBiosImage { base })),
             0x70 => Ok(BiosImage::Nbsi(NbsiBiosImage { base })),
-            0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base })),
+            0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base, falcon_data_offset: None })),
             _ => {
                 pr_info!("Unknown BIOS image type {:#x}\n", base.pcir.code_type);
                 Err(EINVAL)
@@ -888,7 +909,24 @@ impl PciAtBiosImage<'_> {
         };
 
         let data_ptr = u32::from_le_bytes(bytes);
+
+        pr_info!("Falcon data pointer: {:#x}\n", data_ptr);
+        
         Ok(data_ptr)
+    }
+
+    // The falcon data pointer assumes that the PciAt and FWSEC images
+    // are contiguous in memory. However, testing shows the EFI image sits in
+    // between them. So calculate the offset from the end of the PciAt image
+    // to the start of data pointer.
+    fn falcon_data_ptr_offset(&self) -> Result<u32> {
+        let ptr = self.falcon_data_ptr()?;
+
+        if (ptr as usize) < self.base.data.len() {
+            return Err(EINVAL);
+        }
+
+        Ok(ptr - self.base.data.len() as u32)
     }
 }
 
@@ -924,5 +962,23 @@ impl<'a> TryFrom<BiosImageBase<'a>> for PciAtBiosImage<'a> {
 
         Ok(PciAtBiosImage { base, bit_header: Some(bit_header),
                 bit_offset: Some(bit_offset) })
+    }
+}
+
+impl FwSecBiosImage<'_> {
+    fn set_falcon_data_offset(&mut self, falcon_offset: Option<u32>) -> Result {
+        if let Some(offset) = falcon_offset {
+            // The image's len is less than the offset, just return success
+            // since we'll wait for an fwsec image that the offset does fit in
+            if offset > self.base.data.len() as u32 {
+                return Ok(());
+            }
+
+            self.falcon_data_offset = Some(offset);
+        } else {
+            pr_info!("FwSec image falcon offset not set.\n");
+            return Err(EINVAL);
+        }
+        Ok(())
     }
 }
