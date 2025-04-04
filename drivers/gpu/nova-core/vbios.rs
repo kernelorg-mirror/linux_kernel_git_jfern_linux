@@ -13,6 +13,13 @@ pub(crate) fn u16_from_u8s(high: u8, low: u8) -> u16 {
 /// The offset of the VBIOS ROM in the BAR0 space
 const ROM_OFFSET: usize = 0x300000;
 
+
+// PMU lookup table entry types. Used to locate the PMU table entry
+// in the Fwsec image, corresponding to falcon ucodes.
+const FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC: u8 = 0x05;
+const FALCON_UCODE_ENTRY_APPID_FWSEC_DBG: u8 = 0x45;
+const FALCON_UCODE_ENTRY_APPID_FWSEC_PROD: u8 = 0x85;
+
 /// VBIOS data structure
 pub struct Vbios<'a> {
     pub bar0: &'a Devres<Bar0>,
@@ -747,6 +754,8 @@ pub(crate) struct FwSecBiosImage {
     falcon_data_offset: Option<usize>,
     // The PmuLookupTable starts at the offset of the falcon data pointer
     pmu_lookup_table: Option<PmuLookupTable>,
+    // The offset of the Falcon ucode
+    falcon_ucode_offset: Option<usize>,
 }
 
 // Convert from BiosImageBase to BiosImage
@@ -759,7 +768,10 @@ impl TryFrom<BiosImageBase> for BiosImage {
             0x00 => { Ok(BiosImage::PciAt(base.try_into()?)) },
             0x03 => Ok(BiosImage::Efi(EfiBiosImage { base })),
             0x70 => Ok(BiosImage::Nbsi(NbsiBiosImage { base })),
-            0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base, falcon_data_offset: None, pmu_lookup_table: None })),
+            0xE0 => Ok(BiosImage::FwSec(FwSecBiosImage { base,
+                falcon_data_offset: None,
+                pmu_lookup_table: None,
+                falcon_ucode_offset: None })),
             _ => {
                 pr_info!("Unknown BIOS image type {:#x}\n", base.pcir.code_type);
                 Err(EINVAL)
@@ -911,8 +923,12 @@ impl PciAtBiosImage {
 
         let data_ptr = u32::from_le_bytes(bytes);
 
-        pr_info!("Falcon data pointer: {:#x}\n", data_ptr);
-        
+        if (data_ptr as usize) < self.base.data.len() {
+            pr_info!("Falcon data pointer out of bounds\n");
+            return Err(EINVAL);
+        }
+
+        pr_info!("Falcon data pointer: {:#x}\n", data_ptr);        
         Ok(data_ptr)
     }
 
@@ -970,18 +986,29 @@ impl TryFrom<BiosImageBase> for PciAtBiosImage {
     }
 }
 
-/*
-pub(crate) struct PmuLookupTableEntry<'a> {
-    pub(crate) entry_type: u8,
+pub(crate) struct PmuLookupTableEntry {
+    pub(crate) application_id: u8,
+    pub(crate) target_id: u8,
     pub(crate) data: u32,
 }
-*/
+
+impl TryFrom<&[u8]> for PmuLookupTableEntry {
+    type Error = Error;
+
+    fn try_from(data: &[u8]) -> Result<Self> {
+        if data.len() < 5 {
+            return Err(EINVAL);
+        }
+
+        Ok(PmuLookupTableEntry { application_id: data[0], target_id: data[1], data: u32::from_le_bytes(data[2..6].try_into().map_err(|_| EINVAL)?) })
+    }
+}
 
 pub(crate) struct PmuLookupTable {
-    pub(crate) ver: u8,
-    pub(crate) hdr: u8,
-    pub(crate) len: u8,
-    pub(crate) cnt: u8,
+    pub(crate) version: u8,
+    pub(crate) header_len: u8,
+    pub(crate) entry_len: u8,
+    pub(crate) entry_count: u8,
     pub(crate) table_data: KVec<u8>,
 }
 
@@ -992,39 +1019,84 @@ impl TryFrom<&[u8]> for PmuLookupTable {
         if data.len() < 4 {
             return Err(EINVAL);
         }
+
+        let header_len = data[1] as usize;
+        let entry_len = data[2] as usize;        
+        let entry_count = data[3] as usize;
+
+        let required_bytes = header_len + (entry_count * entry_len);
         
-        // Create a copy of the table data
+        if data.len() < required_bytes {
+            return Err(EINVAL);
+        }
+        
+        // Create a copy of only the table data
         let mut table_data = KVec::new();
-        for &byte in &data[4..] {
+
+        // "last_entry_bytes" is a debugging aid.
+        // let mut last_entry_bytes: Option<KVec<u8>> = Some(KVec::new());
+        
+        for &byte in &data[header_len..required_bytes] {
             table_data.push(byte, GFP_KERNEL)?;
+            /*
+             * Useful for debugging (dumps the table data to dmesg):
+             * last_entry_bytes.as_mut().ok_or(EINVAL)?.push(byte, GFP_KERNEL)?;
+             * 
+             * let last_entry_bytes_len = last_entry_bytes.as_ref().ok_or(EINVAL)?.len();
+             * if last_entry_bytes_len == entry_len {
+             *     pr_info!("Last entry bytes: {:02x?}\n", &last_entry_bytes.as_ref().ok_or(EINVAL)?[..]);
+             *     last_entry_bytes = Some(KVec::new());
+             * }
+             */
         }
         
         Ok(PmuLookupTable { 
-            ver: data[0], 
-            hdr: data[1], 
-            len: data[2], 
-            cnt: data[3], 
-            table_data 
+            version: data[0],
+            header_len: header_len as u8,
+            entry_len: entry_len as u8,
+            entry_count: entry_count as u8,
+            table_data
         })
     }
 }
 
-/*
-impl<'a> PmuLookupTableEntry<'a> {
-    pub(crate) fn from_type(table_data: &[u8], entry_type: u8) -> Result<Self> {
-        Ok(PmuLookupTableEntry { entry_type, data: 0 })
+impl PmuLookupTable {
+    pub(crate) fn lookup_index(&self, idx: u8) -> Result<PmuLookupTableEntry> {
+        if idx >= self.entry_count {
+            return Err(EINVAL);
+        }
+
+        let index = (idx as usize) * self.entry_len as usize;
+        Ok(PmuLookupTableEntry::try_from(&self.table_data[index..])?)
     }
+
+    // find entry by type value
+    pub(crate) fn find_entry_by_type(&self, entry_type: u8) -> Result<PmuLookupTableEntry> {
+        for i in 0..self.entry_count {
+            let entry = self.lookup_index(i)?;
+            pr_info!("PmuLookupTableEntry: idx: {:#x}, application_id: {:#x}, target_id: {:#x}\n", i, entry.application_id, entry.target_id);
+            if entry.application_id == entry_type {
+                pr_info!("PmuLookupTableEntry found: idx: {:#x}, application_id: {:#x}, target_id: {:#x}\n", i, entry.application_id, entry.target_id);
+                return Ok(entry);
+            }
+        }
+
+        Err(EINVAL)
+    }  
 }
-*/
 
 impl FwSecBiosImage {
     fn setup_falcon_data(&mut self, pci_at_image: &PciAtBiosImage,
                     first_fwsec_image: &FwSecBiosImage) -> Result<()> {
-        let mut offset = pci_at_image.falcon_data_ptr_offset()?;
+        let mut offset = pci_at_image.falcon_data_ptr()? as usize;
 
-        // The offset is from the start of the first Fwsec image, however
+        // The offset is from the start of the PciAt image, however it points
+        // the data in another image. Compensate.
+        offset -= pci_at_image.base.data.len();
+
+        // The offset is now from the start of the first Fwsec image, however
         // the offset points to a location in the second Fwsec image. Since
-        // the images are contiguous, subtract the length of the first Fwsec
+        // the fwsec images are contiguous, subtract the length of the first Fwsec
         // image from the offset to get the offset to the start of the second
         // Fwsec image.
         offset -= first_fwsec_image.base.data.len();
@@ -1037,12 +1109,21 @@ impl FwSecBiosImage {
         // print the PmuLookupTable fields
         if let Some(pmu_lookup_table) = &self.pmu_lookup_table {
             pr_info!("New 3 PmuLookupTable created with ver: {:#x}, hdr: {:#x}, len: {:#x}, cnt: {:#x}\n",
-                pmu_lookup_table.ver,
-                pmu_lookup_table.hdr,
-                pmu_lookup_table.len,
-                pmu_lookup_table.cnt);
+                pmu_lookup_table.version,
+                pmu_lookup_table.header_len,
+                pmu_lookup_table.entry_len,
+                pmu_lookup_table.entry_count);
         }
 
+        match self.pmu_lookup_table.as_ref().ok_or(EINVAL)?.find_entry_by_type(FALCON_UCODE_ENTRY_APPID_FWSEC_PROD) {
+            Ok(entry) => {
+                self.falcon_ucode_offset = Some(entry.data as usize);
+                pr_info!("PmuLookupTableEntry found: application_id: {:#x}, target_id: {:#x}, data: {:#x}\n", entry.application_id, entry.target_id, entry.data);
+            }
+            Err(e) => {
+                pr_info!("PmuLookupTableEntry not found, error: {:?}\n", e);
+            }
+        }
         Ok(())
     }
 }

@@ -479,7 +479,7 @@ impl Bios {
     pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
         let fwsec_offset = self.find_fwsec_offset()? as usize;
 
-        let hdr = self.rd32(fwsec_offset as isize);
+        let hdr = self.rd32_verbose(fwsec_offset as isize, "joel fwsec_header hdr");
         let ver = (hdr & 0xff00) >> 8;
 
         if ver != 3 {
