@@ -20,7 +20,6 @@ mod macros {
     }
 }
 
-mod bios;
 mod devinit;
 mod dma;
 mod driver;

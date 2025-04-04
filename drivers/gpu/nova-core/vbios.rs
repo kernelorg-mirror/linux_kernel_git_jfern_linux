@@ -1,9 +1,8 @@
 use kernel::prelude::*;
 use core::convert::TryFrom;
-use crate::driver::Bar0;
 use kernel::error::Result;
 use kernel::devres::Devres;
-use crate::regs::RomShadow;
+use crate::{driver::Bar0, regs::RomShadow, falcon::FalconUCodeDescV3};
 
 /// Helper function to create u16 from two u8 values (little-endian)
 pub(crate) fn u16_from_u8s(high: u8, low: u8) -> u16 {
@@ -24,6 +23,7 @@ const FALCON_UCODE_ENTRY_APPID_FWSEC_PROD: u8 = 0x85;
 pub struct Vbios<'a> {
     pub bar0: &'a Devres<Bar0>,
     pub version: u16,
+    pub fwsec_image: Option<FwSecBiosImage>,
     /// VBIOS data
     pub data: KVec<u8>,
 }
@@ -99,7 +99,7 @@ impl<'a> Vbios<'a> {
 
     /// Probe for VBIOS extraction
     pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
-        let mut vbios = Self { bar0, version: 0,  data: KVec::new() };
+        let mut vbios = Self { bar0, version: 0,  data: KVec::new(), fwsec_image: None };
     
         // Enable ROM shadowing so the ROM is accessible on the BAR
         pr_info!("Enabling ROM shadowing\n");
@@ -218,8 +218,18 @@ impl<'a> Vbios<'a> {
             }
         }
 
-
+        vbios.fwsec_image = Some(second_fwsec_image.ok_or(EINVAL)?);
         Ok(vbios)
+    }
+
+    pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
+        let image = self.fwsec_image.as_ref().ok_or(EINVAL)?;
+        image.fwsec_header()
+    }
+
+    pub(crate) fn fwsec_ucode(&self) -> Result<&[u8]> {      
+        let image = self.fwsec_image.as_ref().ok_or(EINVAL)?;  
+        image.fwsec_ucode(image.fwsec_header()?)
     }
 }
 
@@ -1117,13 +1127,64 @@ impl FwSecBiosImage {
 
         match self.pmu_lookup_table.as_ref().ok_or(EINVAL)?.find_entry_by_type(FALCON_UCODE_ENTRY_APPID_FWSEC_PROD) {
             Ok(entry) => {
-                self.falcon_ucode_offset = Some(entry.data as usize);
-                pr_info!("PmuLookupTableEntry found: application_id: {:#x}, target_id: {:#x}, data: {:#x}\n", entry.application_id, entry.target_id, entry.data);
+                let mut ucode_offset = entry.data as usize;
+                ucode_offset -= pci_at_image.base.data.len();
+                ucode_offset -= first_fwsec_image.base.data.len();
+                self.falcon_ucode_offset = Some(ucode_offset);
+                pr_info!("PmuLookupTableEntry found: app_id: {:#x}, target_id: {:#x}, data: {:#x}, ucode_offs: {:#x}\n",
+                    entry.application_id, entry.target_id, entry.data, ucode_offset);
+
+                /*
+                 * for debug: print the v3_desc header
+                 * let v3_desc = self.fwsec_header()?;
+                 * pr_info!("PmuLookupTableEntry v3_desc: {:#?}\n", v3_desc);
+                 */
             }
             Err(e) => {
                 pr_info!("PmuLookupTableEntry not found, error: {:?}\n", e);
             }
         }
         Ok(())
+    }
+
+    /// Get the FwSec header (FalconUCodeDescV3)
+    pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
+        // Get the falcon ucode offset that was found in setup_falcon_data
+        let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)? as usize;
+        
+        // Make sure the offset is within the data bounds
+        if falcon_ucode_offset + core::mem::size_of::<FalconUCodeDescV3>() > self.base.data.len() {
+            pr_err!("fwsec-frts header not contained within BIOS bounds\n");
+            return Err(ERANGE);
+        }
+        
+        // Read the first 4 bytes to get the version
+        let hdr_bytes: [u8; 4] = self.base.data[falcon_ucode_offset..falcon_ucode_offset+4].try_into().map_err(|_| EINVAL)?;
+        let hdr = u32::from_le_bytes(hdr_bytes);
+        let ver = (hdr & 0xff00) >> 8;
+        
+        if ver != 3 {
+            pr_err!("invalid fwsec firmware version\n");
+            return Err(EINVAL);
+        }
+        
+        // Return a reference to the FalconUCodeDescV3 structure
+        Ok(unsafe { &*(self.base.data.as_ptr().add(falcon_ucode_offset) as *const FalconUCodeDescV3) })
+    }
+    /// Get the ucode data as a byte slice
+    pub(crate) fn fwsec_ucode(&self, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
+        let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)? as usize;
+        
+        // The ucode data follows the descriptor
+        let ucode_data_offset = falcon_ucode_offset + v3_desc.size();
+        let size = (v3_desc.imem_load_size + v3_desc.dmem_load_size) as usize;
+        
+        // Make sure the data is within bounds
+        if ucode_data_offset + size > self.base.data.len() {
+            pr_err!("fwsec ucode data not contained within BIOS bounds\n");
+            return Err(ERANGE);
+        }
+        
+        Ok(&self.base.data[ucode_data_offset..ucode_data_offset + size])
     }
 }
