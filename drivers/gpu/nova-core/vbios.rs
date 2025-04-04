@@ -80,7 +80,9 @@ impl<'a> Vbios<'a> {
         }
 
         match BiosImage::try_from(&self.data[offset..offset + bytes]) {
-            Ok(image) => Ok(image),
+            Ok(mut image) => {
+                Ok(image)
+            },
             Err(e) => {
                 pr_info!("Failed to create BiosImage at offset {:#x}: {:?}\n", offset, e);
                 Err(e)
@@ -91,7 +93,7 @@ impl<'a> Vbios<'a> {
     /// Probe for VBIOS extraction
     pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
         let mut vbios = Self { bar0, version: 0,  data: KVec::new() };
-
+    
         // Enable ROM shadowing so the ROM is accessible on the BAR
         pr_info!("Enabling ROM shadowing\n");
         vbios.enable_rom_shadow()?;
@@ -117,11 +119,10 @@ impl<'a> Vbios<'a> {
 
         // Loop through all the BiosImage and extract relevant ones and relevant data from them
         let mut cur_offset = 0;
-        // Instead of storing references, store the needed data
-        let mut pci_at_falcon_data_ptr: Option<u32> = None;
-        let mut pci_at_falcon_data_ptr_offset: Option<usize> = None;
-        let mut fwsec_image_found = false;
-        
+        let mut pci_at_image: Option<PciAtBiosImage> = None;
+        let mut first_fwsec_image: Option<FwSecBiosImage> = None;
+        let mut second_fwsec_image: Option<FwSecBiosImage> = None;
+    
         // loop till break
         loop {
             // Try to parse a BIOS image at the current offset
@@ -142,9 +143,6 @@ impl<'a> Vbios<'a> {
                     break;
                 }
             };
-            
-            // Read the full image
-            vbios.read_more_at_offset(cur_offset as u32, image_size as u32)?;
 
             // Create a new BiosImage with the full image data
             let mut full_image = match vbios.read_bios_image_at_offset(cur_offset, image_size) {
@@ -154,59 +152,31 @@ impl<'a> Vbios<'a> {
                     break;
                 }
             };
-            
+
             // Determine the image type
-            let image_type = match &full_image {
-                BiosImage::PciAt(_) => "PciAt",
-                BiosImage::Efi(_) => "Efi",
-                BiosImage::Nbsi(_) => "Nbsi",
-                BiosImage::FwSec(_) => "FwSec",
-            };
-            
+            let image_type = full_image.image_type_str();
+
             pr_info!("Found BIOS image at offset {:#x}, size: {:#x}, type: {}\n", 
                         cur_offset, image_size, image_type);
 
-            // Process PciAt image
-            if let BiosImage::PciAt(image) = &full_image {
-                if let Ok(data_ptr) = image.falcon_data_ptr() {
-                    pr_info!("PciAt BIOS Image BIT entry BIT_TOKEN_ID_FALCON_DATA: {:#x}\n", data_ptr);
-                    pci_at_falcon_data_ptr = Some(data_ptr);
-                } else {
-                    pr_info!("Failed to get falcon data pointer for PciAt BIOS Image\n");
-                }
-                
-                if let Ok(data_ptr_offset) = image.falcon_data_ptr_offset() {
-                    pci_at_falcon_data_ptr_offset = Some(data_ptr_offset);
-                }
-            }
-
-            // Process FwSec image
-            if let BiosImage::FwSec(fwsec_image) = &mut full_image {
-                if let Some(offset) = pci_at_falcon_data_ptr_offset {
-                    // Check if offset is within the image
-                    if offset <= cur_offset || offset > cur_offset + image_size {
-                        pr_info!("Falcon data pointer offset {:#x} is not within the image\n", offset);
-                    } else {
-                        pr_info!("PMU: About to calculate falcon data offset\n");
-                        pr_info!("PMU: offset: {:#x}\n", offset);
-                        pr_info!("PMU: cur_offset: {:#x}\n", cur_offset);
-                        pr_info!("PMU: image_size: {:#x}\n", image_size);
-                        pr_info!("address corresponding to bios.rs is: {:#x}\n", offset + 0x24600);
-
-                        // TODO: Fix this, the offset in the PciAt image is from the start of the first fwsec image,
-                        // not the second. However, it points into the second fwsec image.
-                        // In the original code, this was tracked by first_e0_done.
-                        fwsec_image.set_falcon_data_offset(offset + 0x24600 - cur_offset)?;
-
-                    }
-                } else {
-                    pr_info!("Not yet got falcon data pointer offset. Skipping setting falcon data offset.\n");
-                }
-                fwsec_image_found = true;
-            }
-
             // Get a reference to the image before we potentially use full_image in all_images
             let is_last = full_image.is_last();
+
+            match full_image {
+                BiosImage::PciAt(image) => {
+                    pci_at_image = Some(image);
+                }
+                BiosImage::FwSec(image) => {
+                    if first_fwsec_image.is_none() {
+                        first_fwsec_image = Some(image);
+                    } else {
+                        second_fwsec_image = Some(image);
+                    }
+                }
+                // For now we don't need to handle these
+                BiosImage::Efi(image) => { }
+                BiosImage::Nbsi(image) => { }
+             }
 
             // Break if this is the last image
             if is_last {
@@ -225,18 +195,22 @@ impl<'a> Vbios<'a> {
             }
         }
 
-        // Print information about falcon data
-        if fwsec_image_found {
-            if let (Some(data_ptr), Some(data_ptr_offset)) = (pci_at_falcon_data_ptr, pci_at_falcon_data_ptr_offset) {
-                pr_info!("PciAt falcon data ptr: {:#x} and ptr offset: {:#x}\n",
-                        data_ptr, data_ptr_offset);
-                pr_info!("FwSec BIOS Image falcon data offset: {:#x}\n", data_ptr_offset);
+        // Using all the images, setup the falcon data pointer in Fwsec.
+        {
+            let mut second = second_fwsec_image.as_mut();
+            let mut first = first_fwsec_image.as_mut();
+            let mut pci_at = pci_at_image.as_mut();
+
+            if let (Some(second), Some(first), Some(pci_at)) = (second, first, pci_at) {
+                match second.setup_falcon_data(pci_at, first) {
+                    Ok(_) => pr_info!("Falcon data setup successful\n"),
+                    Err(e) => pr_info!("Falcon data setup failed: {:?}\n", e),
+                }
             } else {
-                pr_info!("Failed to get PciAt falcon data information for FwSec image\n");
+                pr_info!("No second fwsec image found, skipping falcon data setup\n");
             }
-        } else {
-            pr_info!("Failed to get FwSec image\n");
         }
+
 
         Ok(vbios)
     }
@@ -660,16 +634,74 @@ impl NpdeStruct {
     }
 }
 
-// Replace the simple BiosImage enum with a more powerful version
-pub(crate) enum BiosImage {
-    PciAt(PciAtBiosImage),
-    Efi(EfiBiosImage),
-    Nbsi(NbsiBiosImage),    // NBSI (Nvidia Bios System Interface)
-    FwSec(FwSecBiosImage),
+// Use a macro to implement BiosImage enum and methods. This avoids having to
+// repeat each enum type when implementing functions like base() as well.
+macro_rules! bios_image {
+    (
+        $($variant:ident $class:ident),* $(,)?
+    ) => {
+        // BiosImage enum with variants for each image type
+        pub(crate) enum BiosImage {
+            $($variant($class)),*
+        }
+
+        impl BiosImage {
+            /// Get a reference to the common BIOS image data regardless of type
+            pub(crate) fn base(&self) -> &BiosImageBase {
+                match self {
+                    $(Self::$variant(img) => &img.base),*
+                }
+            }
+            
+            /// Returns a string representing the type of BIOS image
+            pub(crate) fn image_type_str(&self) -> &'static str {
+                match self {
+                    $(Self::$variant(_) => stringify!($variant)),*
+                }
+            }
+
+            /// Check if this is the last image
+            pub(crate) fn is_last(&self) -> bool {
+                let base = self.base();
+                
+                // For NBSI images (type == 0x70), return true as they're
+                // considered the last image
+                if matches!(self, Self::Nbsi(_)) {
+                    return true;
+                }
+
+                // For other image types, check NPDE first if available
+                if let Some(ref npde) = base.npde {
+                    return npde.is_last();
+                }
+
+                // Otherwise, fall back to checking the PCIR last_image flag
+                base.pcir.is_last()
+            }
+
+            /// Get the image size in bytes
+            pub(crate) fn image_size_bytes(&self) -> Result<usize> {
+                let base = self.base();
+
+                // Prefer NPDE image size if available
+                if let Some(ref npde) = base.npde {
+                    return npde.image_size_bytes();
+                }
+
+                // Otherwise, fall back to the PCIR image size
+                base.pcir.image_size_bytes()
+            }
+        }
+    }
 }
 
-// The indiviaul image types, when adding a new type, add it
-// also to the BiosImage::base() method.
+bios_image! {
+    PciAt PciAtBiosImage,   // PCI-AT compatible BIOS image
+    Efi EfiBiosImage,       // EFI (Extensible Firmware Interface)
+    Nbsi NbsiBiosImage,     // NBSI (Nvidia Bios System Interface)
+    FwSec FwSecBiosImage    // FWSEC (Firmware Security)
+}
+
 pub(crate) struct PciAtBiosImage {
     base: BiosImageBase,
     /*
@@ -715,51 +747,6 @@ pub(crate) struct FwSecBiosImage {
     falcon_data_offset: Option<usize>,
     // The PmuLookupTable starts at the offset of the falcon data pointer
     pmu_lookup_table: Option<PmuLookupTable>,
-}
-
-// Implementation for BiosImage to provide common access methods
-impl BiosImage {
-    /// Get a reference to the common BIOS image data regardless of type
-    pub(crate) fn base(&self) -> &BiosImageBase {
-        match self {
-            Self::PciAt(img) => &img.base,
-            Self::Efi(img) => &img.base,
-            Self::Nbsi(img) => &img.base,
-            Self::FwSec(img) => &img.base,
-        }
-    }
-    
-    /// Check if this is the last image
-    pub(crate) fn is_last(&self) -> bool {
-        let base = self.base();
-        
-        // For NBSI images (type == 0x70), return true as they're
-        // considered the last image
-        if matches!(self, Self::Nbsi(_)) {
-            return true;
-        }
-
-        // For other image types, check NPDE first if available
-        if let Some(ref npde) = base.npde {
-            return npde.is_last();
-        }
-
-        // Otherwise, fall back to checking the PCIR last_image flag
-        base.pcir.is_last()
-    }
-
-    /// Get the image size in bytes
-    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
-        let base = self.base();
-
-        // Prefer NPDE image size if available
-        if let Some(ref npde) = base.npde {
-            return npde.image_size_bytes();
-        }
-
-        // Otherwise, fall back to the PCIR image size
-        base.pcir.image_size_bytes()
-    }
 }
 
 // Convert from BiosImageBase to BiosImage
@@ -932,7 +919,8 @@ impl PciAtBiosImage {
     // The falcon data pointer assumes that the PciAt and FWSEC images
     // are contiguous in memory. However, testing shows the EFI image sits in
     // between them. So calculate the offset from the end of the PciAt image
-    // to the start of data pointer.
+    // rather than the start of it and then once the Fwsec image is found,
+    // add this recalculated offset to the start of the fwsec image.
     fn falcon_data_ptr_offset(&self) -> Result<usize> {
         let ptr = self.falcon_data_ptr()?;
 
@@ -940,6 +928,8 @@ impl PciAtBiosImage {
             return Err(EINVAL);
         }
 
+        // Re-calcuate offset to be from the end of the PciAt image.
+        // This will later be added to the start of the Fwsec image.
         Ok(ptr as usize - self.base.data.len())
     }
 }
@@ -1028,24 +1018,25 @@ impl<'a> PmuLookupTableEntry<'a> {
 */
 
 impl FwSecBiosImage {
-    fn set_falcon_data_offset(&mut self, falcon_offset: usize) -> Result {
-        pr_info!("Setting FwSec image falcon offset: {:#x}\n", falcon_offset);
-        // The image's len is less than the offset, just return success
-        // since we'll wait for an fwsec image that the offset does fit in
-        if falcon_offset > self.base.data.len() {
-            pr_info!("Requested FwSec image falcon offset {:#x} is greater than image length {:#x}\n",
-                falcon_offset, self.base.data.len());
-            return Err(EINVAL);
-        }
+    fn setup_falcon_data(&mut self, pci_at_image: &PciAtBiosImage,
+                    first_fwsec_image: &FwSecBiosImage) -> Result<()> {
+        let mut offset = pci_at_image.falcon_data_ptr_offset()?;
 
-        self.falcon_data_offset = Some(falcon_offset);
+        // The offset is from the start of the first Fwsec image, however
+        // the offset points to a location in the second Fwsec image. Since
+        // the images are contiguous, subtract the length of the first Fwsec
+        // image from the offset to get the offset to the start of the second
+        // Fwsec image.
+        offset -= first_fwsec_image.base.data.len();
 
+        self.falcon_data_offset = Some(offset);
+        
         // The PmuLookupTable starts at the offset of the falcon data pointer
-        self.pmu_lookup_table = Some(PmuLookupTable::try_from(&self.base.data[falcon_offset..])?);
+        self.pmu_lookup_table = Some(PmuLookupTable::try_from(&self.base.data[offset..])?);
 
         // print the PmuLookupTable fields
         if let Some(pmu_lookup_table) = &self.pmu_lookup_table {
-            pr_info!("PmuLookupTable created with ver: {:#x}, hdr: {:#x}, len: {:#x}, cnt: {:#x}\n",
+            pr_info!("New 3 PmuLookupTable created with ver: {:#x}, hdr: {:#x}, len: {:#x}, cnt: {:#x}\n",
                 pmu_lookup_table.ver,
                 pmu_lookup_table.hdr,
                 pmu_lookup_table.len,
