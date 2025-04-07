@@ -65,22 +65,16 @@ impl Vbios {
 
     fn read_bios_image_at_offset(bar0: &Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result<BiosImage> {
         if offset + len > data.len() {
-            match Self::read_more_at_offset(bar0, data, offset, len) {
-                Ok(_) => {},
-                Err(e) => {
-                    pr_info!("Failed to read more at offset {:#x}: {:?}\n", offset, e);
-                    return Err(e);
-                }
-            }
+            Self::read_more_at_offset(bar0, data, offset, len)
+                .inspect_err(|e| {
+                    pr_info!("Failed to read more at offset {:#x}: {:?}\n", offset, e)
+                })?;
         }
 
-        match BiosImage::try_from(&data[offset..offset + len]) {
-            Ok(image) => Ok(image),
-            Err(e) => {
-                pr_info!("Failed to create BiosImage at offset {:#x}: {:?}\n", offset, e);
-                Err(e)
-            }
-        }
+        BiosImage::try_from(&data[offset..offset + len])
+            .inspect_err(|e| {
+                pr_info!("Failed to create BiosImage at offset {:#x}: {:?}\n", offset, e)
+            })
     }
 
     /// Probe for VBIOS extraction
@@ -115,31 +109,21 @@ impl Vbios {
         loop {
             // Try to parse a BIOS image at the current offset
             // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
-            let image_size = match Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, 1024) {
-                Ok(image) => {
-                    // Get image size in bytes
-                    match image.image_size_bytes() {
-                        Ok(size) => size,
-                        Err(_) => {
-                            pr_info!("Invalid image size at offset {:#x}, stopping scan\n", cur_offset);
-                            break;
-                        }
-                    }
-                },
-                Err(e) => {
+            let image_size = Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, 1024)
+                .and_then(|image| {
+                    image.image_size_bytes().inspect_err(|_| {
+                        pr_info!("Invalid get image size at offset {:#x}, stopping scan\n", cur_offset);
+                    })
+                })
+                .inspect_err(|e| {
                     pr_info!("Failed to parse BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
-                    break;
-                }
-            };
+                })?;
 
             // Create a new BiosImage with the full image data
-            let full_image = match Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, image_size) {
-                Ok(img) => img,
-                Err(e) => {
+            let full_image = Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, image_size)
+                .inspect_err(|e| {
                     pr_info!("Failed to parse full BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
-                    break;
-                }
-            };
+                })?;
 
             // Determine the image type
             let image_type = full_image.image_type_str();
@@ -192,10 +176,8 @@ impl Vbios {
 
             if let (Some(second), Some(first), Some(pci_at)) =
                     (second.as_mut(), first_ref, pci_at_ref) {
-                match second.setup_falcon_data(pci_at, first) {
-                    Ok(_) => pr_info!("Falcon data setup successful\n"),
-                    Err(e) => pr_info!("Falcon data setup failed: {:?}\n", e),
-                }
+                second.setup_falcon_data(pci_at, first)
+                    .inspect_err(|e| pr_info!("Falcon data setup failed: {:?}\n", e))?;
             } else {
                 pr_info!("Missing required images for falcon data setup, skipping\n");
             }
@@ -636,10 +618,9 @@ impl NpdeStruct {
         }
         
         // Try to create NPDE from the data
-        match NpdeStruct::try_from(&data[npde_start..]) {
-            Ok(npde) => Some(npde),
-            Err(_) => None,
-        }
+        NpdeStruct::try_from(&data[npde_start..]).inspect_err(|e| {
+            pr_info!("Error creating NpdeStruct: {:?}", e);
+        }).ok()
     }
 }
 
