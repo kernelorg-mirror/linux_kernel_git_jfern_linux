@@ -232,9 +232,3 @@ register!(PfbPriMmuWpr2AddrLo@0x001fa824;
 register!(PfbPriMmuWpr2AddrHi@0x001fa828;
     31:4    hi_val => as u32
 );
-
-// The PCI config space is mirrored at 0x88000-0x89000 in Bar0.
-// This contains the register to enable ROM shadowing into Bar0.
-register!(RomShadow@0x00088050;
-    31:0    val => as u32
-);

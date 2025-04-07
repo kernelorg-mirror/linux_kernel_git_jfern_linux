@@ -6,7 +6,7 @@ use kernel::prelude::*;
 use core::convert::TryFrom;
 use kernel::error::Result;
 use kernel::devres::Devres;
-use crate::{driver::Bar0, regs::RomShadow, falcon::FalconUCodeDescV3};
+use crate::{driver::Bar0, falcon::FalconUCodeDescV3};
 
 /// The offset of the VBIOS ROM in the BAR0 space
 const ROM_OFFSET: usize = 0x300000;
