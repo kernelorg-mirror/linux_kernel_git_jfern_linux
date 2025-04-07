@@ -28,13 +28,13 @@ pub struct Vbios<'a> {
 
 impl<'a> Vbios<'a> {
     /// Read bytes from the ROM at the current end of the data vector
-    pub(crate) fn read_more(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, bytes: u32) -> Result {
+    pub(crate) fn read_more(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, len: usize) -> Result {
         with_bar!(bar0, |bar0_ref| {
             // Get current length
             let current_len = data.len();
 
             // Read ROM data bytes push directly to vector
-            for i in 0..bytes as usize {
+            for i in 0..len {
                 // Read a byte from the VBIOS ROM and push it to the data vector
                 let rom_addr = ROM_OFFSET + current_len + i;
                 let byte = bar0_ref.try_readb(rom_addr)?;
@@ -46,23 +46,23 @@ impl<'a> Vbios<'a> {
     }
 
     /// Read bytes at a specific offset, filling any gap
-    pub(crate) fn read_more_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: u32, bytes: u32) -> Result {
+    pub(crate) fn read_more_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result {
         // If offset is beyond current data size, fill the gap first
         let current_len = data.len();
 
-        if offset as usize > current_len {
+        if offset > current_len {
             // Calculate bytes to read to fill the gap
-            let gap_bytes = offset as usize - current_len;
-            Self::read_more(bar0, data, gap_bytes as u32)?;
+            let gap_bytes = offset - current_len;
+            Self::read_more(bar0, data, gap_bytes)?;
         }
 
         // Now read the requested bytes at the offset
-        Self::read_more(bar0, data, bytes)
+        Self::read_more(bar0, data, len)
     }
 
-    pub(crate) fn read_bios_image_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, bytes: usize) -> Result<BiosImage> {
-        if offset + bytes > data.len() {
-            match Self::read_more_at_offset(bar0, data, offset as u32, bytes as u32) {
+    pub(crate) fn read_bios_image_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result<BiosImage> {
+        if offset + len > data.len() {
+            match Self::read_more_at_offset(bar0, data, offset, len) {
                 Ok(_) => {},
                 Err(e) => {
                     pr_info!("Failed to read more at offset {:#x}: {:?}\n", offset, e);
@@ -71,7 +71,7 @@ impl<'a> Vbios<'a> {
             }
         }
 
-        match BiosImage::try_from(&data[offset..offset + bytes]) {
+        match BiosImage::try_from(&data[offset..offset + len]) {
             Ok(mut image) => {
                 Ok(image)
             },
