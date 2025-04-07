@@ -29,17 +29,17 @@ pub struct Vbios<'a> {
 
 impl<'a> Vbios<'a> {
     /// Read bytes from the ROM at the current end of the data vector
-    pub(crate) fn read_more(&mut self, bytes: u32) -> Result {
-        with_bar!(self.bar0, |bar0| {
+    pub(crate) fn read_more(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, bytes: u32) -> Result {
+        with_bar!(bar0, |bar0_ref| {
             // Get current length
-            let current_len = self.data.len();
+            let current_len = data.len();
 
             // Read ROM data bytes push directly to vector
             for i in 0..bytes as usize {
                 // Read a byte from the VBIOS ROM and push it to the data vector
                 let rom_addr = ROM_OFFSET + current_len + i;
-                let byte = bar0.try_readb(rom_addr)?;
-                self.data.push(byte, GFP_KERNEL)?;
+                let byte = bar0_ref.try_readb(rom_addr)?;
+                data.push(byte, GFP_KERNEL)?;
             }
 
             Ok(())
@@ -47,23 +47,23 @@ impl<'a> Vbios<'a> {
     }
 
     /// Read bytes at a specific offset, filling any gap
-    pub(crate) fn read_more_at_offset(&mut self, offset: u32, bytes: u32) -> Result {
+    pub(crate) fn read_more_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: u32, bytes: u32) -> Result {
         // If offset is beyond current data size, fill the gap first
-        let current_len = self.data.len();
+        let current_len = data.len();
 
         if offset as usize > current_len {
             // Calculate bytes to read to fill the gap
             let gap_bytes = offset as usize - current_len;
-            self.read_more(gap_bytes as u32)?;
+            Self::read_more(bar0, data, gap_bytes as u32)?;
         }
 
         // Now read the requested bytes at the offset
-        self.read_more(bytes)
+        Self::read_more(bar0, data, bytes)
     }
 
-    pub(crate) fn read_bios_image_at_offset(&mut self, offset: usize, bytes: usize) -> Result<BiosImage> {
-        if offset + bytes > self.data.len() {
-            match self.read_more_at_offset(offset as u32, bytes as u32) {
+    pub(crate) fn read_bios_image_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, bytes: usize) -> Result<BiosImage> {
+        if offset + bytes > data.len() {
+            match Self::read_more_at_offset(bar0, data, offset as u32, bytes as u32) {
                 Ok(_) => {},
                 Err(e) => {
                     pr_info!("Failed to read more at offset {:#x}: {:?}\n", offset, e);
@@ -72,7 +72,7 @@ impl<'a> Vbios<'a> {
             }
         }
 
-        match BiosImage::try_from(&self.data[offset..offset + bytes]) {
+        match BiosImage::try_from(&data[offset..offset + bytes]) {
             Ok(mut image) => {
                 Ok(image)
             },
@@ -85,21 +85,21 @@ impl<'a> Vbios<'a> {
 
     /// Probe for VBIOS extraction
     pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
-        let mut vbios = Self { bar0, version: 0,  data: KVec::new(), fwsec_image: None };
+        let mut data = KVec::new();
         // Read the first 32 bytes into the KVec
-        vbios.read_more(32)?;
+        Self::read_more(bar0, &mut data, 32)?;
 
         // Print the bytes from the KVec to verify they match
         pr_info!("ROM header bytes from KVec (first 32 bytes):\n");
         for row in 0..2 {
             let base = row * 16;
-            if base + 15 < vbios.data.len() {
+            if base + 15 < data.len() {
                 pr_info!("  {:08x}: {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}\n",
                     base,
-                    vbios.data[base],     vbios.data[base + 1], vbios.data[base + 2], vbios.data[base + 3],
-                    vbios.data[base + 4], vbios.data[base + 5], vbios.data[base + 6], vbios.data[base + 7],
-                    vbios.data[base + 8], vbios.data[base + 9], vbios.data[base + 10], vbios.data[base + 11],
-                    vbios.data[base + 12], vbios.data[base + 13], vbios.data[base + 14], vbios.data[base + 15]
+                    data[base],     data[base + 1], data[base + 2], data[base + 3],
+                    data[base + 4], data[base + 5], data[base + 6], data[base + 7],
+                    data[base + 8], data[base + 9], data[base + 10], data[base + 11],
+                    data[base + 12], data[base + 13], data[base + 14], data[base + 15]
                 );
             }
         }
@@ -114,7 +114,7 @@ impl<'a> Vbios<'a> {
         loop {
             // Try to parse a BIOS image at the current offset
             // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
-            let image_size = match vbios.read_bios_image_at_offset(cur_offset, 1024) {
+            let image_size = match Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, 1024) {
                 Ok(image) => {
                     // Get image size in bytes
                     match image.image_size_bytes() {
@@ -132,7 +132,7 @@ impl<'a> Vbios<'a> {
             };
 
             // Create a new BiosImage with the full image data
-            let mut full_image = match vbios.read_bios_image_at_offset(cur_offset, image_size) {
+            let mut full_image = match Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, image_size) {
                 Ok(img) => img,
                 Err(e) => {
                     pr_info!("Failed to parse full BIOS image at offset {:#x}: {:?}\n", cur_offset, e);
@@ -183,23 +183,30 @@ impl<'a> Vbios<'a> {
         }
 
         // Using all the images, setup the falcon data pointer in Fwsec.
-        {
-            let mut second = second_fwsec_image.as_mut();
-            let mut first = first_fwsec_image.as_mut();
-            let mut pci_at = pci_at_image.as_mut();
+        // We need mutable access here, so we handle the Option manually.
+        let final_fwsec_image = {
+            let mut second = second_fwsec_image; // Take ownership of the option
+            let first_ref = first_fwsec_image.as_ref();
+            let pci_at_ref = pci_at_image.as_ref();
 
-            if let (Some(second), Some(first), Some(pci_at)) = (second, first, pci_at) {
+            if let (Some(second), Some(first), Some(pci_at)) =
+                    (second.as_mut(), first_ref, pci_at_ref) {
                 match second.setup_falcon_data(pci_at, first) {
                     Ok(_) => pr_info!("Falcon data setup successful\n"),
                     Err(e) => pr_info!("Falcon data setup failed: {:?}\n", e),
                 }
             } else {
-                pr_info!("No second fwsec image found, skipping falcon data setup\n");
+                pr_info!("Missing required images for falcon data setup, skipping\n");
             }
-        }
+            second // Return the potentially modified second image
+        };
 
-        vbios.fwsec_image = Some(second_fwsec_image.ok_or(EINVAL)?);
-        Ok(vbios)
+        Ok(Self {
+            bar0,
+            version: 0, // TODO: Determine where the version comes from if needed
+            fwsec_image: final_fwsec_image,
+            data
+        })
     }
 
     pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
@@ -207,8 +214,8 @@ impl<'a> Vbios<'a> {
         image.fwsec_header()
     }
 
-    pub(crate) fn fwsec_ucode(&self) -> Result<&[u8]> {      
-        let image = self.fwsec_image.as_ref().ok_or(EINVAL)?;  
+    pub(crate) fn fwsec_ucode(&self) -> Result<&[u8]> {
+        let image = self.fwsec_image.as_ref().ok_or(EINVAL)?;
         image.fwsec_ucode(image.fwsec_header()?)
     }
 }
