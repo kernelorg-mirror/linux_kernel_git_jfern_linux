@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+
+//! VBIOS extraction and parsing.
+
 use kernel::prelude::*;
 use core::convert::TryFrom;
 use kernel::error::Result;
