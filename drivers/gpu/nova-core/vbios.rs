@@ -8,11 +8,6 @@ use kernel::error::Result;
 use kernel::devres::Devres;
 use crate::{driver::Bar0, regs::RomShadow, falcon::FalconUCodeDescV3};
 
-/// Helper function to create u16 from two u8 values (little-endian)
-pub(crate) fn u16_from_u8s(high: u8, low: u8) -> u16 {
-    ((high as u16) << 8) | (low as u16)
-}
-
 /// The offset of the VBIOS ROM in the BAR0 space
 const ROM_OFFSET: usize = 0x300000;
 
@@ -296,17 +291,17 @@ impl TryFrom<&[u8]> for PcirStruct {
 
         Ok(PcirStruct {
             signature,
-            vendor_id: u16_from_u8s(data[5], data[4]),
-            device_id: u16_from_u8s(data[7], data[6]),
-            device_list_ptr: u16_from_u8s(data[9], data[8]),
-            pci_data_struct_len: u16_from_u8s(data[11], data[10]),
+            vendor_id: u16::from_le_bytes([data[4], data[5]]),
+            device_id: u16::from_le_bytes([data[6], data[7]]),
+            device_list_ptr: u16::from_le_bytes([data[8], data[9]]),
+            pci_data_struct_len: u16::from_le_bytes([data[10], data[11]]),
             pci_data_struct_rev: data[12],
             class_code,
-            image_len: u16_from_u8s(data[17], data[16]),
-            vendor_rom_rev: u16_from_u8s(data[19], data[18]),
+            image_len: u16::from_le_bytes([data[16], data[17]]),
+            vendor_rom_rev: u16::from_le_bytes([data[18], data[19]]),
             code_type: data[20],
             last_image: data[21],
-            max_runtime_image_len: u16_from_u8s(data[23], data[22]),
+            max_runtime_image_len: u16::from_le_bytes([data[22], data[23]]),
         })
     }
 }
@@ -379,7 +374,7 @@ impl TryFrom<&[u8]> for BitHeader {
         signature.copy_from_slice(&data[2..6]);
 
         // Check header ID and signature
-        let id = u16_from_u8s(data[1], data[0]);
+        let id = u16::from_le_bytes([data[0], data[1]]);
         if id != 0xB8FF || &signature != b"BIT\0" {
             return Err(EINVAL);
         }
@@ -387,7 +382,7 @@ impl TryFrom<&[u8]> for BitHeader {
         Ok(BitHeader {
             id,
             signature,
-            bcd_version: u16_from_u8s(data[7], data[6]),
+            bcd_version: u16::from_le_bytes([data[6], data[7]]),
             header_size: data[8],
             token_size: data[9],
             token_entries: data[10],
@@ -450,14 +445,14 @@ impl BitToken {
                 return Ok(BitToken {
                     id: image.base.data[entry_offset],
                     data_version: image.base.data[entry_offset + 1],
-                    data_size: u16_from_u8s(
-                        image.base.data[entry_offset + 3],
-                        image.base.data[entry_offset + 2]
-                    ),
-                    data_offset: u16_from_u8s(
-                        image.base.data[entry_offset + 5],
-                        image.base.data[entry_offset + 4]
-                    ),
+                    data_size: u16::from_le_bytes([
+                        image.base.data[entry_offset + 2],
+                        image.base.data[entry_offset + 3]
+                    ]),
+                    data_offset: u16::from_le_bytes([
+                        image.base.data[entry_offset + 4],
+                        image.base.data[entry_offset + 5]
+                    ]),
                 });
             }
         }
@@ -515,7 +510,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
             return Err(EINVAL);
         }
 
-        let signature = u16_from_u8s(data[1], data[0]);
+        let signature = u16::from_le_bytes([data[0], data[1]]);
 
         // Check for valid ROM signatures
         match signature {
@@ -527,7 +522,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
         }
 
         // Read the pointer to the PCI Data Structure at offset 0x18
-        let pci_data_struct_ptr = u16_from_u8s(data[25], data[24]);
+        let pci_data_struct_ptr = u16::from_le_bytes([data[24], data[25]]);
 
         // Try to read optional fields if enough data
         let mut size_of_block = None;
@@ -545,7 +540,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
 
         // For NBSI images, try to read the nbsiDataOffset at offset 0x16
         if data.len() >= 24 {
-            nbsi_data_offset = Some(u16_from_u8s(data[23], data[22]));
+            nbsi_data_offset = Some(u16::from_le_bytes([data[22], data[23]]));
         }
 
         Ok(PciRomHeader {
@@ -593,9 +588,9 @@ impl TryFrom<&[u8]> for NpdeStruct {
 
         Ok(NpdeStruct {
             signature,
-            npci_data_ext_rev: u16_from_u8s(data[5], data[4]),
-            npci_data_ext_len: u16_from_u8s(data[7], data[6]),
-            subimage_len: u16_from_u8s(data[9], data[8]),
+            npci_data_ext_rev: u16::from_le_bytes([data[4], data[5]]),
+            npci_data_ext_len: u16::from_le_bytes([data[6], data[7]]),
+            subimage_len: u16::from_le_bytes([data[8], data[9]]),
             last_image: data[10],
         })
     }
