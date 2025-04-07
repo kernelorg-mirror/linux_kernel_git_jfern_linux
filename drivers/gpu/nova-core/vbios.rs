@@ -21,7 +21,6 @@ const FALCON_UCODE_ENTRY_APPID_FWSEC_PROD: u8 = 0x85;
 /// VBIOS data structure
 pub struct Vbios<'a> {
     pub bar0: &'a Devres<Bar0>,
-    pub version: u16,
     pub fwsec_image: Option<FwSecBiosImage>,
     /// VBIOS data
     pub data: KVec<u8>,
@@ -203,7 +202,6 @@ impl<'a> Vbios<'a> {
 
         Ok(Self {
             bar0,
-            version: 0, // TODO: Determine where the version comes from if needed
             fwsec_image: final_fwsec_image,
             data
         })
