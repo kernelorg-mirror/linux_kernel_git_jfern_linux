@@ -28,7 +28,7 @@ pub struct Vbios<'a> {
 
 impl<'a> Vbios<'a> {
     /// Read bytes from the ROM at the current end of the data vector
-    pub(crate) fn read_more(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, len: usize) -> Result {
+    fn read_more(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, len: usize) -> Result {
         with_bar!(bar0, |bar0_ref| {
             // Get current length
             let current_len = data.len();
@@ -46,7 +46,7 @@ impl<'a> Vbios<'a> {
     }
 
     /// Read bytes at a specific offset, filling any gap
-    pub(crate) fn read_more_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result {
+    fn read_more_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result {
         // If offset is beyond current data size, fill the gap first
         let current_len = data.len();
 
@@ -60,7 +60,7 @@ impl<'a> Vbios<'a> {
         Self::read_more(bar0, data, len)
     }
 
-    pub(crate) fn read_bios_image_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result<BiosImage> {
+    fn read_bios_image_at_offset(bar0: &'a Devres<Bar0>, data: &mut KVec<u8>, offset: usize, len: usize) -> Result<BiosImage> {
         if offset + len > data.len() {
             match Self::read_more_at_offset(bar0, data, offset, len) {
                 Ok(_) => {},
@@ -246,7 +246,7 @@ struct NV_PCI_DATA_EXT_STRUCT
 }
 */
 #[derive(Debug, Clone)]
-pub(crate) struct PcirStruct {
+struct PcirStruct {
     /// PCI Data Structure signature ("PCIR" or "NPDS")
     pub signature: [u8; 4],
     /// PCI Vendor ID (e.g., 0x10DE for NVIDIA)
@@ -313,12 +313,12 @@ impl TryFrom<&[u8]> for PcirStruct {
 
 impl PcirStruct {
     /// Check if this is the last image in the ROM
-    pub(crate) fn is_last(&self) -> bool {
+    fn is_last(&self) -> bool {
         self.last_image & 0x80 != 0
     }
 
     /// Calculate image size in bytes
-    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
+    fn image_size_bytes(&self) -> Result<usize> {
         if self.image_len > 0 {
             // Image size is in 512-byte blocks
             Ok(self.image_len as usize * 512)
@@ -350,7 +350,7 @@ struct BIT_TOKEN
  */
 /// BIOS Information Table (BIT) Header
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct BitHeader {
+struct BitHeader {
     /// 0h: BIT Header Identifier (0xB8FF)
     pub id: u16,
     /// 2h: BIT Header Signature ("BIT\0")
@@ -415,7 +415,7 @@ impl BitHeader {
 
 /// BIT Token Entry: Records in the BIT table followed by the BIT header
 #[derive(Debug, Clone, Copy)]
-pub struct BitToken {
+struct BitToken {
     /// Token identifier
     pub id: u8,
     /// Version of the token data
@@ -494,7 +494,7 @@ struct PCI_EXP_ROM_NBSI
     u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
 }
  */
-pub(crate) struct PciRomHeader {
+struct PciRomHeader {
     /// 00h: Signature (0xAA55)
     pub signature: u16,
     /// 02h: Reserved bytes for processor architecture unique data (22 bytes)
@@ -560,7 +560,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
 
 /// NVIDIA PCI Data Extension Structure
 #[derive(Debug, Clone)]
-pub(crate) struct NpdeStruct {
+struct NpdeStruct {
     /// Signature ("NPDE")
     pub signature: [u8; 4],
     /// NVIDIA PCI Data Extension Revision
@@ -603,12 +603,12 @@ impl TryFrom<&[u8]> for NpdeStruct {
 
 impl NpdeStruct {
     /// Check if this is the last image in the ROM
-    pub(crate) fn is_last(&self) -> bool {
+    fn is_last(&self) -> bool {
         self.last_image & 0x80 != 0
     }
 
     /// Calculate image size in bytes
-    pub(crate) fn image_size_bytes(&self) -> Result<usize> {
+    fn image_size_bytes(&self) -> Result<usize> {
         if self.subimage_len > 0 {
             // Image size is in 512-byte blocks
             Ok(self.subimage_len as usize * 512)
@@ -618,7 +618,7 @@ impl NpdeStruct {
     }
     
     /// Try to find NPDE in the data
-    pub(crate) fn find_in_data(data: &[u8], pcir_offset: usize, pcir_len: u16) -> Option<Self> {
+    fn find_in_data(data: &[u8], pcir_offset: usize, pcir_len: u16) -> Option<Self> {
         // Calculate the offset where NPDE might be located
         // NPDE should be right after the PCIR structure, aligned to 16 bytes
         let npde_start = (pcir_offset + pcir_len as usize + 0x0F) & !0x0F;
@@ -643,27 +643,27 @@ macro_rules! bios_image {
         $($variant:ident $class:ident),* $(,)?
     ) => {
         // BiosImage enum with variants for each image type
-        pub(crate) enum BiosImage {
+        enum BiosImage {
             $($variant($class)),*
         }
 
         impl BiosImage {
             /// Get a reference to the common BIOS image data regardless of type
-            pub(crate) fn base(&self) -> &BiosImageBase {
+            fn base(&self) -> &BiosImageBase {
                 match self {
                     $(Self::$variant(img) => &img.base),*
                 }
             }
             
             /// Returns a string representing the type of BIOS image
-            pub(crate) fn image_type_str(&self) -> &'static str {
+            fn image_type_str(&self) -> &'static str {
                 match self {
                     $(Self::$variant(_) => stringify!($variant)),*
                 }
             }
 
             /// Check if this is the last image
-            pub(crate) fn is_last(&self) -> bool {
+            fn is_last(&self) -> bool {
                 let base = self.base();
                 
                 // For NBSI images (type == 0x70), return true as they're
@@ -682,7 +682,7 @@ macro_rules! bios_image {
             }
 
             /// Get the image size in bytes
-            pub(crate) fn image_size_bytes(&self) -> Result<usize> {
+            fn image_size_bytes(&self) -> Result<usize> {
                 let base = self.base();
 
                 // Prefer NPDE image size if available
@@ -704,7 +704,7 @@ bios_image! {
     FwSec FwSecBiosImage    // FWSEC (Firmware Security)
 }
 
-pub(crate) struct PciAtBiosImage {
+struct PciAtBiosImage {
     base: BiosImageBase,
     /*
      * The BIT header (BIOS Information Table)
@@ -732,17 +732,17 @@ pub(crate) struct PciAtBiosImage {
     bit_offset: Option<usize>,
 }
 
-pub(crate) struct EfiBiosImage {
+struct EfiBiosImage {
     base: BiosImageBase,
     // EFI-specific fields can be added here in the future.
 }
 
-pub(crate) struct NbsiBiosImage {
+struct NbsiBiosImage {
     base: BiosImageBase,
     // NBSI-specific fields can be added here in the future.
 }
 
-pub(crate) struct FwSecBiosImage {
+struct FwSecBiosImage {
     base: BiosImageBase,
     // FWSEC-specific fields
     // The offset of the Falcon data from the start of Fwsec image
@@ -791,7 +791,7 @@ impl TryFrom<&[u8]> for BiosImage {
 /// BIOS Image structure containing various headers and references
 /// fields base to all BIOS images.
 #[derive(Debug)]
-pub(crate) struct BiosImageBase {
+struct BiosImageBase {
     /// PCI ROM Expansion Header
     pub rom_header: PciRomHeader,
     /// PCI Data Structure
@@ -803,7 +803,7 @@ pub(crate) struct BiosImageBase {
 }
 
 impl BiosImageBase {
-    pub(crate) fn to_image(self) -> Result<BiosImage> {
+    fn to_image(self) -> Result<BiosImage> {
         BiosImage::try_from(self)
     }
 }
@@ -981,10 +981,10 @@ impl TryFrom<BiosImageBase> for PciAtBiosImage {
     }
 }
 
-pub(crate) struct PmuLookupTableEntry {
-    pub(crate) application_id: u8,
-    pub(crate) target_id: u8,
-    pub(crate) data: u32,
+struct PmuLookupTableEntry {
+    application_id: u8,
+    target_id: u8,
+    data: u32,
 }
 
 impl TryFrom<&[u8]> for PmuLookupTableEntry {
@@ -999,12 +999,12 @@ impl TryFrom<&[u8]> for PmuLookupTableEntry {
     }
 }
 
-pub(crate) struct PmuLookupTable {
-    pub(crate) version: u8,
-    pub(crate) header_len: u8,
-    pub(crate) entry_len: u8,
-    pub(crate) entry_count: u8,
-    pub(crate) table_data: KVec<u8>,
+struct PmuLookupTable {
+    version: u8,
+    header_len: u8,
+    entry_len: u8,
+    entry_count: u8,
+    table_data: KVec<u8>,
 }
 
 impl TryFrom<&[u8]> for PmuLookupTable {
@@ -1056,7 +1056,7 @@ impl TryFrom<&[u8]> for PmuLookupTable {
 }
 
 impl PmuLookupTable {
-    pub(crate) fn lookup_index(&self, idx: u8) -> Result<PmuLookupTableEntry> {
+    fn lookup_index(&self, idx: u8) -> Result<PmuLookupTableEntry> {
         if idx >= self.entry_count {
             return Err(EINVAL);
         }
@@ -1066,7 +1066,7 @@ impl PmuLookupTable {
     }
 
     // find entry by type value
-    pub(crate) fn find_entry_by_type(&self, entry_type: u8) -> Result<PmuLookupTableEntry> {
+    fn find_entry_by_type(&self, entry_type: u8) -> Result<PmuLookupTableEntry> {
         for i in 0..self.entry_count {
             let entry = self.lookup_index(i)?;
             pr_info!("PmuLookupTableEntry: idx: {:#x}, application_id: {:#x}, target_id: {:#x}\n", i, entry.application_id, entry.target_id);
@@ -1133,7 +1133,7 @@ impl FwSecBiosImage {
     }
 
     /// Get the FwSec header (FalconUCodeDescV3)
-    pub(crate) fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
+    fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
         // Get the falcon ucode offset that was found in setup_falcon_data
         let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)? as usize;
         
@@ -1157,7 +1157,7 @@ impl FwSecBiosImage {
         Ok(unsafe { &*(self.base.data.as_ptr().add(falcon_ucode_offset) as *const FalconUCodeDescV3) })
     }
     /// Get the ucode data as a byte slice
-    pub(crate) fn fwsec_ucode(&self, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
+    fn fwsec_ucode(&self, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
         let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)? as usize;
         
         // The ucode data follows the descriptor
