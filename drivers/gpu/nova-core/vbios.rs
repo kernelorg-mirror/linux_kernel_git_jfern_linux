@@ -31,7 +31,7 @@ pub(crate) struct Vbios {
 impl Vbios {
     /// Read bytes from the ROM at the current end of the data vector
     fn read_more(bar0: &Devres<Bar0>, data: &mut KVec<u8>, len: usize) -> Result {
-        with_bar!(bar0, |bar0_ref| {
+        with_bar_res!(bar0, |bar0_ref| {
             // Get current length
             let current_len = data.len();
 
@@ -42,9 +42,10 @@ impl Vbios {
                 let byte = bar0_ref.try_readb(rom_addr)?;
                 data.push(byte, GFP_KERNEL)?;
             }
-
             Ok(())
-        })?
+        })?;
+
+        Ok(())
     }
 
     /// Read bytes at a specific offset, filling any gap
