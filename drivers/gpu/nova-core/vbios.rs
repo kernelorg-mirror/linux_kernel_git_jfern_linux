@@ -29,19 +29,6 @@ pub struct Vbios<'a> {
 }
 
 impl<'a> Vbios<'a> {
-    /// Enable ROM shadowing to access VBIOS ROM
-    ///
-    /// This enables ROM shadowing by clearing bit 0 of the ROM shadow register,
-    /// allowing the VBIOS to be accessible through BAR0.
-    fn enable_rom_shadow(&self) -> Result {
-        with_bar!(self.bar0, |bar0| {
-            // Clear LSB of ROM shadow register
-            let reg = RomShadow::read(bar0);
-            reg.set_val(reg.val() & !0x00000001);
-            reg.write(bar0);
-        })
-    }
-
     /// Read bytes from the ROM at the current end of the data vector
     pub(crate) fn read_more(&mut self, bytes: u32) -> Result {
         with_bar!(self.bar0, |bar0| {
@@ -100,12 +87,6 @@ impl<'a> Vbios<'a> {
     /// Probe for VBIOS extraction
     pub(crate) fn probe(bar0: &'a Devres<Bar0>) -> Result<Self> {
         let mut vbios = Self { bar0, version: 0,  data: KVec::new(), fwsec_image: None };
-    
-        // Enable ROM shadowing so the ROM is accessible on the BAR
-        pr_info!("Enabling ROM shadowing\n");
-        vbios.enable_rom_shadow()?;
-        pr_info!("ROM shadowing enabled\n");
-
         // Read the first 32 bytes into the KVec
         vbios.read_more(32)?;
 
