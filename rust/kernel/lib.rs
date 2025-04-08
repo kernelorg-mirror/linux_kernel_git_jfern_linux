@@ -88,6 +88,7 @@ pub mod transmute;
 pub mod types;
 pub mod uaccess;
 pub mod workqueue;
+pub mod debugfs;
 
 #[doc(hidden)]
 pub use bindings;
