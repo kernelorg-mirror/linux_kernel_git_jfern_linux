@@ -291,7 +291,6 @@ impl TryFrom<&[u8]> for PcirStruct {
 
     fn try_from(data: &[u8]) -> Result<Self> {
         if data.len() < 24 {
-            // Updated to match full PCI_DATA_STRUCT size
             pr_info!("Not enough data for PcirStruct\n");
             return Err(EINVAL);
         }
@@ -849,13 +848,8 @@ impl TryFrom<&[u8]> for BiosImageBase {
         }
 
         // Parse the ROM header
-        let rom_header = match PciRomHeader::try_from(&data[0..26]) {
-            Ok(rom_header) => rom_header,
-            Err(e) => {
-                pr_info!("Failed to create PciRomHeader: {:?}\n", e);
-                return Err(e);
-            }
-        };
+        let rom_header = PciRomHeader::try_from(&data[0..26])
+            .inspect_err(|e| pr_info!("Failed to create PciRomHeader: {:?}\n", e))?;
 
         pr_info!(
             "Found ROM header with PCIR ptr: {:#x}\n",
@@ -875,23 +869,12 @@ impl TryFrom<&[u8]> for BiosImageBase {
         }
 
         let pcir_data = &data[pcir_offset..];
-        let pcir = match PcirStruct::try_from(pcir_data) {
-            Ok(pcir) => pcir,
-            Err(e) => {
-                pr_info!(
-                    "Failed to create PcirStruct at offset {:#x}: {:?}\n",
-                    pcir_offset,
-                    e
-                );
-                return Err(e);
-            }
-        };
+        let pcir = PcirStruct::try_from(pcir_data)
+            .inspect_err(|e| pr_info!("Failed to create PcirStruct: {:?}\n", e))?;
 
         // Look for NPDE structure if this is not an NBSI image (type != 0x70)
-        let npde = match NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len) {
-            Some(npde) => Some(npde),
-            None => None,
-        };
+        let npde = NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len)
+            .inspect_err(|e| pr_info!("Failed to create NpdeStruct: {:?}\n", e))?;
 
         if let Some(ref npde) = npde {
             pr_info!(
@@ -958,12 +941,9 @@ impl PciAtBiosImage {
 
         // read the 4 bytes at the offset specified in the token
         let offset = token.data_offset as usize;
-        let bytes: [u8; 4] = match self.base.data[offset..offset + 4].try_into() {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                return Err(EINVAL);
-            }
-        };
+        let bytes: [u8; 4] = self.base.data[offset..offset + 4]
+            .try_into()
+            .inspect_err(|_| pr_info!("Failed to convert data slice to array"))?;
 
         let data_ptr = u32::from_le_bytes(bytes);
 
