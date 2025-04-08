@@ -30,16 +30,15 @@ pub(crate) struct Vbios {
 impl Vbios {
     /// Read bytes from the ROM at the current end of the data vector
     fn read_more(bar0: &Devres<Bar0>, data: &mut KVec<u8>, len: usize) -> Result {
-        with_bar_res!(bar0, |bar0_ref| {
-            // Get current length
-            let current_len = data.len();
+        let current_len = data.len();
+        let start = ROM_OFFSET + current_len;
 
-            // Read ROM data bytes push directly to vector
-            for i in 0..len {
-                // Read a byte from the VBIOS ROM and push it to the data vector
-                let rom_addr = ROM_OFFSET + current_len + i;
-                let byte = bar0_ref.try_readb(rom_addr)?;
-                data.push(byte, GFP_KERNEL)?;
+        data.extend_with(len, 0, GFP_KERNEL)?; // Allocate and zero-initialize the new memory
+        with_bar_res!(bar0, |bar0_ref| {
+            let dst = &mut data[current_len..current_len + len];
+            for (idx, d) in dst.iter_mut().enumerate() {
+                let addr = start + idx;
+                *d = bar0_ref.try_readb(addr)?;
             }
             Ok(())
         })?;
@@ -873,8 +872,7 @@ impl TryFrom<&[u8]> for BiosImageBase {
             .inspect_err(|e| pr_info!("Failed to create PcirStruct: {:?}\n", e))?;
 
         // Look for NPDE structure if this is not an NBSI image (type != 0x70)
-        let npde = NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len)
-            .inspect_err(|e| pr_info!("Failed to create NpdeStruct: {:?}\n", e))?;
+        let npde = NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len);
 
         if let Some(ref npde) = npde {
             pr_info!(
@@ -941,9 +939,10 @@ impl PciAtBiosImage {
 
         // read the 4 bytes at the offset specified in the token
         let offset = token.data_offset as usize;
-        let bytes: [u8; 4] = self.base.data[offset..offset + 4]
-            .try_into()
-            .inspect_err(|_| pr_info!("Failed to convert data slice to array"))?;
+        let bytes: [u8; 4] = self.base.data[offset..offset + 4].try_into().map_err(|_| {
+            pr_info!("Failed to convert data slice to array");
+            EINVAL
+        })?;
 
         let data_ptr = u32::from_le_bytes(bytes);
 
