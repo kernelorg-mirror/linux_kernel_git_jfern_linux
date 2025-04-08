@@ -8,10 +8,12 @@ use kernel::devres::Devres;
 use kernel::error::Result;
 use kernel::prelude::*;
 
-/// The offset of the VBIOS ROM in the BAR0 space
+/// The offset of the VBIOS ROM in the BAR0 space.
 const ROM_OFFSET: usize = 0x300000;
+/// The maximum length of the VBIOS ROM to scan into.
+const BIOS_MAX_SCAN_LEN: usize = 0x100000;
 
-// PMU lookup table entry types. Used to locate the PMU table entry
+// PMU lookup table entry types. Used to locate PMU table entries
 // in the Fwsec image, corresponding to falcon ucodes.
 #[allow(dead_code)]
 const FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC: u8 = 0x05;
@@ -33,7 +35,8 @@ impl Vbios {
         let current_len = data.len();
         let start = ROM_OFFSET + current_len;
 
-        data.extend_with(len, 0, GFP_KERNEL)?; // Allocate and zero-initialize the new memory
+        // Allocate and zero-initialize the required memory
+        data.extend_with(len, 0, GFP_KERNEL)?;
         with_bar_res!(bar0, |bar0_ref| {
             let dst = &mut data[current_len..current_len + len];
             for (idx, d) in dst.iter_mut().enumerate() {
@@ -91,23 +94,6 @@ impl Vbios {
     /// Once the VBIOS object is built, bar0 is not read for vbios purposes anymore.
     pub(crate) fn probe(bar0: &Devres<Bar0>) -> Result<Self> {
         let mut data = KVec::new();
-        // Read the first 32 bytes into the KVec
-        Self::read_more(bar0, &mut data, 32)?;
-
-        // Print the bytes from the KVec to verify they match
-        pr_info!("ROM header bytes from KVec (first 32 bytes):\n");
-        for row in 0..2 {
-            let base = row * 16;
-            if base + 15 < data.len() {
-                pr_info!("  {:08x}: {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}\n",
-                    base,
-                    data[base],     data[base + 1], data[base + 2], data[base + 3],
-                    data[base + 4], data[base + 5], data[base + 6], data[base + 7],
-                    data[base + 8], data[base + 9], data[base + 10], data[base + 11],
-                    data[base + 12], data[base + 13], data[base + 14], data[base + 15]
-                );
-            }
-        }
 
         // Loop through all the BiosImage and extract relevant ones and relevant data from them
         let mut cur_offset = 0;
@@ -187,11 +173,11 @@ impl Vbios {
             cur_offset = (cur_offset + 511) & !511;
 
             // Safety check - don't go beyond 1MB
-            if cur_offset > 0x100000 {
+            if cur_offset > BIOS_MAX_SCAN_LEN {
                 pr_info!("Exceeded 1MB limit, stopping BIOS scan\n");
                 break;
             }
-        }
+        } // end of loop
 
         // Using all the images, setup the falcon data pointer in Fwsec.
         // We need mutable access here, so we handle the Option manually.
@@ -230,32 +216,6 @@ impl Vbios {
 }
 
 /// PCI Data Structure as defined in PCI Firmware Specification
-/*
-struct PCI_DATA_STRUCT
-{
-    u32       sig;                //  00h: Signature, the string "PCIR" or NVIDIA's alternate "NPDS"
-    u16       vendorID;           //  04h: Vendor Identification
-    u16       deviceID;           //  06h: Device Identification
-    u16       deviceListPtr;      //  08h: Device List Pointer
-    u16       pciDataStructLen;   //  0Ah: PCI Data Structure Length
-    u8        pciDataStructRev;   //  0Ch: PCI Data Structure Revision
-    u8        classCode[3];       //  0Dh: Class Code
-    u16       imageLen;           //  10h: Image Length (units of 512 bytes)
-    u16       vendorRomRev;       //  12h: Revision Level of the Vendor's ROM
-    u8        codeType;           //  14h: holds NBSI_OBJ_CODE_TYPE (0x70) and others
-    u8        lastImage;          //  15h: Last Image Indicator: bit7=1 is lastImage
-    u16       maxRunTimeImageLen; //  16h: Maximum Run-time Image Length (units of 512 bytes)
-}
-
-and here is NPDE (Nvidia PCI Data Extension to the PCI Data Structure):
-struct NV_PCI_DATA_EXT_STRUCT
-{
-    u32   signature;          //  00h: Signature, the string "NPDE"
-    u16   nvPciDataExtRev;    //  04h: NVIDIA PCI Data Extension Revision
-    u16   nvPciDataExtLen;    //  06h: NVIDIA PCI Data Extension Length
-    u16   subimageLen;        //  08h: Sub-image Length
-}
-*/
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct PcirStruct {
@@ -481,45 +441,26 @@ impl BitToken {
     }
 }
 
-/// PCI ROM Expansion Header as defined in PCI Firmware Specification
-
-// ROM Image Header (PCI Expansion ROM)
-/*
-struct PCI_EXP_ROM_STANDARD
-{
-    u16       sig;                //  00h: ROM Signature 0xaa55
-    u8        reserved [0x16];    //  02h: Reserved (processor architecture unique data)
-    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure  <--- for first image, this is 0x0170 per my dumps.
-
-    Dump of first 32 bytes of first image:
-        [542804.534235] NovaCore:   00000000: 55 aa 7f eb 4b 37 34 30 30 e9 4c 19 77 cc 56 49
-        [542804.534238] NovaCore:   00000010: 44 45 4f 20 0d 00 00 00 70 01 a5 15 00 00 49 42
-
-    u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
-}
-
-Alternative header format used with NBSI:
-struct PCI_EXP_ROM_NBSI
-{
-    u16       sig;                //  00h: ROM Signature 0xaa55
-    u8        reserved [0x14];    //  02h: Reserved (processor architecture unique data)
-    u16       nbsiDataOffset;     //  16h: Offset from header to NBSI image
-    u16       pciDataStrucPtr;    //  18h: Pointer to PCI Data Structure
-    u32       sizeOfBlock;        //  1Ah: <NBSI-specific appendage>
-}
- */
+/// PCI ROM Expansion Header as defined in PCI Firmware Specification.
+/// This is header is at the beginning of every image in the set of
+/// images in the ROM. It contains a pointer to the PCI Data Structure
+/// which describes the image.
+/// For "NBSI" images (NoteBook System Information), the ROM
+/// header deviates from the standard and contains an offset to the
+/// NBSI image however we do not yet parse that in this module and keep
+/// it for future reference.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 struct PciRomHeader {
     /// 00h: Signature (0xAA55)
     pub signature: u16,
-    /// 02h: Reserved bytes for processor architecture unique data (22 bytes)
-    pub reserved: [u8; 22],
+    /// 02h: Reserved bytes for processor architecture unique data (20 bytes)
+    pub reserved: [u8; 20],
     /// 16h: NBSI Data Offset (NBSI-specific, offset from header to NBSI image)
     pub nbsi_data_offset: Option<u16>,
     /// 18h: Pointer to PCI Data Structure (offset from start of ROM image)
     pub pci_data_struct_ptr: u16,
-    /// 1Ah: Size of Block (NBSI-specific)
+    /// 1Ah: Size of block (this is NBSI-specific)
     pub size_of_block: Option<u32>,
 }
 
@@ -575,19 +516,23 @@ impl TryFrom<&[u8]> for PciRomHeader {
     }
 }
 
-/// NVIDIA PCI Data Extension Structure
+/// NVIDIA PCI Data Extension Structure. This is similar to the
+/// PCI Data Structure, but is Nvidia-specific and follows the
+/// PCI Data Structure. It contains some fields that are redundant
+/// with the PCI Data Structure, but are needed for traversing the
+/// BIOS images.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct NpdeStruct {
-    /// Signature ("NPDE")
+    /// 00h: Signature ("NPDE")
     pub signature: [u8; 4],
-    /// NVIDIA PCI Data Extension Revision
+    /// 04h: NVIDIA PCI Data Extension Revision
     pub npci_data_ext_rev: u16,
-    /// NVIDIA PCI Data Extension Length
+    /// 06h: NVIDIA PCI Data Extension Length
     pub npci_data_ext_len: u16,
-    /// Sub-image Length (in 512-byte units)
+    /// 08h: Sub-image Length (in 512-byte units)
     pub subimage_len: u16,
-    /// Last image indicator flag
+    /// 0Ah: Last image indicator flag
     pub last_image: u8,
 }
 
