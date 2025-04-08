@@ -3,6 +3,8 @@
 //! Rust minimal sample.
 
 use kernel::prelude::*;
+use kernel::c_str;
+use kernel::debugfs;
 
 module! {
     type: RustMinimal,
@@ -12,8 +14,27 @@ module! {
     license: "GPL",
 }
 
+struct MyData {
+    x: i32,
+}
+
+impl AsRef<[u8]> for MyData {
+    fn as_ref(&self) -> &[u8] {
+        // Convert `MyData` into a byte slice
+        unsafe {
+            core::slice::from_raw_parts(
+                self as *const MyData as *const u8,
+                core::mem::size_of::<MyData>(),
+            )
+        }
+    }
+}
+
 struct RustMinimal {
     numbers: KVec<i32>,
+    parent: debugfs::DebugfsEntry,
+    entry: debugfs::Envelope<'static, debugfs::DebugfsBlobEntry>,
+    data: KBox::<MyData>,
 }
 
 impl kernel::Module for RustMinimal {
@@ -26,7 +47,18 @@ impl kernel::Module for RustMinimal {
         numbers.push(108, GFP_KERNEL)?;
         numbers.push(200, GFP_KERNEL)?;
 
-        Ok(RustMinimal { numbers })
+        let parent = debugfs::DebugfsEntry::debugfs_create_dir(c_str!("my_debug_dir"), None)?;
+
+        let mut data = KBox::<MyData>::new( MyData {x:3}, GFP_KERNEL)?;
+
+        if let Ok(entry) =
+            debugfs::DebugfsBlobEntry::new(c_str!("blob"), 0x664, Some(&parent), &mut data) {
+            pr_info!("created debugfs entry\n");
+            Ok(Self { numbers, parent, entry, data })
+        } else {
+            pr_info!("failed to create debugfs entry\n");
+            return Err(EINVAL)
+        }
     }
 }
 
