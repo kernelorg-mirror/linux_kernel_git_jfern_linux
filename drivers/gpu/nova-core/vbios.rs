@@ -580,11 +580,12 @@ impl NpdeStruct {
         }
     }
 
-    /// Try to find NPDE in the data
-    fn find_in_data(data: &[u8], pcir_offset: usize, pcir_len: u16) -> Option<Self> {
+    /// Try to find NPDE in the data, the NPDE is right after the PCIR.
+    fn find_in_data(data: &[u8], rom_header: &PciRomHeader, pcir: &PcirStruct) -> Option<Self> {
         // Calculate the offset where NPDE might be located
         // NPDE should be right after the PCIR structure, aligned to 16 bytes
-        let npde_start = (pcir_offset + pcir_len as usize + 0x0F) & !0x0F;
+        let pcir_offset = rom_header.pci_data_struct_ptr as usize;
+        let npde_start = (pcir_offset + pcir.pci_data_struct_len as usize + 0x0F) & !0x0F;
 
         // Check if we have enough data
         if npde_start + 11 > data.len() {
@@ -803,7 +804,7 @@ impl TryFrom<&[u8]> for BiosImageBase {
             .inspect_err(|e| pr_err!("Failed to create PcirStruct: {:?}\n", e))?;
 
         // Look for NPDE structure if this is not an NBSI image (type != 0x70)
-        let npde = NpdeStruct::find_in_data(data, pcir_offset, pcir.pci_data_struct_len);
+        let npde = NpdeStruct::find_in_data(data, &rom_header, &pcir);
 
         // Create a copy of the data
         let mut data_copy = KVec::new();
