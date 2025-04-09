@@ -299,31 +299,14 @@ impl PcirStruct {
     }
 }
 
-/*
-struct BIT_HEADER
-{
-    u16 Id;            // BMP=0x7FFF/BIT=0xB8FF
-    u32 Signature;     // 0x00544942 - BIT Data Structure Signature
-    u16 BCD_Version;   // BIT Version - 0x0100 for 1.00
-    u8 HeaderSize;    // This version is 12 bytes long
-    u8 TokenSize;     // This version has 6 byte long Tokens
-    u8 TokenEntries;  // Number of Entries
-    u8 HeaderChksum;  // 0 Checksum of the header
-};
-
-struct BIT_TOKEN
-{
-    u8 TokenId;       // Token identifier
-    u8 DataVersion;   // Version of token data
-    u16 DataSize;      // Size of token data
-    u32 DataPtr;       // Pointer to token data
-};
- */
 /// BIOS Information Table (BIT) Header
+/// This is the head of the BIT table, that is used to locate the Falcon data.
+/// The BIT table (with its header) is in the PciAtBiosImage and the falcon data
+/// it is pointing to is in the FwSecBiosImage.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 struct BitHeader {
-    /// 0h: BIT Header Identifier (0xB8FF)
+    /// 0h: BIT Header Identifier (BMP=0x7FFF/BIT=0xB8FF)
     pub id: u16,
     /// 2h: BIT Header Signature ("BIT\0")
     pub signature: [u8; 4],
@@ -368,34 +351,17 @@ impl TryFrom<&[u8]> for BitHeader {
     }
 }
 
-/*
-impl BitHeader {
-    /// Verify BIT header checksum
-    pub fn verify_checksum(&self, data: &[u8]) -> bool {
-        if data.len() < self.header_size as usize {
-            return false;
-        }
-
-        let mut sum: u8 = 0;
-        for i in 0..self.header_size as usize {
-            sum = sum.wrapping_add(data[i]);
-        }
-        sum == 0
-    }
-}
-*/
-
 /// BIT Token Entry: Records in the BIT table followed by the BIT header
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 struct BitToken {
-    /// Token identifier
+    /// 00h: Token identifier
     pub id: u8,
-    /// Version of the token data
+    /// 01h: Version of the token data
     pub data_version: u8,
-    /// Size of token data in bytes
+    /// 02h: Size of token data in bytes
     pub data_size: u16,
-    /// Offset to the token data
+    /// 04h: Offset to the token data
     pub data_offset: u16,
 }
 
@@ -458,7 +424,7 @@ struct PciRomHeader {
     /// 16h: NBSI Data Offset (NBSI-specific, offset from header to NBSI image)
     pub nbsi_data_offset: Option<u16>,
     /// 18h: Pointer to PCI Data Structure (offset from start of ROM image)
-    pub pci_data_struct_ptr: u16,
+    pub pci_data_struct_offset: u16,
     /// 1Ah: Size of block (this is NBSI-specific)
     pub size_of_block: Option<u32>,
 }
@@ -508,7 +474,7 @@ impl TryFrom<&[u8]> for PciRomHeader {
         Ok(PciRomHeader {
             signature,
             reserved: [0u8; 20],
-            pci_data_struct_ptr,
+            pci_data_struct_offset: pci_data_struct_ptr,
             size_of_block,
             nbsi_data_offset,
         })
@@ -584,7 +550,7 @@ impl NpdeStruct {
     fn find_in_data(data: &[u8], rom_header: &PciRomHeader, pcir: &PcirStruct) -> Option<Self> {
         // Calculate the offset where NPDE might be located
         // NPDE should be right after the PCIR structure, aligned to 16 bytes
-        let pcir_offset = rom_header.pci_data_struct_ptr as usize;
+        let pcir_offset = rom_header.pci_data_struct_offset as usize;
         let npde_start = (pcir_offset + pcir.pci_data_struct_len as usize + 0x0F) & !0x0F;
 
         // Check if we have enough data
@@ -603,7 +569,7 @@ impl NpdeStruct {
 }
 
 // Use a macro to implement BiosImage enum and methods. This avoids having to
-// repeat each enum type when implementing functions like base() as well.
+// repeat each enum type when implementing functions like base() in BiosImage.
 macro_rules! bios_image {
     (
         $($variant:ident $class:ident),* $(,)?
@@ -672,28 +638,6 @@ bios_image! {
 
 struct PciAtBiosImage {
     base: BiosImageBase,
-    /*
-     * The BIT header (BIOS Information Table)
-     *
-     *  struct BIT_HEADER
-     *  {
-     *      u16   id;                // Identifier
-     *      char  signature[4];      // Signature string
-     *      u16   bcd_version;       // BCD-encoded version
-     *      u8    header_size;       // Size of header
-     *      u8    token_size;        // Size of each token
-     *      u8    token_entries;     // Number of tokens
-     *      u8    checksum;          // Header checksum
-     *  }
-     *
-     *  struct BIT_TOKEN
-     *  {
-     *      u8    id;                // Token identifier
-     *      u8    data_version;      // Token data version
-     *      u16   data_size;         // Token data size
-     *      u16   data_offset;       // Offset to token data
-     *  }
-     */
     bit_header: Option<BitHeader>,
     bit_offset: Option<usize>,
 }
@@ -742,7 +686,9 @@ impl TryFrom<BiosImageBase> for BiosImage {
     }
 }
 
-// BiosImage creation from a byte slice
+/// BiosImage creation from a byte slice. This creates a BiosImageBase
+/// and then converts it to a BiosImage which triggers the constructor of
+/// the specific BiosImage enum variant.
 impl TryFrom<&[u8]> for BiosImage {
     type Error = Error;
 
@@ -753,7 +699,9 @@ impl TryFrom<&[u8]> for BiosImage {
 }
 
 /// BIOS Image structure containing various headers and references
-/// fields base to all BIOS images.
+/// fields base to all BIOS images. Each BiosImage type has a
+/// BiosImageBase type along with other image-specific fields.
+/// Note that Rust favors composition of types over inheritance.
 #[derive(Debug)]
 #[allow(dead_code)]
 struct BiosImageBase {
@@ -788,7 +736,7 @@ impl TryFrom<&[u8]> for BiosImageBase {
             .inspect_err(|e| pr_err!("Failed to create PciRomHeader: {:?}\n", e))?;
 
         // Get the PCI Data Structure using the pointer from the ROM header
-        let pcir_offset = rom_header.pci_data_struct_ptr as usize;
+        let pcir_offset = rom_header.pci_data_struct_offset as usize;
         if pcir_offset + 24 > data.len() {
             pr_err!(
                 "PCIR offset {:#x} out of bounds (data length: {})\n",
@@ -821,6 +769,8 @@ impl TryFrom<&[u8]> for BiosImageBase {
     }
 }
 
+/// The PciAt BIOS image is typically the first BIOS image type found in the
+/// BIOS image chain. It contains the BIT header and the BIT tokens.
 impl PciAtBiosImage {
     /// Find a byte pattern in a slice
     fn find_byte_pattern(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -890,6 +840,8 @@ impl TryFrom<BiosImageBase> for PciAtBiosImage {
     }
 }
 
+/// The PmuLookupTableEntry structure is a single entry in the PmuLookupTable.
+/// See the PmuLookupTable description for more information.
 #[allow(dead_code)]
 struct PmuLookupTableEntry {
     application_id: u8,
@@ -913,6 +865,9 @@ impl TryFrom<&[u8]> for PmuLookupTableEntry {
     }
 }
 
+/// The PmuLookupTableEntry structure is used to find the PmuLookupTableEntry
+/// for a given application ID. The table of entries is pointed to by the falcon
+/// data pointer in the BIT table, and is used to locate the Falcon Ucode.
 #[allow(dead_code)]
 struct PmuLookupTable {
     version: u8,
@@ -993,6 +948,9 @@ impl PmuLookupTable {
     }
 }
 
+/// The FwSecBiosImage structure contains the PMU table and the Falcon Ucode.
+/// The PMU table contains voltage/frequency tables as well as a pointer to the
+/// Falcon Ucode.
 impl FwSecBiosImage {
     fn setup_falcon_data(
         &mut self,
@@ -1044,6 +1002,9 @@ impl FwSecBiosImage {
         Ok(())
     }
 
+    /// TODO: These were borrowed from the old code for integrating this module
+    /// with the outside world. They should be cleaned up and integrated properly.
+    /// 
     /// Get the FwSec header (FalconUCodeDescV3)
     fn fwsec_header(&self) -> Result<&FalconUCodeDescV3> {
         // Get the falcon ucode offset that was found in setup_falcon_data
