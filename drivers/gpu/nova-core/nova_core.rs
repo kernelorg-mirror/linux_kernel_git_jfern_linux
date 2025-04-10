@@ -28,6 +28,7 @@ mod firmware;
 mod gpu;
 mod regs;
 mod util;
+mod vbios;
 
 kernel::module_pci_driver! {
     type: driver::NovaCore,
