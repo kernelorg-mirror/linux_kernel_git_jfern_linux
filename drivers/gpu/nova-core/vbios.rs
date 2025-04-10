@@ -24,7 +24,12 @@ const FALCON_UCODE_ENTRY_APPID_FWSEC_PROD: u8 = 0x85;
 /// VBIOS data structure
 pub(crate) struct Vbios {
     pub fwsec_image: Option<FwSecBiosImage>,
-    /// VBIOS data
+    /// VBIOS data: As BIOS images are scanned, they are added to this vector
+    /// for reference or copying into other data structures. It is the entire
+    /// scanned contents of the VBIOS which progressively extends. It is used
+    /// so that we do not re-read any contents that are already read as we use
+    /// the cumulative length read so far, and re-read any gaps as we extend
+    /// the length.
     #[allow(dead_code)]
     data: KVec<u8>,
 }
@@ -56,17 +61,22 @@ impl Vbios {
         offset: usize,
         len: usize,
     ) -> Result {
+        if offset > BIOS_MAX_SCAN_LEN {
+            pr_err!("Error: exceeded BIOS scan limit.\n");
+            return Err(EINVAL);
+        }
+
         // If offset is beyond current data size, fill the gap first
         let current_len = data.len();
+        let mut gap_bytes = 0;
 
         if offset > current_len {
             // Calculate bytes to read to fill the gap
-            let gap_bytes = offset - current_len;
-            Self::read_more(bar0, data, gap_bytes)?;
+            gap_bytes = offset - current_len;
         }
 
         // Now read the requested bytes at the offset
-        Self::read_more(bar0, data, len)
+        Self::read_more(bar0, data, gap_bytes + len)
     }
 
     fn read_bios_image_at_offset(
@@ -106,17 +116,10 @@ impl Vbios {
             // Try to parse a BIOS image at the current offset
             // This will now check for all valid ROM signatures (0xAA55, 0xBB77, 0x4E56)
             let image_size = Self::read_bios_image_at_offset(bar0, &mut data, cur_offset, 1024)
-                .and_then(|image| {
-                    image.image_size_bytes().inspect_err(|_| {
-                        pr_err!(
-                            "Invalid get image size at offset {:#x}, stopping scan\n",
-                            cur_offset
-                        );
-                    })
-                })
+                .and_then(|image| image.image_size_bytes())
                 .inspect_err(|e| {
                     pr_err!(
-                        "Failed to parse BIOS image at offset {:#x}: {:?}\n",
+                        "Failed to parse initial BIOS image headers at offset {:#x}: {:?}\n",
                         cur_offset,
                         e
                     );
@@ -143,9 +146,9 @@ impl Vbios {
                 image_type
             );
 
-            // Get a reference to the image before we potentially use full_image in all_images
+            // Get references to images we will need after the loop, in order to
+            // setup the falcon data offset.
             let is_last = full_image.is_last();
-
             match full_image {
                 BiosImage::PciAt(image) => {
                     pci_at_image = Some(image);
@@ -171,9 +174,9 @@ impl Vbios {
             cur_offset += image_size;
             cur_offset = (cur_offset + 511) & !511;
 
-            // Safety check - don't go beyond 1MB
+            // Safety check - don't go beyond BIOS_MAX_SCAN_LEN (1MB)
             if cur_offset > BIOS_MAX_SCAN_LEN {
-                pr_err!("Error: exceeded 1MB limit, stopping BIOS scan\n");
+                pr_err!("Error: exceeded BIOS scan limit, stopping scan\n");
                 break;
             }
         } // end of loop
@@ -694,7 +697,13 @@ impl TryFrom<&[u8]> for BiosImage {
 
     fn try_from(data: &[u8]) -> Result<Self> {
         let base = BiosImageBase::try_from(data)?;
-        base.to_image()
+        let image = base.to_image()?;
+
+        image.image_size_bytes().inspect_err(|_| {
+            pr_err!("Invalid image size computed during BiosImage creation\n")
+        })?;
+
+        Ok(image)
     }
 }
 
