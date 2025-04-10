@@ -8,6 +8,7 @@ use crate::driver::Bar0;
 use crate::falcon::{gsp::Gsp, sec2::Sec2, Falcon};
 use crate::firmware::fwsec::{FwsecCommand, FwsecFirmware};
 use crate::firmware::Firmware;
+use crate::gsp;
 use crate::gsp::fb::FbLayout;
 use crate::regs;
 use crate::util;
@@ -172,6 +173,7 @@ pub(crate) struct Gpu {
     // System memory page required for flushing all pending GPU-side memory writes done through
     // PCIE into system memory.
     sysmem_flush: DmaObject,
+    wpr_meta: DmaObject,
 }
 
 #[pinned_drop]
@@ -321,6 +323,31 @@ impl Gpu {
         }
 
         dev_info!(pdev.as_ref(), "WPR2: {:#x}-{:#x}\n", wpr2_lo, wpr2_hi);
+
+        let _libos = crate::gsp::GspSharedMemObjects::new(pdev.as_ref())?;
+
+        let wpr_meta = gsp::build_wpr_meta(pdev.as_ref(), &fw, &fb_layout)?;
+        let _wpr_handle = wpr_meta.dma_handle();
+
+        pr_info!("Trying to run Booter loader...\n");
+
+        sec2_falcon.reset(&bar)?;
+        sec2_falcon.dma_load(&bar, &fw.booter_load)?;
+        // let (mbox0, mbox1) = sec2_falcon.boot(
+        //     &bar,
+        //     &timer,
+        //     Some(wpr_handle as u32),
+        //     Some((wpr_handle >> 32) as u32),
+        // )?;
+        // let (wpr2_lo, wpr2_hi) = with_bar!(bar, |b| {
+        //     let wpr2_lo = (regs::PfbPriMmuWpr2AddrLo::read(&*b).lo_val() as u64) << 12;
+        //     let wpr2_hi = (regs::PfbPriMmuWpr2AddrHi::read(&*b).hi_val() as u64) << 12;
+        //
+        //     (wpr2_lo, wpr2_hi)
+        // })?;
+        // dev_info!(pdev.as_ref(), "MBOX: {:#x},{:#x}\n", mbox0, mbox1,);
+        // dev_info!(pdev.as_ref(), "WPR2: {:#x}-{:#x}\n", wpr2_lo, wpr2_hi);
+
         dev_info!(pdev.as_ref(), "GPU instance built\n");
 
         Ok(pin_init!(Self {
@@ -328,6 +355,7 @@ impl Gpu {
             bar,
             fw,
             sysmem_flush,
+            wpr_meta,
         }))
     }
 }
