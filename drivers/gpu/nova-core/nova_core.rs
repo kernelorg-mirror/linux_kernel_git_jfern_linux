@@ -21,6 +21,7 @@ mod macros {
 }
 
 mod devinit;
+mod dma;
 mod driver;
 mod firmware;
 mod gpu;
