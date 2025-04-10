@@ -2,9 +2,6 @@
 
 //! Falcon microprocessor base support
 
-// To be removed when all code is used.
-#![expect(dead_code)]
-
 use core::time::Duration;
 use hal::FalconHal;
 use kernel::bindings;
