@@ -2,6 +2,7 @@
 
 use kernel::{device, devres::Devres, error::code::*, pci, prelude::*};
 
+use crate::devinit;
 use crate::driver::Bar0;
 use crate::firmware::Firmware;
 use crate::regs;
@@ -180,6 +181,10 @@ impl Gpu {
             spec.chipset.arch(),
             spec.revision
         );
+
+        // We must wait for GFW_BOOT completion before doing any significant setup on the GPU.
+        devinit::wait_gfw_boot_completion(&bar)
+            .inspect_err(|_| dev_err!(pdev.as_ref(), "GFW boot did not complete"))?;
 
         Ok(pin_init!(Self { spec, bar, fw }))
     }
