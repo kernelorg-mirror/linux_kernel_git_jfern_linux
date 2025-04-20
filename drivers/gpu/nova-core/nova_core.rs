@@ -26,6 +26,7 @@ mod driver;
 mod falcon;
 mod firmware;
 mod gpu;
+mod gsp;
 mod regs;
 mod util;
 mod vbios;

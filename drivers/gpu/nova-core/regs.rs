@@ -53,6 +53,12 @@ register!(NV_PFB_NISO_FLUSH_SYSMEM_ADDR_HI @ 0x00100c40 {
     23:0    adr_63_40 as u32;
 });
 
+register!(NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE @ 0x00100ce0 {
+    3:0     lower_scale as u8;
+    9:4     lower_mag as u8;
+    30:30   ecc_mode_enabled as bool;
+});
+
 /* PGC6 */
 
 register!(NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK @ 0x00118128 {
@@ -62,6 +68,27 @@ register!(NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK @ 0x00118128 {
 // TODO: This is an array of registers.
 register!(NV_PGC6_AON_SECURE_SCRATCH_GROUP_05 @ 0x00118234 {
     31:0    value as u32;
+});
+
+register!(NV_PGC6_AON_SECURE_SCRATCH_GROUP_42 @ 0x001183a4 {
+    31:0    value as u32;
+});
+
+/* PDISP */
+
+register!(NV_PDISP_VGA_WORKSPACE_BASE @ 0x00625f04 {
+    3:3     status_valid as bool;
+    31:8    addr as u32;
+});
+
+/* FUSE */
+
+register!(NV_FUSE_STATUS_OPT_DISPLAY_MAXWELL @ 0x00021c04 {
+    0:0     display_disabled as bool;
+});
+
+register!(NV_FUSE_STATUS_OPT_DISPLAY_AMPERE @ 0x00820c04 {
+    0:0     display_disabled as bool;
 });
 
 /* PFALCON */
