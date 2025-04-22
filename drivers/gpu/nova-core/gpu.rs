@@ -169,8 +169,8 @@ pub(crate) struct Gpu {
     /// MMIO mapping of PCI BAR 0
     bar: Devres<Bar0>,
     fw: Firmware,
-    // System memory page required for flushing all pending GPU-side memory writes done through
-    // PCIE into system memory.
+    /// System memory page required for flushing all pending GPU-side memory writes done through
+    /// PCIE into system memory, via sysmembar (A GPU-initiated HW memory-barrier operation).
     sysmem_flush: DmaObject,
 }
 
@@ -215,7 +215,13 @@ impl Gpu {
         devinit::wait_gfw_boot_completion(&bar)
             .inspect_err(|_| dev_err!(pdev.as_ref(), "GFW boot did not complete"))?;
 
-        // System memory page required for sysmembar to properly flush into system memory.
+        // System memory page required for sysmembar which is a GPU-initiated hardware
+        // memory-barrier operation that flushes all pending GPU-side memory writes that
+        // were done through PCIE, to system memory. It is required for Falcon to be reset
+        // as the reset operation involves a reset handshake. When the falcon acks the
+        // reset, it writes its acknowledgement into system memory, but for this write to
+        // be visible to the host, the falcon needs to do sysmembar to flush
+        // its writes and prevent the driver from timing out.
         let sysmem_flush = {
             let page = DmaObject::new(pdev.as_ref(), kernel::bindings::PAGE_SIZE)?;
 
