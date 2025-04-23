@@ -10,8 +10,8 @@
 //! 3. Clock and PLL configuration.
 //! 4. Thermal management.
 //!
-//! devinit itself is a 'script' which is interpreted by the PMU microcontroller of
-//! the GPU by an interpreter program.
+//! devinit itself is a 'script' which is interpreted by a microcontroller of
+//! the GPU by an interpreter program (typically running on the PMU).
 //!
 //! Note that the devinit sequence also needs to run during suspend/resume at runtime.
 
@@ -30,7 +30,7 @@ use crate::regs;
 ///
 /// The GPU firmware (gfw) code includes several components that execute before the driver loads.
 /// These components are located in the VBIOS ROM and are executed in a sequence on these different
-/// microcontrollers. The devinit sequence itself runs on the PMU, and the FWSEC runs on the GSP.
+/// microcontrollers. The devinit sequence typically runs on the PMU, and the FWSEC runs on the GSP.
 ///
 /// This function specifically waits for a signal indicating core initialization is complete before
 /// which not much can be done. This signal is setup by the FWSEC running on the GSP in Heavy-secured
