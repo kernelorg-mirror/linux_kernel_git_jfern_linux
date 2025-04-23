@@ -27,4 +27,5 @@ vGPU manager VFIO driver and the nova-drm driver.
    :titlesonly:
 
    core/guidelines
+   core/vbios
    core/todo
