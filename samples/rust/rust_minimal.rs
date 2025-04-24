@@ -34,8 +34,10 @@ struct RustMinimal {
     numbers: KVec<i32>,
     parent: debugfs::DebugfsEntry,
     entry: debugfs::Envelope<'static, debugfs::DebugfsBlobEntry>,
-    data: KBox::<MyData>,
+    data: &'static MyData,
 }
+
+static data: MyData = MyData { x: 3 };
 
 impl kernel::Module for RustMinimal {
     fn init(_module: &'static ThisModule) -> Result<Self> {
@@ -49,12 +51,10 @@ impl kernel::Module for RustMinimal {
 
         let parent = debugfs::DebugfsEntry::debugfs_create_dir(c_str!("my_debug_dir"), None)?;
 
-        let mut data = KBox::<MyData>::new( MyData {x:3}, GFP_KERNEL)?;
-
         if let Ok(entry) =
-            debugfs::DebugfsBlobEntry::new(c_str!("blob"), 0x664, Some(&parent), &mut data) {
+            debugfs::DebugfsBlobEntry::new(c_str!("blob"), 0x664, Some(&parent), &data) {
             pr_info!("created debugfs entry\n");
-            Ok(Self { numbers, parent, entry, data })
+            Ok(Self { numbers, parent, entry, data: &data })
         } else {
             pr_info!("failed to create debugfs entry\n");
             return Err(EINVAL)

@@ -69,11 +69,11 @@ unsafe impl Send for DebugfsBlobEntry {}
 unsafe impl Sync for DebugfsBlobEntry {}
 
 impl DebugfsBlobEntry {
-    pub fn new<'a, T: AsRef<[u8]>>(
+    pub fn new<'a, T>(
         name: &CStr,
         mode: bindings::umode_t,
         parent: Option<&DebugfsEntry>,
-        data: &'a mut T,
+        data: &'a T,
     ) -> Result<Envelope<'a, Self>> {
         let _parent: *mut bindings::dentry = match parent {
             // To do: probably should test for parent == PTR_ERR here
@@ -84,7 +84,7 @@ impl DebugfsBlobEntry {
         let mut entry = KBox::<DebugfsBlobEntry>::new(DebugfsBlobEntry {
             dentry: core::ptr::null_mut(), // Assign it to NULL for now
             blob: { bindings::debugfs_blob_wrapper {
-                data: data as *mut T as *mut core::ffi::c_void, // Pointer to the data
+                data: data as *const T as *mut core::ffi::c_void, // Pointer to the data
                 size: core::mem::size_of_val(data),
             }},
         }, GFP_KERNEL)?;
