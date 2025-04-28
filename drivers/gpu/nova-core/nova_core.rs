@@ -2,6 +2,24 @@
 
 //! Nova Core GPU Driver
 
+#[macro_use]
+mod macros {
+    /// Convenience macro to run a closure while holding [`crate::driver::Bar0`].
+    ///
+    /// If the bar cannot be acquired, then `ENXIO` is returned.
+    ///
+    /// If a `?` is present before the `bar` argument, then the `Result` returned by the closure is
+    /// merged into the `Result` of the macro itself to avoid having a `Result<Result<>>`.
+    macro_rules! with_bar {
+        ($bar:expr, $closure:expr) => {
+            $bar.try_access_with($closure).ok_or(ENXIO)
+        };
+        (? $bar:expr, $closure:expr) => {
+            with_bar!($bar, $closure).and_then(|r| r)
+        };
+    }
+}
+
 mod driver;
 mod firmware;
 mod gpu;
