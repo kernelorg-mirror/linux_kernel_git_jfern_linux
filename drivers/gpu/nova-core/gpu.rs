@@ -3,6 +3,7 @@
 use kernel::{device, devres::Devres, error::code::*, pci, prelude::*};
 
 use crate::devinit;
+use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::firmware::Firmware;
 use crate::regs;
@@ -158,12 +159,32 @@ impl Spec {
 }
 
 /// Structure holding the resources required to operate the GPU.
-#[pin_data]
+#[pin_data(PinnedDrop)]
 pub(crate) struct Gpu {
     spec: Spec,
     /// MMIO mapping of PCI BAR 0
     bar: Devres<Bar0>,
     fw: Firmware,
+    // System memory page required for flushing all pending GPU-side memory writes done through
+    // PCIE into system memory.
+    sysmem_flush: DmaObject,
+}
+
+#[pinned_drop]
+impl PinnedDrop for Gpu {
+    fn drop(self: Pin<&mut Self>) {
+        // Unregister the sysmem flush page before we release it.
+        let _ = with_bar!(&self.bar, |b| {
+            regs::NV_PFB_NISO_FLUSH_SYSMEM_ADDR::default()
+                .set_adr_39_08(0)
+                .write(b);
+            if self.spec.chipset >= Chipset::GA102 {
+                regs::NV_PFB_NISO_FLUSH_SYSMEM_ADDR_HI::default()
+                    .set_adr_63_40(0)
+                    .write(b);
+            }
+        });
+    }
 }
 
 impl Gpu {
@@ -186,6 +207,32 @@ impl Gpu {
         devinit::wait_gfw_boot_completion(&bar)
             .inspect_err(|_| dev_err!(pdev.as_ref(), "GFW boot did not complete"))?;
 
-        Ok(pin_init!(Self { spec, bar, fw }))
+        // System memory page required for sysmembar to properly flush into system memory.
+        let sysmem_flush = {
+            let page = DmaObject::new(pdev.as_ref(), kernel::bindings::PAGE_SIZE)?;
+
+            // Register the sysmem flush page.
+            with_bar!(bar, |b| {
+                let handle = page.dma_handle();
+
+                regs::NV_PFB_NISO_FLUSH_SYSMEM_ADDR::default()
+                    .set_adr_39_08((handle >> 8) as u32)
+                    .write(b);
+                if spec.chipset >= Chipset::GA102 {
+                    regs::NV_PFB_NISO_FLUSH_SYSMEM_ADDR_HI::default()
+                        .set_adr_63_40((handle >> 40) as u32)
+                        .write(b);
+                }
+            })?;
+
+            page
+        };
+
+        Ok(pin_init!(Self {
+            spec,
+            bar,
+            fw,
+            sysmem_flush,
+        }))
     }
 }
