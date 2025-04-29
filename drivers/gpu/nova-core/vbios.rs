@@ -2,9 +2,6 @@
 
 //! VBIOS extraction and parsing.
 
-// To be removed when all code is used.
-#![expect(dead_code)]
-
 use crate::driver::Bar0;
 use crate::firmware::FalconUCodeDescV3;
 use core::convert::TryFrom;
