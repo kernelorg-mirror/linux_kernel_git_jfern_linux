@@ -89,13 +89,19 @@ impl TryFrom<u8> for FalconCoreRevSubversion {
 /// register.
 #[repr(u8)]
 #[derive(Debug, Default, Copy, Clone)]
+/// Security mode of the Falcon microprocessor.
+/// See falcon.rst for more details.
 pub(crate) enum FalconSecurityModel {
     /// Non-Secure: runs unsigned code without privileges.
     #[default]
     None = 0,
-    /// Low-secure: runs unsigned code with some privileges. Can only be entered from `Heavy` mode.
+    /// Light-Secured (LS): runs signed code with some privileges
+    /// Its signature can only be verified and entered from `Heavy` mode.
+    /// Also known as Privilege Level 2 or PL2.
     Light = 2,
-    /// High-Secure: runs signed code with full privileges.
+    /// Heavy-Secured: runs signed code with full privileges.
+    /// Its signature can only be verified by the Falcon Boot ROM (BROM).
+    /// Also known as Privilege Level 3 or PL3.
     Heavy = 3,
 }
 
@@ -117,10 +123,13 @@ impl TryFrom<u8> for FalconSecurityModel {
 }
 
 /// Signing algorithm for a given firmware, used in the [`crate::regs::NV_PFALCON2_FALCON_MOD_SEL`]
-/// register.
+/// register. It is passed to the Falcon Boot ROM (BROM) as a parameter.
 #[repr(u8)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum FalconModSelAlgo {
+    /// AES.
+    #[expect(dead_code)]
+    Aes = 0,
     /// RSA3K.
     #[default]
     Rsa3k = 1,
@@ -184,15 +193,19 @@ pub(crate) enum FalconMem {
     Dmem,
 }
 
-/// Target/source of a DMA transfer to/from falcon memory.
+/// FBIF (Framebuffer Interface) aperture type. Used to determine
+/// the memory type of the external memory access for a DMA memory
+/// transfer (by the Falcon's Framebuffer DMA (FBDMA) engine located
+/// inside the falcon). See falcon.rst for more details.
 #[derive(Debug, Clone, Default)]
 pub(crate) enum FalconFbifTarget {
     /// VRAM.
     #[default]
+    /// Local Framebuffer (GPU's VRAM memory)
     LocalFb = 0,
-    /// Coherent system memory.
+    /// Coherent system memory (System DRAM).
     CoherentSysmem = 1,
-    /// Non-coherent system memory.
+    /// Non-coherent system memory (System DRAM).
     NoncoherentSysmem = 2,
 }
 
