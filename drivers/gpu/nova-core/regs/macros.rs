@@ -68,6 +68,7 @@
 ///
 /// // Flip the `start` switch for the CPU core which base address is at `CPU_BASE`.
 /// let cpuctl = CPU_CTL::read(&bar, CPU_BASE);
+/// pr_info!("CPU CTL: {:#x}", cpuctl);
 /// cpuctl.set_start(true).write(&bar, CPU_BASE);
 /// ```
 macro_rules! register {

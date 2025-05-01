@@ -148,8 +148,7 @@ pub(crate) struct Spec {
 
 impl Spec {
     fn new(bar: &Devres<Bar0>) -> Result<Spec> {
-        let bar = bar.try_access().ok_or(ENXIO)?;
-        let boot0 = regs::NV_PMC_BOOT_0::read(&*bar);
+        let boot0 = with_bar!(bar, regs::NV_PMC_BOOT_0::read)?;
 
         Ok(Self {
             chipset: boot0.chipset()?,
