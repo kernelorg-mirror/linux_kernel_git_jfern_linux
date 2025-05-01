@@ -6,6 +6,7 @@ use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::falcon::{gsp::Gsp, sec2::Sec2, Falcon};
+use crate::firmware::fwsec::{FwsecCommand, FwsecFirmware};
 use crate::firmware::Firmware;
 use crate::gsp::fb::FbLayout;
 use crate::regs;
@@ -196,7 +197,11 @@ impl Gpu {
         bar: Devres<Bar0>,
     ) -> Result<impl PinInit<Self>> {
         let spec = Spec::new(&bar)?;
-        let fw = Firmware::new(pdev.as_ref(), spec.chipset, "535.113.01")?;
+        let fw = Firmware::new(
+            pdev.as_ref(),
+            spec.chipset,
+            crate::firmware::FIRMWARE_VERSION,
+        )?;
 
         dev_info!(
             pdev.as_ref(),
@@ -244,7 +249,18 @@ impl Gpu {
         let fb_layout = FbLayout::new(spec.chipset, &bar)?;
         dev_dbg!(pdev.as_ref(), "{:#x?}\n", fb_layout);
 
-        let _bios = Vbios::new(pdev, &bar)?;
+        let bios = Vbios::new(pdev, &bar)?;
+
+        let _fwsec_frts = FwsecFirmware::new(
+            &gsp_falcon,
+            pdev.as_ref(),
+            &bar,
+            &bios,
+            FwsecCommand::Frts {
+                frts_addr: fb_layout.frts.start,
+                frts_size: fb_layout.frts.end - fb_layout.frts.start,
+            },
+        )?;
 
         Ok(pin_init!(Self {
             spec,

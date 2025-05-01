@@ -8,8 +8,11 @@ use kernel::firmware;
 use kernel::prelude::*;
 use kernel::str::CString;
 
+use crate::dma::DmaObject;
 use crate::gpu;
 use crate::gpu::Chipset;
+
+pub(crate) mod fwsec;
 
 pub(crate) const FIRMWARE_VERSION: &str = "535.113.01";
 
@@ -84,6 +87,21 @@ impl FalconUCodeDescV3 {
     pub(crate) fn size(&self) -> usize {
         ((self.hdr & 0xffff0000) >> 16) as usize
     }
+}
+
+/// Patch the `ucode_dma` firmware at offset `sig_base_img` with `signature`.
+fn patch_signature(ucode_dma: &mut DmaObject, signature: &[u8], sig_base_img: usize) -> Result<()> {
+    if sig_base_img + signature.len() > ucode_dma.size() {
+        return Err(ERANGE);
+    }
+
+    // SAFETY: we are the only user of this object, so there cannot be any race.
+    let dst = unsafe { ucode_dma.start_ptr_mut().add(sig_base_img) };
+
+    // SAFETY: `signature` and `dst` are valid, properly aligned, and do not overlap.
+    unsafe { core::ptr::copy_nonoverlapping(signature.as_ptr(), dst, signature.len()) };
+
+    Ok(())
 }
 
 pub(crate) struct ModInfoBuilder<const N: usize>(firmware::ModInfoBuilder<N>);
