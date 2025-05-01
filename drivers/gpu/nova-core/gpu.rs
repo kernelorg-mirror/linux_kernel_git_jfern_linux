@@ -7,6 +7,7 @@ use crate::dma::DmaObject;
 use crate::driver::Bar0;
 use crate::falcon::{gsp::Gsp, sec2::Sec2, Falcon};
 use crate::firmware::Firmware;
+use crate::gsp::fb::FbLayout;
 use crate::regs;
 use crate::util;
 use crate::vbios::Vbios;
@@ -239,6 +240,9 @@ impl Gpu {
         gsp_falcon.clear_swgen0_intr(&bar)?;
 
         let _sec2_falcon = Falcon::<Sec2>::new(pdev.as_ref(), spec.chipset, &bar, true)?;
+
+        let fb_layout = FbLayout::new(spec.chipset, &bar)?;
+        dev_dbg!(pdev.as_ref(), "{:#x?}\n", fb_layout);
 
         let _bios = Vbios::new(pdev, &bar)?;
 
