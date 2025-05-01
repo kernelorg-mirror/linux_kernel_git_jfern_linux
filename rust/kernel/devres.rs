@@ -196,3 +196,9 @@ impl<T> Drop for Devres<T> {
         DevresInner::remove_action(&self.0);
     }
 }
+
+impl<T> AsRef<Device> for Devres<T> {
+    fn as_ref(&self) -> &Device {
+        &self.0.dev
+    }
+}
