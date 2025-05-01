@@ -183,7 +183,10 @@ pub(crate) struct Gpu {
 }
 
 impl Gpu {
-    pub(crate) fn new(pdev: &pci::Device, bar: Devres<Bar0>) -> Result<impl PinInit<Self>> {
+    pub(crate) fn new(
+        pdev: &pci::Device<device::Bound>,
+        bar: Devres<Bar0>,
+    ) -> Result<impl PinInit<Self>> {
         let spec = Spec::new(&bar)?;
         let fw = Firmware::new(pdev.as_ref(), &spec, "535.113.01")?;
 
