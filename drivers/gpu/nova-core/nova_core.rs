@@ -23,6 +23,7 @@ mod macros {
 mod devinit;
 mod dma;
 mod driver;
+mod falcon;
 mod firmware;
 mod gpu;
 mod regs;
