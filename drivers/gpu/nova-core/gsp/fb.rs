@@ -16,10 +16,6 @@ fn align_down(value: u64, align: u64) -> u64 {
     value & !(align - 1)
 }
 
-fn align64(value: u64, alignment: u64) -> u64 {
-    (value + alignment - 1) & !(alignment - 1)
-}
-
 fn calc_wpr_heap(chipset: Chipset, fb_size_fb: u64) -> u64 {
     let (carveout, heap_min) = if chipset >= Chipset::GA102 {
         (
@@ -35,14 +31,9 @@ fn calc_wpr_heap(chipset: Chipset, fb_size_fb: u64) -> u64 {
 
     let size = carveout
         + nvfw::GSP_FW_HEAP_PARAM_BASE_RM_SIZE_TU10X as u64
-        + align64(
-            nvfw::GSP_FW_HEAP_PARAM_SIZE_PER_GB_FB as u64 * fb_size_fb,
-            GSP_HEAP_SHIFT,
-        )
-        + align64(
-            nvfw::GSP_FW_HEAP_PARAM_CLIENT_ALLOC_SIZE as u64,
-            GSP_HEAP_SHIFT,
-        );
+        + (nvfw::GSP_FW_HEAP_PARAM_SIZE_PER_GB_FB as u64 * fb_size_fb)
+            .next_multiple_of(GSP_HEAP_SHIFT)
+        + (nvfw::GSP_FW_HEAP_PARAM_CLIENT_ALLOC_SIZE as u64).next_multiple_of(GSP_HEAP_SHIFT);
 
     core::cmp::max(size, heap_min as u64)
 }
@@ -112,7 +103,7 @@ impl FbLayout {
             elf_addr..elf_addr + elf_size
         };
 
-        let fb_size_fb = (fb_len + ((1 << 30) - 1)) / (1 << 30);
+        let fb_size_fb = fb_len.div_ceil(1 << 30);
         let wpr2_heap = {
             const WPR2_HEAP_DOWN_ALIGN: u64 = 0x100000;
             let wpr2_heap_size = calc_wpr_heap(chipset, fb_size_fb);
