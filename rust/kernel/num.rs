@@ -3,13 +3,20 @@
 //! Numerical and binary utilities for primitive types.
 
 /// A trait providing alignment operations for `usize`.
-pub trait UsizeAlign {
+pub trait Align {
     /// Aligns `self` upwards to the nearest multiple of `align`.
-    fn align_up(self, align: usize) -> usize;
+    fn align_up(self, align: Self) -> Self;
 }
 
-impl UsizeAlign for usize {
-    fn align_up(mut self, align: usize) -> usize {
+impl Align for usize {
+    fn align_up(mut self, align: Self) -> Self {
+        self = (self + align - 1) & !(align - 1);
+        self
+    }
+}
+
+impl Align for u64 {
+    fn align_up(mut self, align: Self) -> Self {
         self = (self + align - 1) & !(align - 1);
         self
     }
