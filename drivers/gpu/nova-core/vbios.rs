@@ -11,7 +11,7 @@ use core::convert::TryFrom;
 use kernel::device;
 use kernel::devres::Devres;
 use kernel::error::Result;
-use kernel::num::UsizeAlign;
+use kernel::num::Align;
 use kernel::pci;
 use kernel::prelude::*;
 
