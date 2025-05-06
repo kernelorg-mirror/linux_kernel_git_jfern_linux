@@ -1,0 +1,180 @@
+# Input to bindgen generated with make KBUILD_VERBOSE=1
+
+# BINDGEN nvfw/r570_144_bindings.rs
+  bindgen nvfw/r570_144_bindings.h \
+    --blocklist-type __kernel_s?size_t \
+    --blocklist-type __kernel_ptrdiff_t \
+    --opaque-type xregs_state \
+    --opaque-type desc_struct \
+    --opaque-type arch_lbr_state \
+    --opaque-type local_apic \
+    --opaque-type alt_instr \
+    --opaque-type x86_msi_data \
+    --opaque-type x86_msi_addr_lo \
+    --opaque-type kunit_try_catch \
+    --opaque-type spinlock \
+    --no-doc-comments \
+    --blocklist-function __list_.*_report \
+    --blocklist-item ARCH_SLAB_MINALIGN \
+    --allowlist-type=GspStaticConfigInfo_t \
+    --allowlist-var=NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO \
+    --allowlist-type=GspFwWprMeta \
+    --allowlist-var=GSP_FW_WPR_META_MAGIC \
+    --allowlist-var=GSP_FW_WPR_META_REVISION \
+    --allowlist-type=LibosMemoryRegionKind \
+    --allowlist-type=LibosMemoryRegionLoc \
+    --allowlist-type=LibosMemoryRegionInitArgument \
+    --allowlist-type=GSP_ARGUMENTS_CACHED \
+    --allowlist-var=NV2080_CTRL_GPU_SET_POWER_STATE_GPU_LEVEL_3 \
+    --rust-target 1.68 \
+    --use-core \
+    --with-derive-default \
+    --ctypes-prefix ffi \
+    --no-layout-tests \
+    --no-debug '.*' \
+    --enable-function-attribute-detection \
+    -o nvfw/r570_144_bindings.rs \
+    -- \
+    -Wp,-MMD,nvfw/.r570_144_bindings.rs.d \
+    -nostdinc \
+    -I/home/joelaf/repo/linux-acourbot-gsp/arch/x86/include \
+    -I/home/joelaf/repo/linux-acourbot-gsp/arch/x86/include/generated \
+    -I/home/joelaf/repo/linux-acourbot-gsp/include \
+    -I/home/joelaf/repo/linux-acourbot-gsp/include \
+    -I/home/joelaf/repo/linux-acourbot-gsp/arch/x86/include/uapi \
+    -I/home/joelaf/repo/linux-acourbot-gsp/arch/x86/include/generated/uapi \
+    -I/home/joelaf/repo/linux-acourbot-gsp/include/uapi \
+    -I/home/joelaf/repo/linux-acourbot-gsp/include/generated/uapi \
+    -include /home/joelaf/repo/linux-acourbot-gsp/include/linux/compiler-version.h \
+    -include /home/joelaf/repo/linux-acourbot-gsp/include/linux/kconfig.h \
+    -include /home/joelaf/repo/linux-acourbot-gsp/include/linux/compiler_types.h \
+    -D__KERNEL__ \
+    --target=x86_64-linux-gnu \
+    -fintegrated-as \
+    -Werror=unknown-warning-option \
+    -Werror=ignored-optimization-argument \
+    -Werror=option-ignored \
+    -Werror=unused-command-line-argument \
+    -std=gnu11 \
+    -fshort-wchar \
+    -funsigned-char \
+    -fno-common \
+    -fno-PIE \
+    -fno-strict-aliasing \
+    -mno-sse \
+    -mno-mmx \
+    -mno-sse2 \
+    -mno-3dnow \
+    -mno-avx \
+    -fcf-protection=none \
+    -m64 \
+    -falign-loops=1 \
+    -mno-80387 \
+    -mno-fp-ret-in-387 \
+    -mstack-alignment=8 \
+    -mskip-rax-setup \
+    -march=x86-64 \
+    -mtune=generic \
+    -mno-red-zone \
+    -mcmodel=kernel \
+    -mstack-protector-guard-reg=gs \
+    -mstack-protector-guard-symbol=__ref_stack_chk_guard \
+    -Wno-sign-compare \
+    -fno-asynchronous-unwind-tables \
+    -mretpoline-external-thunk \
+    -mindirect-branch-cs-prefix \
+    -mfunction-return=thunk-extern \
+    -fpatchable-function-entry=16,16 \
+    -fno-delete-null-pointer-checks \
+    -O2 \
+    -fstack-protector-strong \
+    -fno-omit-frame-pointer \
+    -fno-optimize-sibling-calls \
+    -ftrivial-auto-var-init=zero \
+    -fno-stack-clash-protection \
+    -fzero-call-used-regs=used-gpr \
+    -pg \
+    -mfentry \
+    -DCC_USING_NOP_MCOUNT \
+    -DCC_USING_FENTRY \
+    -falign-functions=16 \
+    -fstrict-flex-arrays=3 \
+    -fno-strict-overflow \
+    -fno-stack-check \
+    -Wall \
+    -Wundef \
+    -Werror=implicit-function-declaration \
+    -Werror=implicit-int \
+    -Werror=return-type \
+    -Werror=strict-prototypes \
+    -Wno-format-security \
+    -Wno-trigraphs \
+    -Wno-frame-address \
+    -Wno-address-of-packed-member \
+    -Wmissing-declarations \
+    -Wmissing-prototypes \
+    -Wframe-larger-than=4096 \
+    -Wno-gnu \
+    -Wvla \
+    -Wno-pointer-sign \
+    -Wcast-function-type \
+    -Wimplicit-fallthrough \
+    -Werror=date-time \
+    -Werror=incompatible-pointer-types \
+    -Wenum-conversion \
+    -Wextra \
+    -Wunused \
+    -Wno-unused-but-set-variable \
+    -Wno-unused-const-variable \
+    -Wno-override-init \
+    -Wno-pointer-to-enum-cast \
+    -Wno-tautological-constant-out-of-range-compare \
+    -Wno-unaligned-access \
+    -Wno-enum-compare-conditional \
+    -Wno-missing-field-initializers \
+    -Wno-type-limits \
+    -Wno-shift-negative-value \
+    -Wno-enum-enum-conversion \
+    -Wno-sign-compare \
+    -Wno-unused-parameter \
+    -g \
+    -gdwarf-5 \
+    -DKBUILD_MODFILE='"./r570_144_bindings"' \
+    -DKBUILD_BASENAME='"r570_144_bindings"' \
+    -DKBUILD_MODNAME='"r570_144_bindings"' \
+    -D__KBUILD_MODNAME=kmod_r570_144_bindings \
+    -fno-builtin \
+    -D__BINDGEN__ \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/sdk/nvidia/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/inc/kernel \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/generated \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/inc/libraries \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/arch/nvalloc/common/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/kernel/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//kernel-open/common/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/inc \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/nvidia/interface \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/nvlink/inband/interface \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/inc/swref/published \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/inc/swref \
+    -I/home/joelaf/repo/open-gpu-kernel-modules//src/common/uproc/os/common/include/ \
+    -I/home/joelaf/repo/linux-acourbot-gsp/include/linux \
+    -DPORT_ATOMIC_64_BIT_SUPPORTED=1 \
+    -DPORT_IS_KERNEL_BUILD=1 \
+    -DPORT_IS_CHECKED_BUILD=1 \
+    -DPORT_MODULE_atomic=0 \
+    -DPORT_MODULE_core=0 \
+    -DPORT_MODULE_cpu=0 \
+    -DPORT_MODULE_crypto=0 \
+    -DPORT_MODULE_debug=1 \
+    -DPORT_MODULE_memory=1 \
+    -DPORT_MODULE_safe=0 \
+    -DPORT_MODULE_string=0 \
+    -DPORT_MODULE_sync=0 \
+    -DPORT_MODULE_thread=1 \
+    -DPORT_MODULE_util=0 \
+    -DPORT_MODULE_example=0 \
+    -DPORT_MODULE_mmio=0 \
+    -DPORT_MODULE_time=0 \
+    -DMODULE
