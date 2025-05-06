@@ -255,7 +255,6 @@ impl Gpu {
         dev_dbg!(pdev.as_ref(), "{:#x?}\n", fb_layout);
 
         let bios = Vbios::new(pdev, &bar)?;
-
         let fwsec_frts = FwsecFirmware::new(
             &gsp_falcon,
             pdev.as_ref(),

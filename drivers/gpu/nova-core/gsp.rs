@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
+// Shut up silly warnings for now
+#![allow(dead_code, unused)]
+
 use core::ffi::c_void;
 
 use kernel::device;
@@ -12,7 +15,7 @@ use kernel::{asm, dma_read, dma_write, pr_info};
 use crate::dma::DmaObject;
 use crate::firmware::Firmware;
 use crate::gsp::fb::FbLayout;
-use crate::nvfw::r570_133_07 as fw;
+use crate::nvfw::r570_144 as fw;
 
 pub(crate) mod fb;
 
@@ -60,6 +63,13 @@ trait GspMessageElement {
             size - size_of::<Self>() as u32,
             unsafe { core::ptr::read(ptr as *const Self) },
         ))
+    }
+
+    unsafe fn new(ptr: *mut c_void) -> Self
+    where
+        Self: Sized,
+    {
+        unsafe { core::ptr::read(ptr as *const Self) }
     }
 }
 
@@ -164,15 +174,68 @@ unsafe impl Send for GspCmdq {}
 
 pub(crate) struct GspCmdq {
     // HACK: We only need the next two fields until nova-core can initialise the GSP itself, so make the lifetime checks go away
-    pdev: *mut c_void,
-    drvdata: *mut c_void,
+    // pdev: *mut c_void,
+    // drvdata: *mut c_void,
 
     // HACK: We only need this until nova-core can boot the GSP as well
-    cmdq_info: GspCmdqInfo,
+    // cmdq_info: GspCmdqInfo,
+    msg_count: u32,
+    seq: u32,
     gsp_mem: CoherentAllocation<GspMem>,
+    cpu_ptr: *mut c_void,
+    gsp_ptr: *mut c_void,
 }
 
 impl GspCmdq {
+    // This is equivalent to gsp_shared_init()
+    fn new(dev: &device::Device<device::Bound>) -> Result<GspCmdq> {
+        // TODO: At the moment we assume 4096 PTEs will cover the GspMem object.
+        // Seems reasonable, see the definition for the struct, but we probalby
+        // should calculate it.
+        let mut gsp_mem =
+            CoherentAllocation::<GspMem>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
+
+        // Basically the same as create_pte_array() but we don't skip the first
+        // PTE.
+        // TODO: Also we're creating PTEs for the RMARGS struct that follows
+        // this one which is a bit ugly. Nouveau r535 doesn't seem to explicitly mention
+        // this, so no idea if that was intentional.
+        let ptes = unsafe {
+            let ptr = gsp_mem.start_ptr_mut() as *mut u64;
+            core::slice::from_raw_parts_mut(ptr, size_of::<GspMem>() >> GSP_PAGE_SHIFT)
+        };
+
+        for (i, pte) in ptes.iter_mut().enumerate() {
+            *pte = gsp_mem.dma_handle() as u64 + ((i as u64) << GSP_PAGE_SHIFT);
+        }
+
+        let msg_count = ((0x40000 - GSP_PAGE_SIZE) / GSP_PAGE_SIZE) as u32;
+        dma_write!(gsp_mem[0].cpuq.tx.version = 0);
+        dma_write!(gsp_mem[0].cpuq.tx.size = 0x40000);
+        dma_write!(gsp_mem[0].cpuq.tx.entry_off = GSP_PAGE_SIZE as u32);
+        dma_write!(gsp_mem[0].cpuq.tx.msg_size = GSP_PAGE_SIZE as u32);
+        dma_write!(gsp_mem[0].cpuq.tx.msg_count = msg_count);
+        dma_write!(gsp_mem[0].cpuq.tx.write_ptr = 0);
+        dma_write!(gsp_mem[0].cpuq.tx.flags = 1);
+
+        // TODO: Hard-coded for now because offset_of!() isn't stable for nested types
+        dma_write!(gsp_mem[0].cpuq.tx.rx_hdr_off = 32);
+
+        // Add 0x1000 for the ptes and another 0x1000 for the message queue header
+        let cpu_ptr = unsafe { (gsp_mem.start_ptr_mut() as *mut u8).add(0x2000) as *mut c_void };
+
+        // And another 0x40000 for the gsp queue
+        let gsp_ptr = unsafe { (gsp_mem.start_ptr_mut() as *mut u8).add(0x42000) as *mut c_void };
+
+        Ok(GspCmdq {
+            msg_count,
+            seq: 0,
+            gsp_mem,
+            cpu_ptr,
+            gsp_ptr,
+        })
+    }
+
     // We need the next four accessors because the dma_read macro is failable
     // and uses `?` which requires any calling function to return a Result<>.
     // However in the first instance a dma_read failure probably needs to be dealt with
@@ -201,10 +264,10 @@ impl GspCmdq {
     fn get_free_tx_bytes(self: &Self) -> u32 {
         let wptr = self.cpu_wptr().unwrap();
         let rptr = self.gsp_rptr().unwrap();
-        let mut free = rptr + self.cmdq_info.cnt - wptr - 1;
+        let mut free = rptr + self.msg_count - wptr - 1;
 
-        if free >= self.cmdq_info.cnt {
-            free -= self.cmdq_info.cnt;
+        if free >= self.msg_count {
+            free -= self.msg_count;
         }
 
         free << GSP_PAGE_SHIFT
@@ -214,9 +277,9 @@ impl GspCmdq {
     fn get_used_rx_bytes(self: &Self) -> u32 {
         let rptr = self.cpu_rptr().unwrap();
         let wptr = self.gsp_wptr().unwrap();
-        let mut used = wptr + self.cmdq_info.cnt - rptr;
-        if used >= self.cmdq_info.cnt {
-            used -= self.cmdq_info.cnt;
+        let mut used = wptr + self.msg_count - rptr;
+        if used >= self.msg_count {
+            used -= self.msg_count;
         }
 
         used << GSP_PAGE_SHIFT
@@ -249,7 +312,7 @@ impl GspCmdq {
     unsafe fn alloc_cmd(self: &Self, size: u32) -> *mut c_void {
         while self.get_free_tx_bytes() < size {}
         let wptr = self.cpu_wptr().unwrap();
-        let ptr = (self.cmdq_info.ptr as usize + 0x1000 + (wptr as usize) * 0x1000) as *mut c_void;
+        let ptr = (self.cpu_ptr as usize + (wptr as usize) * 0x1000) as *mut c_void;
         ptr
     }
 
@@ -258,7 +321,7 @@ impl GspCmdq {
             auth_tag_buffer: [0; 16],
             aad_buffer: [0; 16],
             checksum: 0,
-            sequence: self.cmdq_info.seq,
+            sequence: self.seq,
             elem_count: 1,
             pad: 0,
         };
@@ -273,7 +336,7 @@ impl GspCmdq {
             cpu_rm_gfid: 0,
         };
 
-        self.cmdq_info.seq += 1;
+        self.seq += 1;
         rpc.length =
             (size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>() + size_of::<A>()) as u32;
         msg.checksum = GspCmdq::calculate_checksum(&msg, &rpc, &args);
@@ -292,7 +355,7 @@ impl GspCmdq {
             asm!("sfence";);
             dma_write!(self.gsp_mem[0].cpuq.tx.write_ptr = wptr);
             asm!("mfence";);
-            iowrite32(0, self.cmdq_info.falcon);
+            // iowrite32(0, self.cmdq_info.falcon);
         };
 
         Ok(())
@@ -307,8 +370,7 @@ impl GspCmdq {
             }
         };
 
-        let msg_ptr =
-            (self.cmdq_info.msgq_ptr as usize + 0x1000 + (rptr as usize) * 0x1000) as *mut c_void;
+        let msg_ptr = (self.gsp_ptr as usize + (rptr as usize) * 0x1000) as *mut c_void;
         let (rpc_ptr, size, _) = unsafe { GspMsgHeader::new_from_raw(msg_ptr, size)? };
         let (args_ptr, size, _) = unsafe { GspRpcHeader::new_from_raw(rpc_ptr, size)? };
         let (_, _, args) = unsafe { A::new_from_raw(args_ptr, size)? };
@@ -349,48 +411,65 @@ impl GspCmdq {
     }
 }
 
+impl GspMessageElement for fw::GspFwWprMeta {}
+
 pub(crate) fn build_wpr_meta(
     dev: &device::Device<device::Bound>,
     fw: &Firmware,
     fb_layout: &FbLayout,
 ) -> Result<DmaObject> {
     // TODO: Can we use dma_write!() with a properly defined structure instead?
-    let mut wpr_meta = DmaObject::new(dev, GSP_PAGE_SIZE)?;
-    fw::s_GspFwWprMeta::new(wpr_meta.start_ptr_mut())
-        .magic(fw::GSP_FW_WPR_META_MAGIC)
-        .revision(fw::GSP_FW_WPR_META_REVISION as u64)
-        .sysmemAddrOfRadix3Elf(fw.gsp.lvl0_dma_handle() as u64)
-        .sizeOfRadix3Elf(fw.gsp.size() as u64)
-        .sysmemAddrOfBootloader(fw.bootloader.ucode.dma_handle())
-        .sizeOfBootloader(fw.bootloader.ucode.size() as u64)
-        .bootloaderCodeOffset(fw.bootloader.code_offset as u64)
-        .bootloaderDataOffset(fw.bootloader.data_offset as u64)
-        .bootloaderManifestOffset(fw.bootloader.manifest_offset as u64)
-        .sysmemAddrOfSignature(fw.gsp_sigs.dma_handle() as u64)
-        .sizeOfSignature(fw.gsp_sigs.size() as u64)
-        .gspFwRsvdStart(fb_layout.heap.start)
-        .nonWprHeapOffset(fb_layout.heap.start)
-        .nonWprHeapSize(fb_layout.heap.end - fb_layout.heap.start)
-        .gspFwWprStart(fb_layout.wpr2.start)
-        .gspFwHeapOffset(fb_layout.wpr2_heap.start)
-        .gspFwHeapSize(fb_layout.wpr2_heap.end - fb_layout.wpr2_heap.start)
-        .gspFwOffset(fb_layout.elf.start)
-        .bootBinOffset(fb_layout.boot.start)
-        .frtsOffset(fb_layout.frts.start)
-        .frtsSize(fb_layout.frts.end - fb_layout.frts.start)
-        .gspFwWprEnd(fb_layout.vga_workspace.start & !(0x20000 - 1))
-        .gspFwHeapVfPartitionCount(fb_layout.vf_partition_count)
-        .fbSize(fb_layout.fb.end - fb_layout.fb.start)
-        .vgaWorkspaceOffset(fb_layout.vga_workspace.start)
-        .vgaWorkspaceSize(fb_layout.vga_workspace.end - fb_layout.vga_workspace.start)
-        .bootCount(0)
-        .partitionRpcAddr(0)
-        .partitionRpcRequestOffset(0)
-        .partitionRpcReplyOffset(0)
-        .verified(0);
+    // Alistair: I think we can and should now that we have proper bindings
+    // that we can use to define the structure.
+    let mut wpr_meta_dma_object = DmaObject::new(dev, GSP_PAGE_SIZE)?;
+    let mut wpr_meta =
+        unsafe { fw::GspFwWprMeta::new(wpr_meta_dma_object.start_ptr_mut() as *mut c_void) };
+    wpr_meta.magic = fw::GSP_FW_WPR_META_MAGIC as u64;
+    wpr_meta.revision = fw::GSP_FW_WPR_META_REVISION as u64;
+    wpr_meta.sysmemAddrOfRadix3Elf = fw.gsp.lvl0_dma_handle() as u64;
+    wpr_meta.sizeOfRadix3Elf = fw.gsp.size() as u64;
+    wpr_meta.sysmemAddrOfBootloader = fw.bootloader.ucode.dma_handle();
+    wpr_meta.sizeOfBootloader = fw.bootloader.ucode.size() as u64;
+    wpr_meta.bootloaderCodeOffset = fw.bootloader.code_offset as u64;
+    wpr_meta.bootloaderDataOffset = fw.bootloader.data_offset as u64;
+    wpr_meta.bootloaderManifestOffset = fw.bootloader.manifest_offset as u64;
+    wpr_meta
+        .__bindgen_anon_1
+        .__bindgen_anon_1
+        .sysmemAddrOfSignature = fw.gsp_sigs.dma_handle() as u64;
+    wpr_meta.__bindgen_anon_1.__bindgen_anon_1.sizeOfSignature = fw.gsp_sigs.size() as u64;
+    wpr_meta.gspFwRsvdStart = fb_layout.heap.start;
+    wpr_meta.nonWprHeapOffset = fb_layout.heap.start;
+    wpr_meta.nonWprHeapSize = fb_layout.heap.end - fb_layout.heap.start;
+    wpr_meta.gspFwWprStart = fb_layout.wpr2.start;
+    wpr_meta.gspFwHeapOffset = fb_layout.wpr2_heap.start;
+    wpr_meta.gspFwHeapSize = fb_layout.wpr2_heap.end - fb_layout.wpr2_heap.start;
+    wpr_meta.gspFwOffset = fb_layout.elf.start;
+    wpr_meta.bootBinOffset = fb_layout.boot.start;
+    wpr_meta.frtsOffset = fb_layout.frts.start;
+    wpr_meta.frtsSize = fb_layout.frts.end - fb_layout.frts.start;
+    wpr_meta.gspFwWprEnd = fb_layout.vga_workspace.start & !(0x20000 - 1);
+    wpr_meta.gspFwHeapVfPartitionCount = fb_layout.vf_partition_count;
+    wpr_meta.fbSize = fb_layout.fb.end - fb_layout.fb.start;
+    wpr_meta.vgaWorkspaceOffset = fb_layout.vga_workspace.start;
+    wpr_meta.vgaWorkspaceSize = fb_layout.vga_workspace.end - fb_layout.vga_workspace.start;
+    wpr_meta.bootCount = 0;
+    wpr_meta.__bindgen_anon_2.__bindgen_anon_1.partitionRpcAddr = 0;
+    wpr_meta
+        .__bindgen_anon_2
+        .__bindgen_anon_1
+        .partitionRpcRequestOffset = 0;
+    wpr_meta
+        .__bindgen_anon_2
+        .__bindgen_anon_1
+        .partitionRpcReplyOffset = 0;
+    wpr_meta.verified = 0;
 
-    Ok(wpr_meta)
+    Ok(wpr_meta_dma_object)
 }
+
+unsafe impl FromBytes for fw::GSP_ARGUMENTS_CACHED {}
+unsafe impl AsBytes for fw::GSP_ARGUMENTS_CACHED {}
 
 #[allow(unused)]
 pub(crate) struct GspSharedMemObjects {
@@ -398,9 +477,9 @@ pub(crate) struct GspSharedMemObjects {
     loginit: DmaObject,
     logintr: DmaObject,
     logrm: DmaObject,
-    rmargs: DmaObject,
+    rmargs: CoherentAllocation<fw::GSP_ARGUMENTS_CACHED>,
     kern: Option<DmaObject>,
-    shm: DmaObject,
+    cmdq: GspCmdq,
     wpr_meta: DmaObject,
 }
 
@@ -440,17 +519,39 @@ fn create_dma_object(
     libos_arg_nr: usize,
 ) -> Result<DmaObject> {
     let mut obj = DmaObject::new(dev, size)?;
-    create_pte_array(&mut obj);
 
-    let arg_offset = libos_arg_nr * fw::s_LibosMemoryRegionInitArgument::str_size();
+    let arg_offset = libos_arg_nr * size_of::<fw::LibosMemoryRegionInitArgument>();
     let libos_start_ptr = unsafe { libos.start_ptr_mut().add(arg_offset) };
 
-    fw::s_LibosMemoryRegionInitArgument::new(libos_start_ptr)
-        .id8(id8(name))
-        .pa(obj.dma_handle())
-        .size(obj.size() as u64)
-        .kind(fw::LIBOS_MEMORY_REGION_CONTIGUOUS as u8)
-        .loc(fw::LIBOS_MEMORY_REGION_LOC_SYSMEM as u8);
+    let libos_mem_init_args = fw::LibosMemoryRegionInitArgument {
+        id8: id8(name),
+        pa: obj.dma_handle(),
+        size: obj.size() as u64,
+        kind: fw::LibosMemoryRegionKind_LIBOS_MEMORY_REGION_CONTIGUOUS as u8,
+        loc: fw::LibosMemoryRegionLoc_LIBOS_MEMORY_REGION_LOC_SYSMEM as u8,
+    };
+
+    Ok(obj)
+}
+
+fn create_coherent_dma_object<A: AsBytes + FromBytes>(
+    dev: &device::Device<device::Bound>,
+    name: &'static str,
+    libos: &mut DmaObject,
+    libos_arg_nr: usize,
+) -> Result<CoherentAllocation<A>> {
+    let mut obj = CoherentAllocation::<A>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
+
+    let arg_offset = libos_arg_nr * size_of::<fw::LibosMemoryRegionInitArgument>();
+    let libos_start_ptr = unsafe { libos.start_ptr_mut().add(arg_offset) };
+
+    let libos_mem_init_args = fw::LibosMemoryRegionInitArgument {
+        id8: id8(name),
+        pa: obj.dma_handle(),
+        size: obj.size() as u64,
+        kind: fw::LibosMemoryRegionKind_LIBOS_MEMORY_REGION_CONTIGUOUS as u8,
+        loc: fw::LibosMemoryRegionLoc_LIBOS_MEMORY_REGION_LOC_SYSMEM as u8,
+    };
 
     Ok(obj)
 }
@@ -459,10 +560,28 @@ impl GspSharedMemObjects {
     pub(crate) fn new(dev: &device::Device<device::Bound>) -> Result<Self> {
         let mut libos = DmaObject::new(dev, GSP_PAGE_SIZE)?;
 
-        let loginit = create_dma_object(dev, "LOGINIT", 0x10000, &mut libos, 0);
-        let logintr = create_dma_object(dev, "LOGINTR", 0x10000, &mut libos, 1);
-        let logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2);
-        let rmargs = create_dma_object(dev, "RMARGS", 0x1000, &mut libos, 3);
+        let mut loginit = create_dma_object(dev, "LOGINIT", 0x10000, &mut libos, 0)?;
+        create_pte_array(&mut loginit);
+        let mut logintr = create_dma_object(dev, "LOGINTR", 0x10000, &mut libos, 1)?;
+        create_pte_array(&mut logintr);
+        let mut logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
+        create_pte_array(&mut logrm);
+
+        // Creates its own PTE array
+        let cmdq = GspCmdq::new(dev)?;
+        let rmargs =
+            create_coherent_dma_object::<fw::GSP_ARGUMENTS_CACHED>(dev, "RMARGS", &mut libos, 3)?;
+        dma_write!(
+            rmargs[0].messageQueueInitArguments.sharedMemPhysAddr = cmdq.gsp_mem.dma_handle()
+        );
+        dma_write!(rmargs[0].messageQueueInitArguments.pageTableEntryCount = 4096);
+        dma_write!(rmargs[0].messageQueueInitArguments.cmdQueueOffset = 0x2000);
+        dma_write!(rmargs[0].messageQueueInitArguments.statQueueOffset = 0x42000);
+        dma_write!(
+            rmargs[0].srInitArguments.oldLevel = fw::NV2080_CTRL_GPU_SET_POWER_STATE_GPU_LEVEL_3
+        );
+        dma_write!(rmargs[0].srInitArguments.flags = 0);
+        dma_write!(rmargs[0].srInitArguments.bInPMTransition = 1);
 
         // TODO: initialize rmargs and shm as per r535_gsp_rmargs_init.
         // TODO: also kernel from Dave's branch?

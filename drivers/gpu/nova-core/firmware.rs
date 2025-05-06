@@ -24,7 +24,7 @@ pub(crate) mod radix3;
 pub(crate) mod riscv;
 pub(crate) mod sec2;
 
-pub(crate) const FIRMWARE_VERSION: &str = "570.133.07";
+pub(crate) const FIRMWARE_VERSION: &str = "570.144";
 
 /// Structure encapsulating the firmware blobs required for the GPU to operate.
 #[expect(dead_code)]
