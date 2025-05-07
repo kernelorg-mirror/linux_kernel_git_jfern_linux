@@ -411,6 +411,9 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *rpc)
 
 	msg->checksum = upper_32_bits(csum) ^ lower_32_bits(csum);
 
+	print_hex_dump(KERN_INFO, "msg: ", DUMP_PREFIX_OFFSET, 16, 1,
+		       msg, len, true);
+
 	wptr = *gsp->cmdq.wptr;
 	do {
 		do {
@@ -594,11 +597,11 @@ r535_gsp_rpc_send(struct nvkm_gsp *gsp, void *payload, bool wait,
 	void *repv = NULL;
 	int ret;
 
-	if (gsp->subdev.debug >= NV_DBG_TRACE) {
-		nvkm_trace(&gsp->subdev, "rpc fn:%d len:0x%x/0x%zx\n", rpc->function,
+	if (1 || gsp->subdev.debug >= NV_DBG_TRACE) {
+		nvkm_info(&gsp->subdev, "rpc fn:%d len:0x%x/0x%zx\n", rpc->function,
 			   rpc->length, rpc->length - sizeof(*rpc));
-		print_hex_dump(KERN_INFO, "rpc: ", DUMP_PREFIX_OFFSET, 16, 1,
-			       rpc->data, rpc->length - sizeof(*rpc), true);
+		// print_hex_dump(KERN_INFO, "rpc: ", DUMP_PREFIX_OFFSET, 16, 1,
+		// 	       rpc, rpc->length, true);
 	}
 
 	ret = r535_gsp_cmdq_push(gsp, rpc);

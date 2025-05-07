@@ -97,7 +97,6 @@ quiet_cmd_bindgen = BINDGEN $@
 		$(bindgen_target_cflags) $(bindgen_target_extra)
 
 ifdef CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH
-bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/sdk/nvidia/inc
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia/inc/kernel
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia/generated
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia/inc/libraries
@@ -110,7 +109,10 @@ bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia/inte
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/nvlink/inband/interface
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/inc/swref/published
 bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/inc/swref
-bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/uproc/os/common/include/
+bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/uproc/os/common/include
+bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia
+bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/nvidia/arch/nvalloc/unix/include
+bindgen_c_flags_final += -I$(CONFIG_NVIDIA_OPEN_GPU_KERNEL_PATH)/src/common/sdk/nvidia/inc
 
 # So stddef.h can be found
 bindgen_c_flags_final += -I$(srctree)/include/linux
