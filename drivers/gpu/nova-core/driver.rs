@@ -99,6 +99,7 @@ impl pci::Driver for NovaCoreDriver {
 impl Drop for NovaCoreDriver {
     fn drop(&mut self) {
         self.0.gpu.release();
+        self.0.pdev.disable_msi();
         dev_dbg!(self.0.pdev.as_ref(), "Remove Nova GPU driver.\n");
     }
 }

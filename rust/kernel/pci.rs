@@ -395,6 +395,12 @@ impl Device {
         unsafe { bindings::pci_enable_msi(self.as_raw()) };
     }
 
+    /// disable MSI
+    pub fn disable_msi(&self) {
+        // SAFETY: Safe by the type invariants.
+        unsafe { bindings::pci_disable_msi(self.as_raw()) };
+    }
+
     /// Returns the size of the given PCI bar resource.
     pub fn resource_len(&self, bar: u32) -> Result<bindings::resource_size_t> {
         if !Bar::index_is_valid(bar) {
