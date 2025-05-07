@@ -3,7 +3,7 @@
 // Shut up silly warnings for now
 #![allow(dead_code, unused)]
 
-use core::ffi::c_void;
+use core::ffi::{c_char, c_int, c_void};
 
 use kernel::device;
 use kernel::prelude::*;
@@ -25,6 +25,16 @@ pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
 
 extern "C" {
     fn iowrite32(val: u32, addr: *mut c_void);
+    fn print_hex_dump(
+        level: *const c_char,
+        prefix_str: *const c_char,
+        prefix_type: c_int,
+        rowsize: c_int,
+        groupsize: c_int,
+        buf: *const c_char,
+        len: usize,
+        ascii: c_int,
+    );
 }
 
 trait GspMessageElement {
@@ -71,6 +81,11 @@ trait GspMessageElement {
     {
         unsafe { core::ptr::read(ptr as *const Self) }
     }
+}
+
+// Not all message sizes are known at compile time, so we need a ?Sized version.
+trait UnsizedGspMessageElement: GspMessageElement {
+    fn size(&self) -> usize;
 }
 
 #[repr(C)]
@@ -306,6 +321,14 @@ impl GspCmdq {
         ((sum >> 32) as u32) ^ (sum as u32)
     }
 
+    fn calculate_checksum_bytes(msg_bytes: &[u8]) -> u32 {
+        let mut sum: u64 = 0;
+        for &byte in msg_bytes.iter().rev() {
+            sum = sum.rotate_left(8) ^ (byte as u64);
+        }
+        ((sum >> 32) as u32) ^ (sum as u32)
+    }
+
     // Returns an uninitialized pointer to the shared memory region with at
     // least `size` bytes free for writing.
     // SAFETY: Caller must initialize and ensure size is repsected.
@@ -346,6 +369,67 @@ impl GspCmdq {
             let rpc_ptr = msg.copy_to(ptr);
             let args_ptr = rpc.copy_to(rpc_ptr);
             args.copy_to(args_ptr);
+        }
+
+        let wptr = self.cpu_wptr().unwrap() + 1;
+
+        // TODO: Figure out Rust barriers
+        unsafe {
+            asm!("sfence";);
+            dma_write!(self.gsp_mem[0].cpuq.tx.write_ptr = wptr);
+            asm!("mfence";);
+            // iowrite32(0, self.cmdq_info.falcon);
+        };
+
+        Ok(())
+    }
+
+    fn send_unsized<A: UnsizedGspMessageElement>(
+        self: &mut Self,
+        function: u32,
+        args: &A,
+    ) -> Result<()> {
+        let mut msg = GspMsgHeader {
+            auth_tag_buffer: [0; 16],
+            aad_buffer: [0; 16],
+            checksum: 0,
+            sequence: self.seq,
+            elem_count: 1,
+            pad: 0,
+        };
+        let mut rpc = GspRpcHeader {
+            header_version: 0x03000000,
+            signature: 0x43505256,
+            length: 0,
+            function,
+            rpc_result: 0xffffffff,
+            rpc_result_private: 0xffffffff,
+            sequence: 0,
+            cpu_rm_gfid: 0,
+        };
+
+        self.seq += 1;
+        rpc.length = (size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>() + args.size()) as u32;
+
+        unsafe {
+            let ptr = self.alloc_cmd(rpc.length);
+            let rpc_ptr = msg.copy_to(ptr);
+            let args_ptr = rpc.copy_to(rpc_ptr);
+            args.copy_to(args_ptr);
+
+            let msg_bytes = core::slice::from_raw_parts(ptr as *const u8, rpc.length as usize);
+            let mut msg_ptr = ptr as *mut GspMsgHeader;
+            (*msg_ptr).checksum = GspCmdq::calculate_checksum_bytes(msg_bytes);
+            print_hex_dump(
+                "\0".as_ptr() as *const i8,
+                "gsp: \0".as_ptr() as *const i8,
+                2,
+                16,
+                1,
+                ptr as *const i8,
+                rpc.length as usize,
+                1,
+            );
         }
 
         let wptr = self.cpu_wptr().unwrap() + 1;
@@ -556,6 +640,83 @@ fn create_coherent_dma_object<A: AsBytes + FromBytes>(
     Ok(obj)
 }
 
+const GSP_REGISTRY_NUM_ENTRIES: usize = 2;
+struct RegistryEntry {
+    key: &'static str,
+    value: u32,
+}
+
+struct RegistryTable {
+    entries: [RegistryEntry; GSP_REGISTRY_NUM_ENTRIES],
+}
+
+impl GspMessageElement for RegistryTable {
+    unsafe fn copy_to(&self, ptr: *mut c_void) -> *mut c_void {
+        // We need to construct the GSP representation of the RegistryTable which we do in place.
+        unsafe {
+            let table = ptr as *mut fw::PACKED_REGISTRY_TABLE;
+            let mut table_data = (ptr as *const u8).add(
+                size_of::<fw::PACKED_REGISTRY_TABLE>()
+                    + GSP_REGISTRY_NUM_ENTRIES * size_of::<fw::PACKED_REGISTRY_ENTRY>(),
+            ) as *mut u8;
+            (*table).numEntries = 2;
+            (*table).size = self.size() as u32;
+
+            for i in 0..GSP_REGISTRY_NUM_ENTRIES {
+                let entry_ptr = (ptr as *const u8).add(
+                    size_of::<fw::PACKED_REGISTRY_TABLE>()
+                        + i * size_of::<fw::PACKED_REGISTRY_ENTRY>(),
+                ) as *mut fw::PACKED_REGISTRY_ENTRY;
+
+                (*entry_ptr).nameOffset = table_data.byte_offset_from(table) as u32;
+                (*entry_ptr).type_ = fw::REGISTRY_TABLE_ENTRY_TYPE_DWORD as u8;
+                (*entry_ptr).data = self.entries[i].value;
+                (*entry_ptr).length = 0;
+
+                // Copy the key string to table_data and null terminate it
+                let key_bytes = self.entries[i].key.as_bytes();
+                core::ptr::copy_nonoverlapping(key_bytes.as_ptr(), table_data, key_bytes.len());
+                table_data = table_data.add(key_bytes.len());
+                *table_data = 0; // Add null terminator
+                table_data = table_data.add(1); // Move past null terminator
+            }
+
+            (ptr as *const u8).add((*table).size as usize) as *mut c_void
+        }
+    }
+}
+
+impl UnsizedGspMessageElement for RegistryTable {
+    fn size(&self) -> usize {
+        let mut key_size = 0;
+        for i in 0..GSP_REGISTRY_NUM_ENTRIES {
+            key_size += self.entries[i].key.len() + 1; // +1 for NULL terminator
+        }
+        size_of::<fw::PACKED_REGISTRY_TABLE>()
+            + GSP_REGISTRY_NUM_ENTRIES * size_of::<fw::PACKED_REGISTRY_ENTRY>()
+            + key_size
+    }
+}
+
+fn build_registry(mut cmdq: GspCmdq) -> Result<RegistryTable> {
+    let registry = RegistryTable {
+        entries: [
+            RegistryEntry {
+                key: "RMSecBusResetEnable",
+                value: 1,
+            },
+            RegistryEntry {
+                key: "RMForcePcieConfigSave",
+                value: 1,
+            },
+        ],
+    };
+
+    cmdq.send_unsized(fw::NV_VGPU_MSG_FUNCTION_SET_REGISTRY, &registry);
+
+    Err(EINVAL)
+}
+
 impl GspSharedMemObjects {
     pub(crate) fn new(dev: &device::Device<device::Bound>) -> Result<Self> {
         let mut libos = DmaObject::new(dev, GSP_PAGE_SIZE)?;
@@ -582,6 +743,8 @@ impl GspSharedMemObjects {
         );
         dma_write!(rmargs[0].srInitArguments.flags = 0);
         dma_write!(rmargs[0].srInitArguments.bInPMTransition = 1);
+
+        build_registry(cmdq);
 
         // TODO: initialize rmargs and shm as per r535_gsp_rmargs_init.
         // TODO: also kernel from Dave's branch?
