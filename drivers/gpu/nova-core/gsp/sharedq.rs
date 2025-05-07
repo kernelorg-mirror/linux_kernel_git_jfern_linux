@@ -469,6 +469,8 @@ impl GSPSharedQueues::ver {
 
             let (recv_rpc_fn, rpc_result) = RpcMsg::ver::get_rpc_result(&mut msg);
 
+            pr_info!("MSG RPC FN received: {}, looking for {}", recv_rpc_fn, rpc_fn);
+
             if rpc_result != 0 {
                 pr_info!("MESSAGE INVALID {}\n", rpc_result);
                 return Err(EINVAL);
@@ -484,6 +486,7 @@ impl GSPSharedQueues::ver {
 
             match recv_rpc_fn {
                 fw::ver::gen::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
+                    pr_info!("GSP RUN CPU SEQUENCER");
                     if !self.gsp_falcon.is_none() &&
                         !self.sec2_falcon.is_none() {
                             notifiers::Notifiers::ver::run_cpu_sequencer(self.gsp_falcon.as_ref().unwrap(), self.sec2_falcon.as_ref().unwrap(), &mut msg)?;
