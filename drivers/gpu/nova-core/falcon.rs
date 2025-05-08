@@ -506,27 +506,27 @@ impl Falcon {
 
     pub(crate) fn reset_prep(&self) -> Result<()> {
 
-	if chipsets_before!(&self.base.spec.chipset, GA100) {
-	    return Ok(());
-	}
+		if chipsets_before!(&self.base.spec.chipset, GA100) {
+			return Ok(());
+		}
 
-	self.rd32(0xf4)?;
+		self.rd32(0xf4)?;
 
-	// this timesout according to nvidia driver
-	let _ = self.wait_for_reg_bits_set(0xf4, 0x80000000, 150);
-	Ok(())
+		// this timesout according to nvidia driver
+		let _ = self.wait_for_reg_bits_set(0xf4, 0x80000000, 150);
+		Ok(())
     }
 
     pub(crate) fn reset_eng(&self) -> Result<()> {
-	self.reset_prep()?;
+		self.reset_prep()?;
 
-	self.mask(0x3c0, 0x1, 0x1)?;
+		self.mask(0x3c0, 0x1, 0x1)?;
 
-	sleep(Duration::from_micros(10));
+		sleep(Duration::from_micros(10));
 
-	self.mask(0x3c0, 0x1, 0x0)?;
+		self.mask(0x3c0, 0x1, 0x0)?;
 
-	self.reset_wait_mem_scrubbing()
+		self.reset_wait_mem_scrubbing()
     }
 
     fn tu102_reset_wait_mem_scrubbing(&self) -> Result<()> {

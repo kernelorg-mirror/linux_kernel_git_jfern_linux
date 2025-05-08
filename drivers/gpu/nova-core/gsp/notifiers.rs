@@ -100,6 +100,8 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
             },
             5 => { // GSP Core Reset
                 let _ = gsp_falcon.falcon.reset();
+
+                // JOEL: Some DMA control stuff he's doing.
                 gsp_falcon.falcon.mask(0x624, 0x80, 0x80)?;
                 gsp_falcon.falcon.wr32(0x10c, 0)?;
             },

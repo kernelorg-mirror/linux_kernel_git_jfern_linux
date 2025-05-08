@@ -54,6 +54,8 @@ impl GspFalcon {
         self.falcon.wr32(0x80, self.app_version)
     }
 
+    // JOEL: This is the write into the Falcon's MBOX registers which
+    // contains the address of the libos.
     pub(crate) fn write_libos_addr(&self) -> Result<()> {
         self.falcon.wr32(0x40, (self.libos_addr & 0xffffffff) as u32)?;
         self.falcon.wr32(0x44, (self.libos_addr >> 32) as u32)
