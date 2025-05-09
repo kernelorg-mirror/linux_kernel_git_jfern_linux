@@ -66,6 +66,14 @@ register!(NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE @ 0x00100ce0 {
     30:30   ecc_mode_enabled as bool;
 });
 
+register!(NV_PGSP_QUEUE_HEAD @ 0x00110c00 {
+    31:0    address as u32;
+});
+
+register!(NV_PGSP_FALCON_ENGINE @ 0x001103c0 {
+    0:0     reset as bool;
+});
+
 register!(NV_PFB_PRI_MMU_WPR2_ADDR_LO@0x001fa824  {
     31:4    lo_val as u32;
 });
