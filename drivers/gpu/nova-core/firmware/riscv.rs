@@ -14,6 +14,7 @@ pub(crate) struct RiscvFirmware {
     pub code_offset: u32,
     pub data_offset: u32,
     pub manifest_offset: u32,
+    #[allow(dead_code)]
     pub app_version: u32,
 }
 
