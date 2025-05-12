@@ -26,7 +26,12 @@
 
 #[allow(clippy::undocumented_unsafe_blocks)]
 use kernel::ffi;
+// For normal compilation
+#[cfg(not(any(rustdoc, rust_analyzer)))]
 include!(concat!(
     env!("OBJTREE"),
     "/drivers/gpu/nova-core/bindings_generated.rs"
 ));
+
+#[cfg(any(rustdoc, rust_analyzer))]
+include!("/home/joelaf/repo/linux-acourbot-gsp/drivers/gpu/nova-core/bindings_generated.rs");
