@@ -444,7 +444,10 @@ impl GspCmdq {
             let args_ptr = rpc.copy_to(rpc_ptr);
             args.copy_to(args_ptr);
 
-            let msg_bytes = core::slice::from_raw_parts(ptr as *const u8, rpc.length as usize);
+            let msg_bytes = core::slice::from_raw_parts(
+                ptr as *const u8,
+                rpc.length as usize + size_of::<GspMsgHeader>(),
+            );
             let mut msg_ptr = ptr as *mut GspMsgHeader;
             (*msg_ptr).checksum = GspCmdq::calculate_checksum_bytes(msg_bytes);
             print_hex_dump(
@@ -454,7 +457,7 @@ impl GspCmdq {
                 16,
                 1,
                 ptr as *const i8,
-                rpc.length as usize,
+                rpc.length as usize + size_of::<GspMsgHeader>(),
                 1,
             );
         }
@@ -495,7 +498,7 @@ impl GspCmdq {
         // TODO: Increment by what we actually received
         rptr += 1;
 
-        pr_info!("Got fn {}\n", rpc.function);
+        pr_info!("Got fn 0x{:x}\n", rpc.function);
 
         // TODO: Figure out Rust barriers
         unsafe {
@@ -840,9 +843,7 @@ impl GspSharedMemObjects {
         dma_write!(rmargs[0].bDmemStack = 1);
 
         set_system_info(pdev, &mut cmdq, bar)?;
-
-        // Not working yet for some reason
-        // build_registry(&mut cmdq, bar);
+        build_registry(&mut cmdq, bar);
 
         Ok(GspSharedMemObjects {
             libos,
