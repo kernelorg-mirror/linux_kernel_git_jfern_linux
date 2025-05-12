@@ -23,10 +23,15 @@
     unreachable_pub,
     unsafe_op_in_unsafe_fn
 )]
-
 #[allow(clippy::undocumented_unsafe_blocks)]
 use kernel::ffi;
+
+// For normal compilation
+#[cfg(not(any(rustdoc, rust_analyzer)))]
 include!(concat!(
     env!("OBJTREE"),
     "/drivers/gpu/nova-core/nvfw/r570_144_bindings.rs"
 ));
+
+#[cfg(any(rustdoc, rust_analyzer))]
+include!("/home/joelaf/repo/linux-acourbot-gsp/drivers/gpu/nova-core/nvfw/r570_144_bindings.rs");
