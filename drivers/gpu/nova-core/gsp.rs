@@ -802,6 +802,13 @@ fn set_system_info(
     info.pciConfigMirrorBase = 0x088000;
     info.pciConfigMirrorSize = 0x001000;
 
+    info.PCIDeviceID = ((dev.device_id() as u32) << 16) | dev.vendor_id() as u32;
+    info.PCISubDeviceID =
+        ((dev.subsystem_device_id() as u32) << 16) | dev.subsystem_vendor_id() as u32;
+    info.PCIRevisionID = dev.revision_id() as u32;
+    info.bIsPrimary = 0;
+    info.bPreserveVideoMemoryAllocations = 0;
+
     cmdq.send(bar, fw::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO, info);
     Ok(())
 }
@@ -830,6 +837,7 @@ impl GspSharedMemObjects {
         dma_write!(rmargs[0].srInitArguments.oldLevel = 0);
         dma_write!(rmargs[0].srInitArguments.flags = 0);
         dma_write!(rmargs[0].srInitArguments.bInPMTransition = 0);
+        dma_write!(rmargs[0].bDmemStack = 1);
 
         set_system_info(pdev, &mut cmdq, bar)?;
 
