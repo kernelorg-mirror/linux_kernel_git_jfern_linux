@@ -379,9 +379,25 @@ impl Device {
         unsafe { (*self.as_raw()).device }
     }
 
+    /// Returns the PCI revision ID.
+    pub fn revision_id(&self) -> u8 {
+        // SAFETY: `self.as_raw` is a valid pointer to a `struct pci_dev`.
+        unsafe { (*self.as_raw()).revision }
+    }
+
     pub fn dev_id(&self) -> u16 {
         // SAFETY: `self.as_raw` is a valid pointer to a `struct pci_dev`.
         unsafe { bindings::pci_dev_id(self.as_raw()) }
+    }
+
+    pub fn subsystem_vendor_id(&self) -> u16 {
+        // SAFETY: `self.as_raw` is a valid pointer to a `struct pci_dev`.
+        unsafe { (*self.as_raw()).subsystem_vendor }
+    }
+
+    pub fn subsystem_device_id(&self) -> u16 {
+        // SAFETY: `self.as_raw` is a valid pointer to a `struct pci_dev`.
+        unsafe { (*self.as_raw()).subsystem_device }
     }
 
     /// Returns the start of the given PCI bar resource.
