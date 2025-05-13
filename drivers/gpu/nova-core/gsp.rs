@@ -43,6 +43,13 @@ extern "C" {
     );
 }
 
+// We provide this trait because not all our structs are Sized so therefore the
+// AsBytes and FromBytes traits don't work. However we can provide default
+// implementations for all structs that are Sized, which we do here.
+//
+// This also allows us to create a convenient internal representation of a
+// message which is only converted to bytes when actually doing the call. See the
+// registry for an example.
 pub(crate) trait GspMessageElement {
     fn byte_slice(&self) -> &[u8]
     where
@@ -87,11 +94,13 @@ pub(crate) trait GspMessageElement {
     {
         unsafe { core::ptr::read(ptr as *const Self) }
     }
-}
 
-// Not all message sizes are known at compile time, so we need a ?Sized version.
-trait UnsizedGspMessageElement: GspMessageElement {
-    fn size(&self) -> usize;
+    fn size(&self) -> usize
+    where
+        Self: Sized,
+    {
+        return size_of::<Self>();
+    }
 }
 
 // This next section contains constants and structures hand-coded from the GSP
@@ -325,68 +334,6 @@ impl GspCmdq {
     }
 
     fn send<A: GspMessageElement>(
-        self: &mut Self,
-        bar: &Devres<Bar0>,
-        function: u32,
-        args: A,
-    ) -> Result<()> {
-        let mut msg = GspMsgHeader {
-            auth_tag_buffer: [0; 16],
-            aad_buffer: [0; 16],
-            checksum: 0,
-            sequence: self.seq,
-            elem_count: 1,
-            pad: 0,
-        };
-        let mut rpc = GspRpcHeader {
-            header_version: 0x03000000,
-            signature: 0x43505256,
-            length: 0,
-            function,
-            rpc_result: 0xffffffff,
-            rpc_result_private: 0xffffffff,
-            sequence: 0,
-            cpu_rm_gfid: 0,
-        };
-
-        self.seq += 1;
-        rpc.length = (size_of::<GspRpcHeader>() + size_of::<A>()) as u32;
-        msg.checksum = GspCmdq::calculate_checksum(&msg, &rpc, &args);
-
-        unsafe {
-            let ptr = self.alloc_cmd(rpc.length + size_of::<GspMsgHeader>() as u32);
-            let rpc_ptr = msg.copy_to(ptr);
-            let args_ptr = rpc.copy_to(rpc_ptr);
-            args.copy_to(args_ptr);
-            print_hex_dump(
-                "\0".as_ptr() as *const i8,
-                "gsp: \0".as_ptr() as *const i8,
-                2,
-                16,
-                1,
-                ptr as *const i8,
-                rpc.length as usize,
-                1,
-            );
-        }
-
-        let wptr = self.cpu_wptr().unwrap() + 1;
-
-        // TODO: Figure out Rust barriers
-        unsafe {
-            asm!("sfence";);
-            dma_write!(self.gsp_mem[0].cpuq.tx.write_ptr = wptr);
-            asm!("mfence";);
-        };
-
-        with_bar!(bar, |b| {
-            NV_PGSP_QUEUE_HEAD::default().set_address(0 as u32).write(b);
-        });
-
-        Ok(())
-    }
-
-    fn send_unsized<A: UnsizedGspMessageElement>(
         self: &mut Self,
         bar: &Devres<Bar0>,
         function: u32,
@@ -729,9 +676,7 @@ impl GspMessageElement for RegistryTable {
             (ptr as *const u8).add((*table).size as usize) as *mut c_void
         }
     }
-}
 
-impl UnsizedGspMessageElement for RegistryTable {
     fn size(&self) -> usize {
         let mut key_size = 0;
         for i in 0..GSP_REGISTRY_NUM_ENTRIES {
@@ -757,7 +702,7 @@ fn build_registry(cmdq: &mut GspCmdq, bar: &Devres<Bar0>) {
         ],
     };
 
-    cmdq.send_unsized(bar, fw::NV_VGPU_MSG_FUNCTION_SET_REGISTRY, &registry);
+    cmdq.send(bar, fw::NV_VGPU_MSG_FUNCTION_SET_REGISTRY, &registry);
 }
 
 impl GspMessageElement for fw::GspSystemInfo {}
@@ -787,7 +732,7 @@ fn set_system_info(
     info.bIsPrimary = 0;
     info.bPreserveVideoMemoryAllocations = 0;
 
-    cmdq.send(bar, fw::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO, info);
+    cmdq.send(bar, fw::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO, &info);
     Ok(())
 }
 
