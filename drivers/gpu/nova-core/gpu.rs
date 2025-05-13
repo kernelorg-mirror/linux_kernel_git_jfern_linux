@@ -312,7 +312,7 @@ impl Gpu {
         dev_dbg!(pdev.as_ref(), "WPR2: {:#x}-{:#x}\n", wpr2_lo, wpr2_hi);
 
         let wpr_meta = gsp::build_wpr_meta(pdev.as_ref(), &fw, &fb_layout)?;
-        let mut libos = crate::gsp::GspSharedMemObjects::new(pdev, &devres_bar)?;
+        let mut libos = crate::gsp::GspSharedMemObjects::new(pdev, &devres_bar, &gsp_falcon, &sec2_falcon, &fw)?;
         let libos_handle = libos.libos.dma_handle();
         let wpr_handle = wpr_meta.dma_handle();
 
