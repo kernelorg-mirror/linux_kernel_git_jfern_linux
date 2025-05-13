@@ -31,7 +31,6 @@ pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
 
 extern "C" {
-    fn iowrite32(val: u32, addr: *mut c_void);
     fn print_hex_dump(
         level: *const c_char,
         prefix_str: *const c_char,
@@ -95,24 +94,11 @@ trait UnsizedGspMessageElement: GspMessageElement {
     fn size(&self) -> usize;
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub(crate) struct GspCmdqInfo {
-    falcon: *mut c_void,
-    shm_ptr: *mut c_void,
-    ptr: *mut c_void,
-    size: u32,
-    cnt: u32,
-    seq: u32,
-    wptr: *mut u32,
-    rptr: *mut u32,
-    msgq_ptr: *mut c_void,
-    msgq_wptr: *mut u32,
-    msgq_rptr: *mut u32,
-}
-
-// --- This next section contains constants and structures hand-coded from the GSP headers ---
-// These could probably be replaced with bindgen generated versions but leaving them here for now
+// This next section contains constants and structures hand-coded from the GSP
+// headers We could replace these with bindgen versions, but that's a bit of a
+// pain because they basically end up pulling in the world (ie. definitions for
+// every rpc method). So for now the hand-coded ones are fine. They are just
+// structs so we can easily move to bindgen generated ones if/when we want to.
 
 // A GSP RPC header
 #[repr(C)]
@@ -142,7 +128,7 @@ struct GspMsgHeader {
 }
 impl GspMessageElement for GspMsgHeader {}
 
-// These next two structs come from r535 msgq_priv.h. Hopefully the will never
+// These next two structs come from msgq_priv.h. Hopefully the will never
 // need updating once the ABI is stabalised.
 #[repr(C)]
 #[derive(Debug)]
@@ -163,6 +149,8 @@ struct MsgqRxHeader {
     read_ptr: u32, // message id of last message read
 }
 
+// There is no struct defined for this in the open-gpu-kernel-source headers.
+// Instead it is defined by code in GspMsgQueuesInit().
 #[repr(C)]
 #[derive(Debug)]
 struct Msgq {
@@ -172,12 +160,10 @@ struct Msgq {
     msgq: [u8; 0x3f000],
 }
 
-// --- End of GSP header structs
-
 #[repr(C)]
 #[derive(Debug)]
 struct GspMem {
-    ptes: [u8; 4096], // GSP_PAGE_SIZE is 4K for now
+    ptes: [u8; GSP_PAGE_SIZE],
     cpuq: Msgq,
     gspq: Msgq,
 }
@@ -195,37 +181,30 @@ unsafe impl AsBytes for GspMem {}
 unsafe impl Send for GspCmdq {}
 
 pub(crate) struct GspCmdq {
-    // HACK: We only need the next two fields until nova-core can initialise the GSP itself, so make the lifetime checks go away
-    // pdev: *mut c_void,
-    // drvdata: *mut c_void,
-
-    // HACK: We only need this until nova-core can boot the GSP as well
-    // cmdq_info: GspCmdqInfo,
     msg_count: u32,
     seq: u32,
-    // falcon: *mut c_void,
     gsp_mem: CoherentAllocation<GspMem>,
     cpu_ptr: *mut c_void,
     gsp_ptr: *mut c_void,
+    nr_ptes: u32,
 }
 
 impl GspCmdq {
     // This is equivalent to gsp_shared_init()
     fn new(dev: &device::Device<device::Bound>, bar: &Devres<Bar0>) -> Result<GspCmdq> {
-        // TODO: At the moment we assume 4096 PTEs will cover the GspMem object.
-        // Seems reasonable, see the definition for the struct, but we probalby
-        // should calculate it.
         let mut gsp_mem =
             CoherentAllocation::<GspMem>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
 
+        let nr_ptes = size_of::<GspMem>() >> GSP_PAGE_SHIFT;
+        build_assert!((size_of::<GspMem>() >> GSP_PAGE_SHIFT) * size_of::<u64>() <= GSP_PAGE_SIZE);
+
         // Basically the same as create_pte_array() but we don't skip the first
         // PTE.
-        // TODO: Also we're creating PTEs for the RMARGS struct that follows
-        // this one which is a bit ugly. Nouveau r535 doesn't seem to explicitly mention
-        // this, so no idea if that was intentional.
+        // SAFETY: By the above build_assert which ensures the number of ptes
+        // fits in the GSP_PAGE_SIZE allocated for GspMem.ptes
         let ptes = unsafe {
             let ptr = gsp_mem.start_ptr_mut() as *mut u64;
-            core::slice::from_raw_parts_mut(ptr, size_of::<GspMem>() >> GSP_PAGE_SHIFT)
+            core::slice::from_raw_parts_mut(ptr, nr_ptes)
         };
 
         for (i, pte) in ptes.iter_mut().enumerate() {
@@ -244,11 +223,8 @@ impl GspCmdq {
         // TODO: Hard-coded for now because offset_of!() isn't stable for nested types
         dma_write!(gsp_mem[0].cpuq.tx.rx_hdr_off = 32);
 
-        // Add 0x1000 for the ptes and another 0x1000 for the message queue header
-        let cpu_ptr = unsafe { (gsp_mem.start_ptr_mut() as *mut u8).add(0x2000) as *mut c_void };
-
-        // And another 0x40000 for the gsp queue
-        let gsp_ptr = unsafe { (gsp_mem.start_ptr_mut() as *mut u8).add(0x42000) as *mut c_void };
+        let cpu_ptr = unsafe { (*gsp_mem.start_ptr_mut()).cpuq.msgq.as_mut_ptr() as *mut c_void };
+        let gsp_ptr = unsafe { (*gsp_mem.start_ptr_mut()).gspq.msgq.as_mut_ptr() as *mut c_void };
 
         Ok(GspCmdq {
             msg_count,
@@ -256,6 +232,7 @@ impl GspCmdq {
             gsp_mem,
             cpu_ptr,
             gsp_ptr,
+            nr_ptes: nr_ptes as u32,
         })
     }
 
@@ -400,7 +377,6 @@ impl GspCmdq {
             asm!("sfence";);
             dma_write!(self.gsp_mem[0].cpuq.tx.write_ptr = wptr);
             asm!("mfence";);
-            // iowrite32(0, self.cmdq_info.falcon);
         };
 
         with_bar!(bar, |b| {
@@ -469,7 +445,6 @@ impl GspCmdq {
             asm!("sfence";);
             dma_write!(self.gsp_mem[0].cpuq.tx.write_ptr = wptr);
             asm!("mfence";);
-            // iowrite32(0, self.cmdq_info.falcon);
         };
 
         with_bar!(bar, |b| {
@@ -834,7 +809,7 @@ impl GspSharedMemObjects {
         dma_write!(
             rmargs[0].messageQueueInitArguments.sharedMemPhysAddr = cmdq.gsp_mem.dma_handle()
         );
-        dma_write!(rmargs[0].messageQueueInitArguments.pageTableEntryCount = 0x81);
+        dma_write!(rmargs[0].messageQueueInitArguments.pageTableEntryCount = cmdq.nr_ptes);
         dma_write!(rmargs[0].messageQueueInitArguments.cmdQueueOffset = 0x1000);
         dma_write!(rmargs[0].messageQueueInitArguments.statQueueOffset = 0x41000);
         dma_write!(rmargs[0].srInitArguments.oldLevel = 0);
