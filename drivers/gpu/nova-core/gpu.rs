@@ -356,6 +356,32 @@ impl Gpu {
 
         dev_info!(pdev.as_ref(), "GPU instance built\n");
 
+        /*
+            Sequencer related bindings:
+
+            typedef struct rpc_run_cpu_sequencer_v17_00
+            {
+                NvU32      bufferSizeDWord;
+                NvU32      cmdIndex;
+                NvU32      regSaveArea[8];
+                NvU32      commandBuffer[];
+            } rpc_run_cpu_sequencer_v17_00;
+
+            typedef struct GSP_SEQUENCER_BUFFER_CMD
+            {
+                GSP_SEQ_BUF_OPCODE opCode;
+                union
+                {
+                    // see rmgspseq.h for the definition of the payloads
+                    GSP_SEQ_BUF_PAYLOAD_REG_WRITE regWrite;
+                    GSP_SEQ_BUF_PAYLOAD_REG_MODIFY regModify;
+                    GSP_SEQ_BUF_PAYLOAD_REG_POLL regPoll;
+                    GSP_SEQ_BUF_PAYLOAD_DELAY_US delayUs;
+                    GSP_SEQ_BUF_PAYLOAD_REG_STORE regStore;
+                } payload;
+            } GSP_SEQUENCER_BUFFER_CMD;
+        */
+
         libos.cmdq.receive()?.dump();
 
         Ok(pin_init!(Self {

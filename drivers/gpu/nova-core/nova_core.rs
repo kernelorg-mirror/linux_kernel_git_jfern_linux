@@ -25,7 +25,11 @@ mod macros {
         ($name:ty) => {
             impl $name {
                 pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
-                    let mut data: [u8; size_of::<Self>()] = bytes.try_into().map_err(|_| EINVAL)?;
+                    let mut data: [u8; size_of::<Self>()] = bytes.try_into().map_err(|e| {
+                        pr_err!("Bytes size: {:?}\n", bytes.len());
+                        pr_err!("Failed to convert bytes to array: {:?}\n", e);
+                        EINVAL
+                    })?;
 
                     const U32_SIZE: usize = size_of::<u32>();
                     data.chunks_exact_mut(U32_SIZE)

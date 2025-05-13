@@ -26,6 +26,7 @@ use crate::regs::NV_PGSP_FALCON_ENGINE;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
 
 pub(crate) mod fb;
+pub(crate) mod sequencer;
 
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
@@ -445,6 +446,21 @@ impl<'a> GspCmdq<'a> {
 
         let result = match rpc.function {
             fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
+                let args_vec: &[u8] = unsafe { core::slice::from_raw_parts(args_ptr as *mut u8, size as usize) };
+
+                // Create and run the GSP sequencer
+                match sequencer::GspSequencer::new(args_vec, self.bar, self.sec2_falcon,
+                                                   self.gsp_falcon, self.libos_dma_handle,
+                                                   self.fw) {
+                    Ok(sequencer) => {
+                        if let Err(e) = sequencer.run() {
+                            pr_info!("Error running CPU sequencer: {:?}\n", e);
+                        }
+                    },
+                    Err(e) => {
+                        pr_info!("Error creating CPU sequencer: {:?}\n", e);
+                    }
+                }
                 GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, size)
             }
             _ => Err(ENOTSUPP),
