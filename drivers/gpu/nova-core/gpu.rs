@@ -356,7 +356,7 @@ impl Gpu {
 
         dev_info!(pdev.as_ref(), "GPU instance built\n");
 
-        libos.cmdq.receive::<fw::GspStaticConfigInfo_t>()?;
+        libos.cmdq.receive()?.dump();
 
         Ok(pin_init!(Self {
             spec,

@@ -9,10 +9,9 @@ use core::mem::MaybeUninit;
 use kernel::bindings;
 use kernel::device;
 use kernel::devres::Devres;
+use kernel::dma::CoherentAllocation;
 use kernel::pci;
 use kernel::prelude::*;
-
-use kernel::dma::CoherentAllocation;
 use kernel::transmute::{AsBytes, FromBytes};
 use kernel::{asm, dma_read, dma_write, pr_info};
 
@@ -101,6 +100,10 @@ pub(crate) trait GspMessageElement {
     {
         return size_of::<Self>();
     }
+
+    fn dump(&self) {
+        pr_info!("Dump not implemented for this GspMessageElement\n");
+    }
 }
 
 // This next section contains constants and structures hand-coded from the GSP
@@ -181,6 +184,12 @@ struct NoArgs {}
 impl GspMessageElement for NoArgs {}
 
 impl GspMessageElement for fw::GspStaticConfigInfo_t {}
+impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
+    fn dump(&self) {
+        pr_info!("CPU Sequencer\n");
+        pr_info!("{:?}\n", self);
+    }
+}
 
 // Needed for CoherentAllocation
 unsafe impl FromBytes for GspMem {}
@@ -294,28 +303,7 @@ impl GspCmdq {
         used << GSP_PAGE_SHIFT
     }
 
-    fn calculate_checksum<A: GspMessageElement>(
-        msg: &GspMsgHeader,
-        rpc: &GspRpcHeader,
-        args: &A,
-    ) -> u32 {
-        let mut sum: u64 = 0;
-        let msg_bytes = msg.byte_slice();
-        for &byte in msg_bytes.iter().rev() {
-            sum = sum.rotate_left(8) ^ (byte as u64);
-        }
-        let rpc_bytes = rpc.byte_slice();
-        for &byte in rpc_bytes.iter().rev() {
-            sum = sum.rotate_left(8) ^ (byte as u64);
-        }
-        let args_bytes = args.byte_slice();
-        for &byte in args_bytes.iter().rev() {
-            sum = sum.rotate_left(8) ^ (byte as u64);
-        }
-        ((sum >> 32) as u32) ^ (sum as u32)
-    }
-
-    fn calculate_checksum_bytes(msg_bytes: &[u8]) -> u32 {
+    fn calculate_checksum(msg_bytes: &[u8]) -> u32 {
         let mut sum: u64 = 0;
         for &byte in msg_bytes.iter().rev() {
             sum = sum.rotate_left(8) ^ (byte as u64);
@@ -372,7 +360,7 @@ impl GspCmdq {
                 rpc.length as usize + size_of::<GspMsgHeader>(),
             );
             let mut msg_ptr = ptr as *mut GspMsgHeader;
-            (*msg_ptr).checksum = GspCmdq::calculate_checksum_bytes(msg_bytes);
+            (*msg_ptr).checksum = GspCmdq::calculate_checksum(msg_bytes);
             print_hex_dump(
                 "\0".as_ptr() as *const i8,
                 "gsp: \0".as_ptr() as *const i8,
@@ -401,26 +389,52 @@ impl GspCmdq {
         Ok(())
     }
 
-    pub(crate) fn receive<A: GspMessageElement>(self: &mut Self) -> Result<A> {
-        let mut rptr = self.cpu_rptr()?;
+    fn receive_headers(self: &mut Self) -> Result<(GspMsgHeader, GspRpcHeader, *mut c_void, u32)> {
         let size = loop {
             let size = self.get_used_rx_bytes();
-            if size >= size_of::<A>() as u32 {
+            if size as usize >= size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>() {
                 break size;
             }
         };
 
-        pr_info!("Got {} bytes\n", size);
-
+        let mut rptr = self.cpu_rptr()?;
         let msg_ptr = (self.gsp_ptr as usize + (rptr as usize) * 0x1000) as *mut c_void;
         let (rpc_ptr, size, msg) = unsafe { GspMsgHeader::new_from_raw(msg_ptr, size)? };
         let (args_ptr, size, rpc) = unsafe { GspRpcHeader::new_from_raw(rpc_ptr, size)? };
-        let (_, _, args) = unsafe { A::new_from_raw(args_ptr, size)? };
+
+        pr_info!("Got {}/{} bytes\n", size, rpc.length);
+
+        Ok((msg, rpc, args_ptr, size))
+    }
+
+    fn create_result<A: GspMessageElement + 'static>(
+        ptr: *mut c_void,
+        size: u32,
+    ) -> Result<KBox<dyn GspMessageElement>> {
+        let mut result = KBox::<A>::new_uninit(GFP_KERNEL)?;
+
+        unsafe {
+            let (_, _, msg) = A::new_from_raw(ptr, size)?;
+            msg.copy_to(result.as_mut_ptr() as *mut c_void);
+        };
+
+        Ok(unsafe { result.assume_init() })
+    }
+
+    pub(crate) fn receive(self: &mut Self) -> Result<KBox<dyn GspMessageElement>> {
+        let (msg, rpc, args_ptr, size) = self.receive_headers()?;
+        pr_info!("Got fn 0x{:x}\n", rpc.function);
+
+        let result = match rpc.function {
+            fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
+                GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, size)
+            }
+            _ => Err(ENOTSUPP),
+        };
 
         // TODO: Increment by what we actually received
+        let mut rptr = self.cpu_rptr()?;
         rptr += 1;
-
-        pr_info!("Got fn 0x{:x}\n", rpc.function);
 
         // TODO: Figure out Rust barriers
         unsafe {
@@ -429,7 +443,7 @@ impl GspCmdq {
         };
 
         // TODO: Validate checksum, etc.
-        Ok(args)
+        result
     }
 
     pub(crate) fn test(self: &mut Self) -> Result<()> {
