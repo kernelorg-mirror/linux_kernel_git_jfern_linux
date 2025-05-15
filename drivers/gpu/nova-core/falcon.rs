@@ -478,6 +478,15 @@ impl<E: FalconEngine + 'static> Falcon<E> {
         Ok(())
     }
 
+    /// Wait until the falcon CPU is halted.
+    pub(crate) fn wait_till_halted(&self, bar: &Devres<Bar0>) -> Result<()> {
+        util::wait_on(Duration::from_secs(2), || {
+            bar.try_access()
+                .map(|b| regs::NV_PFALCON_FALCON_CPUCTL::read(&*b, E::BASE))
+                .and_then(|v| if v.halted() { Some(()) } else { None })
+        })
+    }
+
     /// Start running the loaded firmware.
     ///
     /// `mbox0` and `mbox1` are optional parameters to write into the `MBOX0` and `MBOX1` registers
@@ -513,11 +522,7 @@ impl<E: FalconEngine + 'static> Falcon<E> {
             }
         })?;
 
-        util::wait_on(Duration::from_secs(2), || {
-            bar.try_access()
-                .map(|b| regs::NV_PFALCON_FALCON_CPUCTL::read(&*b, E::BASE))
-                .and_then(|v| if v.halted() { Some(()) } else { None })
-        })?;
+        self.wait_till_halted(bar)?;
 
         let (mbox0, mbox1) = with_bar!(bar, |b| {
             let mbox0 = regs::NV_PFALCON_FALCON_MAILBOX0::read(b, E::BASE).value();
