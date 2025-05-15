@@ -487,6 +487,20 @@ impl<E: FalconEngine + 'static> Falcon<E> {
         })
     }
 
+    /// Start the falcon CPU.
+    pub(crate) fn start(&self, bar: &Devres<Bar0>) -> Result<()> {
+        with_bar!(bar, |b| {
+            match regs::NV_PFALCON_FALCON_CPUCTL::read(b, E::BASE).alias_en() {
+                true => regs::NV_PFALCON_FALCON_CPUCTL_ALIAS::default()
+                    .set_startcpu(true)
+                    .write(b, E::BASE),
+                false => regs::NV_PFALCON_FALCON_CPUCTL::default()
+                    .set_startcpu(true)
+                    .write(b, E::BASE),
+            }
+        })
+    }
+
     /// Start running the loaded firmware.
     ///
     /// `mbox0` and `mbox1` are optional parameters to write into the `MBOX0` and `MBOX1` registers
@@ -511,17 +525,9 @@ impl<E: FalconEngine + 'static> Falcon<E> {
                     .set_value(mbox1)
                     .write(b, E::BASE);
             }
-
-            match regs::NV_PFALCON_FALCON_CPUCTL::read(b, E::BASE).alias_en() {
-                true => regs::NV_PFALCON_FALCON_CPUCTL_ALIAS::default()
-                    .set_startcpu(true)
-                    .write(b, E::BASE),
-                false => regs::NV_PFALCON_FALCON_CPUCTL::default()
-                    .set_startcpu(true)
-                    .write(b, E::BASE),
-            }
         })?;
 
+        self.start(bar)?;
         self.wait_till_halted(bar)?;
 
         let (mbox0, mbox1) = with_bar!(bar, |b| {
