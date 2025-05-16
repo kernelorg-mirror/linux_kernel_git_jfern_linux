@@ -501,18 +501,13 @@ impl<E: FalconEngine + 'static> Falcon<E> {
         })
     }
 
-    /// Start running the loaded firmware.
-    ///
-    /// `mbox0` and `mbox1` are optional parameters to write into the `MBOX0` and `MBOX1` registers
-    /// prior to running.
-    ///
-    /// Returns `MBOX0` and `MBOX1` after the firmware has stopped running.
-    pub(crate) fn boot(
+    /// Write values to the mailbox registers if provided.
+    pub(crate) fn write_mailboxes(
         &self,
         bar: &Devres<Bar0>,
         mbox0: Option<u32>,
         mbox1: Option<u32>,
-    ) -> Result<(u32, u32)> {
+    ) -> Result<()> {
         with_bar!(bar, |b| {
             if let Some(mbox0) = mbox0 {
                 regs::NV_PFALCON_FALCON_MAILBOX0::default()
@@ -525,19 +520,48 @@ impl<E: FalconEngine + 'static> Falcon<E> {
                     .set_value(mbox1)
                     .write(b, E::BASE);
             }
-        })?;
+        })
+    }
 
+    /// Read the value from mbox0 register.
+    pub(crate) fn read_mailbox0(&self, bar: &Devres<Bar0>) -> Result<u32> {
+        with_bar!(bar, |b| {
+            let mbox0 = regs::NV_PFALCON_FALCON_MAILBOX0::read(b, E::BASE).value();
+            mbox0
+        })
+    }
+
+    /// Read the value from mbox1 register.
+    pub(crate) fn read_mailbox1(&self, bar: &Devres<Bar0>) -> Result<u32> {
+        with_bar!(bar, |b| {
+            let mbox1 = regs::NV_PFALCON_FALCON_MAILBOX1::read(b, E::BASE).value();
+            mbox1
+        })
+    }
+
+    /// Read values from both mailbox registers.
+    pub(crate) fn read_mailboxes(&self, bar: &Devres<Bar0>) -> Result<(u32, u32)> {
+        let mbox0 = self.read_mailbox0(bar)?;
+        let mbox1 = self.read_mailbox1(bar)?;
+        Ok((mbox0, mbox1))
+    }
+
+    /// Start running the loaded firmware.
+    ///
+    /// `mbox0` and `mbox1` are optional parameters to write into the `MBOX0` and `MBOX1` registers
+    /// prior to running.
+    ///
+    /// Returns `MBOX0` and `MBOX1` after the firmware has stopped running.
+    pub(crate) fn boot(
+        &self,
+        bar: &Devres<Bar0>,
+        mbox0: Option<u32>,
+        mbox1: Option<u32>,
+    ) -> Result<(u32, u32)> {
+        self.write_mailboxes(bar, mbox0, mbox1)?;
         self.start(bar)?;
         self.wait_till_halted(bar)?;
-
-        let (mbox0, mbox1) = with_bar!(bar, |b| {
-            let mbox0 = regs::NV_PFALCON_FALCON_MAILBOX0::read(b, E::BASE).value();
-            let mbox1 = regs::NV_PFALCON_FALCON_MAILBOX1::read(b, E::BASE).value();
-
-            (mbox0, mbox1)
-        })?;
-
-        Ok((mbox0, mbox1))
+        self.read_mailboxes(bar)
     }
 
     /// Returns the fused version of the signature to use in order to run a HS firmware on this
