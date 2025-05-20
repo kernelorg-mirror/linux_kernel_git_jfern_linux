@@ -302,7 +302,7 @@ impl FwsecFirmware {
         let ucode = bios.fwsec_ucode(dev)?;
 
         let mut ucode_dma = DmaObject::from_data(dev, ucode)?;
-        patch_command(&mut ucode_dma, v3_desc, cmd)?;
+        patch_command(&mut ucode_dma, &v3_desc, cmd)?;
 
         const SIG_SIZE: usize = 96 * 4;
         let signatures = bios.fwsec_sigs(dev)?;
