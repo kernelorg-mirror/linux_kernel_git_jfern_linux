@@ -252,7 +252,7 @@ impl Vbios {
         }
     }
 
-    pub(crate) fn fwsec_header(&self, pdev: &device::Device) -> Result<&FalconUCodeDescV3> {
+    pub(crate) fn fwsec_header(&self, pdev: &device::Device) -> Result<FalconUCodeDescV3> {
         self.fwsec_image.fwsec_header(pdev)
     }
 
@@ -1072,7 +1072,7 @@ impl FwSecBiosImage {
     /// with the outside world. They should be cleaned up and integrated properly.
     ///
     /// Get the FwSec header (FalconUCodeDescV3)
-    fn fwsec_header(&self, dev: &device::Device) -> Result<&FalconUCodeDescV3> {
+    fn fwsec_header(&self, dev: &device::Device) -> Result<FalconUCodeDescV3> {
         // Get the falcon ucode offset that was found in setup_falcon_data
         let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)?;
 
@@ -1094,14 +1094,12 @@ impl FwSecBiosImage {
             return Err(EINVAL);
         }
 
-        // Return a reference to the FalconUCodeDescV3 structure SAFETY: we have checked that
-        // `falcon_ucode_offset + size_of::<FalconUCodeDescV3` is within the bounds of `data.`
-        Ok(unsafe {
-            &*(self.base.data.as_ptr().add(falcon_ucode_offset) as *const FalconUCodeDescV3)
-        })
+        let offset = falcon_ucode_offset as usize;
+        let size = core::mem::size_of::<FalconUCodeDescV3>();
+        Ok(FalconUCodeDescV3::from_bytes(&self.base.data[offset..offset + size])?)
     }
     /// Get the ucode data as a byte slice
-    fn fwsec_ucode(&self, dev: &device::Device, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
+    fn fwsec_ucode(&self, dev: &device::Device, v3_desc: FalconUCodeDescV3) -> Result<&[u8]> {
         let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)?;
 
         // The ucode data follows the descriptor
@@ -1117,7 +1115,7 @@ impl FwSecBiosImage {
     }
 
     /// Get the signatures as a byte slice
-    fn fwsec_sigs(&self, dev: &device::Device, v3_desc: &FalconUCodeDescV3) -> Result<&[u8]> {
+    fn fwsec_sigs(&self, dev: &device::Device, v3_desc: FalconUCodeDescV3) -> Result<&[u8]> {
         const SIG_SIZE: usize = 96 * 4;
 
         let falcon_ucode_offset = self.falcon_ucode_offset.ok_or(EINVAL)?;
