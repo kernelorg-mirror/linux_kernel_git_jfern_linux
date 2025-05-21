@@ -595,4 +595,14 @@ impl<E: FalconEngine + 'static> Falcon<E> {
                 .write(b, E::BASE)
         })
     }
+
+    /// Check if the RISC-V core is active.
+    ///
+    /// Returns `true` if the RISC-V core is active, `false` otherwise.
+    pub(crate) fn is_riscv_active(&self, bar: &Devres<Bar0>) -> Result<bool> {
+        with_bar!(?bar, |b| {
+            let cpuctl = regs::NV_PRISCV_RISCV_CPUCTL::read(b, E::BASE);
+            Ok(cpuctl.active_stat())
+        })
+    }
 }
