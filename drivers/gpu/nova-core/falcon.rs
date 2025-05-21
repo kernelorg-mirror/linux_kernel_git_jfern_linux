@@ -585,4 +585,14 @@ impl<E: FalconEngine + 'static> Falcon<E> {
         self.hal
             .get_signature_reg_fuse_version(bar, engine_id_mask, ucode_id)
     }
+
+    /// Write the application version to the OS register.
+    #[expect(dead_code)]
+    pub(crate) fn write_os_version(&self, bar: &Devres<Bar0>, app_version: u32) -> Result<()> {
+        with_bar!(bar, |b| {
+            regs::NV_PFALCON_FALCON_OS::default()
+                .set_value(app_version)
+                .write(b, E::BASE)
+        })
+    }
 }
