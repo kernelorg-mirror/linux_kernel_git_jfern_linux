@@ -13,6 +13,28 @@ use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 use crate::util::wait_on;
 
+use kernel::{pr_info, pr_cont};
+
+/// Print a byte slice using pr_info, with bytes_per_line bytes on each line.
+/// Each line is formatted as [0xAA, 0xBB, ...].
+fn print_bytes(bytes: &[u8], bytes_per_line: usize) {
+    for chunk in bytes.chunks(bytes_per_line) {
+        // Print opening bracket
+        pr_info!("[");
+        
+        // Print each byte with comma separators
+        for (i, byte) in chunk.iter().enumerate() {
+            if i > 0 {
+                pr_cont!(", ");
+            }
+            pr_cont!("0x{:02X}", byte);
+        }
+        
+        // Print closing bracket and newline
+        pr_cont!("]\n");
+    }
+}
+
 impl_from_bytes!(fw::rpc_run_cpu_sequencer_v17_00);
 impl_from_bytes!(fw::GSP_SEQUENCER_BUFFER_CMD);
 const CMD_SIZE: usize = size_of::<fw::GSP_SEQUENCER_BUFFER_CMD>();
@@ -381,8 +403,48 @@ impl<'a> GspSequencer<'a> {
         })
     }
 
+    pub(crate) fn dump_bytes(&self) {
+        // TODO: Replace with actual RPC header size calculation from your codebase
+        // For example: let rpc_header_size = RpcMsg::ver::get_gsp_rpc_hdr_size() as usize;
+        let rpc_header_size = 0; // Replace with actual size when available
+        
+        // Dump RPC header
+        pr_info!("RPC header ({} bytes):", rpc_header_size);
+        if rpc_header_size > 0 && self.data.len() >= rpc_header_size {
+            let rpc_header_slice = &self.data[..rpc_header_size];
+            print_bytes(rpc_header_slice, 20);
+        } else {
+            pr_info!("(RPC header not available or size unknown)\n");
+        }
+        
+        // Dump run structure (seq_info)
+        let run_struct_size = size_of::<fw::rpc_run_cpu_sequencer_v17_00>();
+        let run_struct_start = rpc_header_size;
+        
+        pr_info!("Run structure ({} bytes):", run_struct_size);
+        if self.data.len() >= run_struct_start + run_struct_size {
+            let run_struct_slice = &self.data[run_struct_start..run_struct_start + run_struct_size];
+            print_bytes(run_struct_slice, 20);
+        } else {
+            pr_info!("(Run structure not available or not enough data)\n");
+        }
+        
+        // Dump opcode data (first 200 bytes)
+        let opcode_data_start = run_struct_start + run_struct_size;
+        
+        pr_info!("First 200 bytes of opcode data:");
+        if self.data.len() > opcode_data_start {
+            let opcode_data_len = core::cmp::min(200, self.data.len() - opcode_data_start);
+            let opcode_slice = &self.data[opcode_data_start..opcode_data_start + opcode_data_len];
+            print_bytes(opcode_slice, 20);
+        } else {
+            pr_info!("(Opcode data not available or not enough data)\n");
+        }
+    }
+
     pub(crate) fn run(&self) ->  Result {
         pr_info!("Running CPU Sequencer commands\n");
+        self.dump_bytes();
 
         for cmd_result in self {
             match cmd_result {
