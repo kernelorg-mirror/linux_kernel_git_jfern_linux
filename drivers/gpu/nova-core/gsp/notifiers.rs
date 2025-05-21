@@ -45,6 +45,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
 
         match opcode {
             0 => { // GSP REG WRITE
+                pr_info!("seq: GSP REG WRITE");
                 let regwrite = cmd.new_S_payload_regWrite();
                 let addr = regwrite.get_addr() as usize;
                 let val = regwrite.get_val();
@@ -52,6 +53,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_WRITE::str_size() / 4;
             },
             1 => { // GSP REG MODIFY
+                pr_info!("seq: GSP REG MODIFY");
                 let regmod = cmd.new_S_payload_regModify();
 
                 let val = regmod.get_val();
@@ -64,6 +66,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_MODIFY::str_size() / 4;
             },
             2 => { // GSP REG POLL
+                pr_info!("seq: GSP REG POLL");
                 let regpoll = cmd.new_S_payload_regPoll();
 
                 let addr = regpoll.get_addr() as usize;
@@ -85,6 +88,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_POLL::str_size() / 4;
             }
             3 => { // GSP DELAY US
+                pr_info!("seq: GSP DELAY US");
                 let delay = cmd.new_S_payload_delayUs();
                 let delay_val : u32 = delay.get_val();
 
@@ -92,6 +96,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_DELAY_US::str_size() / 4;
             }
             4 => { // GSP RegStore
+                pr_info!("seq: GSP RegStore");
                 let regstore = cmd.new_S_payload_regStore();
 
                 reg_save_area[regstore.get_index() as usize] = bar.try_readl(regstore.get_addr() as usize)?;
@@ -99,6 +104,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_STORE::str_size() / 4;
             },
             5 => { // GSP Core Reset
+                pr_info!("seq: GSP Core Reset");
                 let _ = gsp_falcon.falcon.reset();
 
                 // JOEL: Some DMA control stuff he's doing.
@@ -106,6 +112,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 gsp_falcon.falcon.wr32(0x10c, 0)?;
             },
             6 => { // GSP Core Start
+                pr_info!("seq: GSP Core Start");
                 if (gsp_falcon.falcon.rd32(0x100)? & 0x00000040) != 0 {
                     gsp_falcon.falcon.wr32(0x130, 0x2)?;
                 } else {
@@ -113,9 +120,11 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 }
             },
             7 => { // GSP Core Wait for Halt
+                pr_info!("seq: GSP Core Wait for Halt");
                 let _ = gsp_falcon.falcon.wait_for_reg_bits_set(0x100, 0x10, 2000000);
             },
             8 => { // GSP Core Resume
+                pr_info!("seq: GSP Core Resume");
                 let _ = gsp_falcon.reset();
 
                 gsp_falcon.write_libos_addr()?;
