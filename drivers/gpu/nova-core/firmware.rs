@@ -36,6 +36,7 @@ pub(crate) struct Firmware {
     pub bootloader: RiscvFirmware,
     pub gsp: RadixFirmware,
     pub gsp_sigs: DmaObject,
+    pub gsp_desc: RmRiscvUCodeDesc,
 }
 
 impl Firmware {
@@ -56,7 +57,9 @@ impl Firmware {
 
         let gsp_fw = request("gsp")?;
         let gsp_elf = elf::Parser::new(gsp_fw.data())?;
-        let gsp = {
+
+        let (gsp, gsp_desc) = {
+            // Extract the .fwimage section for the GSP firmware
             let data = gsp_elf
                 .sections_iter()?
                 .filter_map(Result::ok)
@@ -64,7 +67,21 @@ impl Firmware {
                 .map(|section| section.data)
                 .ok_or(EINVAL)?;
 
-            RadixFirmware::new(dev, ".fwimage", data)?
+            let gsp = RadixFirmware::new(dev, ".fwimage", data)?;
+
+            // Extract RISC-V ucode descriptor
+            let hdr = data
+                .get(0..size_of::<BinHdr>())
+                .ok_or(EINVAL)
+                .and_then(BinHdr::from_bytes)?;
+
+            let offset = hdr.header_offset as usize;
+            let desc = data
+                .get(offset..offset + size_of::<RmRiscvUCodeDesc>())
+                .ok_or(EINVAL)
+                .and_then(RmRiscvUCodeDesc::from_bytes)?;
+
+            (gsp, desc)
         };
 
         // TODO: make this a GPU-specific const.
@@ -85,6 +102,7 @@ impl Firmware {
             bootloader: request("bootloader").and_then(|fw| RiscvFirmware::new(dev, &fw))?,
             gsp,
             gsp_sigs,
+            gsp_desc,
         })
     }
 }
@@ -219,7 +237,7 @@ impl_from_bytes!(HsLoadHeaderV2App);
 
 #[repr(C)]
 #[derive(Debug)]
-struct RmRiscvUCodeDesc {
+pub(crate) struct RmRiscvUCodeDesc {
     version: u32,
     bootloader_offset: u32,
     bootloader_size: u32,
