@@ -987,6 +987,7 @@ request_firmware(const struct firmware **firmware_p, const char *name,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s\n", name);
 	/* Need to pin this module until return */
 	__module_get(THIS_MODULE);
 	ret = _request_firmware(firmware_p, name, device, NULL, 0, 0,
@@ -1014,6 +1015,7 @@ int firmware_request_nowarn(const struct firmware **firmware, const char *name,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s (nowarn)\n", name);
 	/* Need to pin this module until return */
 	__module_get(THIS_MODULE);
 	ret = _request_firmware(firmware, name, device, NULL, 0, 0,
@@ -1039,6 +1041,7 @@ int request_firmware_direct(const struct firmware **firmware_p,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s (direct)\n", name);
 	__module_get(THIS_MODULE);
 	ret = _request_firmware(firmware_p, name, device, NULL, 0, 0,
 				FW_OPT_UEVENT | FW_OPT_NO_WARN |
@@ -1063,6 +1066,7 @@ int firmware_request_platform(const struct firmware **firmware,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s (platform)\n", name);
 	/* Need to pin this module until return */
 	__module_get(THIS_MODULE);
 	ret = _request_firmware(firmware, name, device, NULL, 0, 0,
@@ -1117,6 +1121,7 @@ request_firmware_into_buf(const struct firmware **firmware_p, const char *name,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s (into_buf)\n", name);
 	if (fw_cache_is_setup(device, name))
 		return -EOPNOTSUPP;
 
@@ -1147,6 +1152,7 @@ request_partial_firmware_into_buf(const struct firmware **firmware_p,
 {
 	int ret;
 
+	pr_err("Firmware: loading %s (partial_into_buf)\n", name);
 	if (fw_cache_is_setup(device, name))
 		return -EOPNOTSUPP;
 
@@ -1272,6 +1278,7 @@ int request_firmware_nowait(
 	const char *name, struct device *device, gfp_t gfp, void *context,
 	void (*cont)(const struct firmware *fw, void *context))
 {
+	pr_err("Firmware: loading %s (nowait)\n", name);
 	return _request_firmware_nowait(module, uevent, name, device, gfp,
 					context, cont, false);
 
@@ -1298,6 +1305,7 @@ int firmware_request_nowait_nowarn(
 	struct device *device, gfp_t gfp, void *context,
 	void (*cont)(const struct firmware *fw, void *context))
 {
+	pr_err("Firmware: loading %s (nowait_nowarn)\n", name);
 	return _request_firmware_nowait(module, FW_ACTION_UEVENT, name, device,
 					gfp, context, cont, true);
 }
