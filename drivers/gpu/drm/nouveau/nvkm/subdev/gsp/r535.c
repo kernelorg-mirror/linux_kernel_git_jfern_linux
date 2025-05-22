@@ -411,8 +411,8 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *rpc)
 
 	msg->checksum = upper_32_bits(csum) ^ lower_32_bits(csum);
 
-	print_hex_dump(KERN_INFO, "msg: ", DUMP_PREFIX_OFFSET, 16, 1,
-		       msg, len, true);
+	//print_hex_dump(KERN_INFO, "msg: ", DUMP_PREFIX_OFFSET, 16, 1,
+	//	       msg, len, true);
 
 	wptr = *gsp->cmdq.wptr;
 	do {
