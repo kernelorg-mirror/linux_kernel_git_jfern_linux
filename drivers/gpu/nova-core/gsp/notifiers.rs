@@ -35,11 +35,25 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
 
     let mut ptr: usize = 0;
     
-    // Print the first 100 bytes of opcode data
+    // Dump RPC header
+    let rpc_hdr_size = RpcMsg::ver::get_gsp_rpc_hdr_size() as usize;
+    let rpc_hdr_ptr = unsafe { msg.as_ptr() };
+    pr_info!("RPC header ({} bytes):", rpc_hdr_size);
+    let rpc_hdr_slice = unsafe { core::slice::from_raw_parts(rpc_hdr_ptr, rpc_hdr_size) };
+    print_bytes(rpc_hdr_slice, 20);
+    
+    // Dump s_rpc_run_cpu_sequencer
+    let s_rpc_run_size = fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as usize;
+    let s_rpc_run_ptr = unsafe { msg.as_ptr().byte_offset(rpc_hdr_size as isize) };
+    pr_info!("s_rpc_run_cpu_sequencer ({} bytes):", s_rpc_run_size);
+    let s_rpc_run_slice = unsafe { core::slice::from_raw_parts(s_rpc_run_ptr, s_rpc_run_size) };
+    print_bytes(s_rpc_run_slice, 20);
+    
+    // Print the first 200 bytes of opcode data
     let opcode_data_ptr = unsafe { msg.as_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize + fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as isize) };
-    pr_info!("First 100 bytes of sequencer data:");
-    let opcode_data_slice = unsafe { core::slice::from_raw_parts(opcode_data_ptr, 100) };
-    print_bytes(opcode_data_slice, 10);
+    pr_info!("First 200 bytes of sequencer data:");
+    let opcode_data_slice = unsafe { core::slice::from_raw_parts(opcode_data_ptr, 200) };
+    print_bytes(opcode_data_slice, 20);
 
     while ptr < cmd_index {
         let base_ptr = unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize + fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as isize + (ptr * 4) as isize) };

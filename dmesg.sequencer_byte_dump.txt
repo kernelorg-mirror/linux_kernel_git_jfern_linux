@@ -1,0 +1,840 @@
+[16332.467248] NovaCore: brom: 0x400 0x9
+[16332.467249] NovaCore: sig_fuse_version: 7
+[16332.467251] NovaCore: reg_fuse_version: 0x4
+[16332.467252] NovaCore: sigs FalconFwSign { sig_base_prd: 266968, sig_base_dbg: 0, sig_base_img: 59300, sig_size: 384, sig_nr_prd: 3, sigs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+[16332.467390] NovaCore: patching sigs 3 size 384
+[16332.467391] NovaCore: patch idx:2 src:0x415d8 dst 0xe7a4
+[16332.467393] NovaCore: booting fwsec
+[16332.467394] NovaCore: attempting to boot falcon fwsec sigs: 3
+[16332.467555] NovaCore: timeout
+[16332.467767] NovaCore: timeout
+[16332.682517] NovaCore: fwsec-frts: WPR2 @ 0x5ff2000 - 0x5ff2e00
+[16332.682790] NovaCore: timeout
+[16332.682846] NovaCore: attempting to boot falcon booter-load sigs: 2
+[16332.683004] NovaCore: timeout
+[16332.683160] NovaCore: timeout
+[16332.683371] NovaCore: timeout
+[16334.091279] NovaCore: MSG RPC FN received: 4098, looking for 4097
+[16334.091281] NovaCore: GSP RUN CPU SEQUENCER
+[16334.091282] NovaCore: running cpu seq
+[16334.091283] NovaCore: RPC header (32 bytes):
+[16334.091285] NovaCore: [0x00, 0x00, 0x00, 0x03, 0x56, 0x52, 0x50, 0x43, 0x70, 0x18, 0x00, 0x00, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091311] NovaCore: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091327] NovaCore: s_rpc_run_cpu_sequencer (40 bytes):
+[16334.091328] NovaCore: [0xE2, 0x3F, 0x00, 0x00, 0x0A, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091353] NovaCore: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091378] NovaCore: First 200 bytes of sequencer data:
+[16334.091379] NovaCore: [0x02, 0x00, 0x00, 0x00, 0x40, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00]
+[16334.091404] NovaCore: [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00]
+[16334.091429] NovaCore: [0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x11, 0x00, 0x14, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x01, 0x11, 0x00]
+[16334.091453] NovaCore: [0x10, 0xA4, 0xF4, 0x05, 0x00, 0x00, 0x00, 0x00, 0x28, 0x01, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091478] NovaCore: [0x14, 0x01, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x11, 0x00, 0x00, 0x01, 0x00, 0x00]
+[16334.091503] NovaCore: [0x00, 0x00, 0x00, 0x00, 0x18, 0x01, 0x11, 0x00, 0x14, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x18, 0x01, 0x11, 0x00]
+[16334.091528] NovaCore: [0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091552] NovaCore: [0x14, 0x01, 0x11, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x11, 0x00, 0x00, 0x02, 0x00, 0x00]
+[16334.091577] NovaCore: [0x00, 0x00, 0x00, 0x00, 0x18, 0x01, 0x11, 0x00, 0x14, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x18, 0x01, 0x11, 0x00]
+[16334.091602] NovaCore: [0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+[16334.091627] NovaCore: seq: GSP REG POLL addr: 0x110040 mask: 0x80000000 val: 0x80000000 timeout: 0
+[16334.091630] NovaCore: seq: GSP REG WRITE addr: 0x110040 val: 0x0
+[16334.091632] NovaCore: seq: GSP Core Reset
+[16334.091792] NovaCore: timeout
+[16334.092002] NovaCore: timeout
+[16334.092063] NovaCore: seq: GSP REG WRITE addr: 0x110600 val: 0x114
+[16334.092064] NovaCore: seq: GSP REG WRITE addr: 0x110110 val: 0x5f4a410
+[16334.092066] NovaCore: seq: GSP REG WRITE addr: 0x110128 val: 0x0
+[16334.092067] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x0
+[16334.092068] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x100
+[16334.092069] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092071] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092073] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x100
+[16334.092075] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x200
+[16334.092076] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092077] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092080] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x200
+[16334.092081] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x300
+[16334.092082] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092084] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092086] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x300
+[16334.092088] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x400
+[16334.092089] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092090] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092093] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x400
+[16334.092094] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x500
+[16334.092095] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092097] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092100] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x500
+[16334.092101] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x600
+[16334.092102] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092103] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092106] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x600
+[16334.092107] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x700
+[16334.092108] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092109] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092112] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x700
+[16334.092113] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x800
+[16334.092115] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092116] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092119] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x800
+[16334.092120] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x900
+[16334.092121] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092122] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092125] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x900
+[16334.092126] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xa00
+[16334.092127] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092129] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092131] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xa00
+[16334.092133] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xb00
+[16334.092134] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092135] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092138] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xb00
+[16334.092139] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xc00
+[16334.092140] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092141] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092144] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xc00
+[16334.092145] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xd00
+[16334.092147] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092148] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092151] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xd00
+[16334.092152] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xe00
+[16334.092153] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092154] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092157] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xe00
+[16334.092158] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xf00
+[16334.092159] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092161] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092163] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xf00
+[16334.092165] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1000
+[16334.092166] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092167] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092170] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1000
+[16334.092171] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1100
+[16334.092172] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092173] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092176] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1100
+[16334.092178] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1200
+[16334.092179] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092180] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092183] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1200
+[16334.092184] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1300
+[16334.092185] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092187] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092189] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1300
+[16334.092191] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1400
+[16334.092192] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092193] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092196] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1400
+[16334.092197] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1500
+[16334.092198] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092199] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092202] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1500
+[16334.092203] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1600
+[16334.092205] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092206] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092209] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1600
+[16334.092210] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1700
+[16334.092211] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092212] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092215] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1700
+[16334.092216] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1800
+[16334.092217] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092219] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092221] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1800
+[16334.092223] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1900
+[16334.092224] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092225] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092228] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1900
+[16334.092229] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1a00
+[16334.092230] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092231] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092234] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1a00
+[16334.092236] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1b00
+[16334.092237] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092238] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092241] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1b00
+[16334.092242] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1c00
+[16334.092243] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092244] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092247] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1c00
+[16334.092248] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1d00
+[16334.092249] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092251] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092254] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1d00
+[16334.092255] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1e00
+[16334.092256] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092257] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092260] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1e00
+[16334.092261] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1f00
+[16334.092262] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092264] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092267] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1f00
+[16334.092271] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2000
+[16334.092272] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092274] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092276] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2000
+[16334.092278] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2100
+[16334.092279] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092280] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092283] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2100
+[16334.092284] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2200
+[16334.092285] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092286] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092289] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2200
+[16334.092290] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2300
+[16334.092292] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092293] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092296] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2300
+[16334.092297] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2400
+[16334.092298] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092299] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092302] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2400
+[16334.092303] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2500
+[16334.092304] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092306] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092308] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2500
+[16334.092310] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2600
+[16334.092311] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092312] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092315] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2600
+[16334.092316] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2700
+[16334.092317] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092318] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092321] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2700
+[16334.092322] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2800
+[16334.092324] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092325] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092328] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2800
+[16334.092329] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2900
+[16334.092330] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092332] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092335] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2900
+[16334.092336] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2a00
+[16334.092337] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092339] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092342] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2a00
+[16334.092343] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2b00
+[16334.092345] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092346] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092349] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2b00
+[16334.092351] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2c00
+[16334.092352] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092353] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092356] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2c00
+[16334.092358] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2d00
+[16334.092359] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092361] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092364] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2d00
+[16334.092365] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2e00
+[16334.092366] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092368] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092371] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2e00
+[16334.092372] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2f00
+[16334.092374] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092375] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092378] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2f00
+[16334.092380] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3000
+[16334.092381] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092383] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092386] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3000
+[16334.092387] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3100
+[16334.092389] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092390] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092393] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3100
+[16334.092395] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3200
+[16334.092396] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092398] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092401] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3200
+[16334.092402] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3300
+[16334.092404] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092406] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092409] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3300
+[16334.092410] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3400
+[16334.092412] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092413] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092416] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3400
+[16334.092417] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3500
+[16334.092419] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092420] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092423] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3500
+[16334.092425] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3600
+[16334.092426] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092428] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092431] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3600
+[16334.092432] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3700
+[16334.092434] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092435] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092438] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3700
+[16334.092439] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3800
+[16334.092441] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092442] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092445] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3800
+[16334.092447] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3900
+[16334.092448] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092450] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092453] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3900
+[16334.092454] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3a00
+[16334.092456] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092457] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092460] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3a00
+[16334.092462] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3b00
+[16334.092463] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092464] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092467] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3b00
+[16334.092468] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3c00
+[16334.092469] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092471] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092474] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3c00
+[16334.092475] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3d00
+[16334.092476] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092477] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092480] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3d00
+[16334.092481] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3e00
+[16334.092482] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092484] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092486] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3e00
+[16334.092488] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x3f00
+[16334.092489] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092490] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092493] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x3f00
+[16334.092494] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x4000
+[16334.092495] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x614
+[16334.092496] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092499] NovaCore: seq: GSP REG WRITE addr: 0x110110 val: 0x5f4a451
+[16334.092500] NovaCore: seq: GSP REG WRITE addr: 0x110128 val: 0x0
+[16334.092502] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x0
+[16334.092503] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x0
+[16334.092504] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092505] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092508] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x100
+[16334.092509] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x100
+[16334.092510] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092512] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092514] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x200
+[16334.092516] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x200
+[16334.092517] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092518] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092521] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x300
+[16334.092522] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x300
+[16334.092523] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092524] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092527] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x400
+[16334.092528] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x400
+[16334.092530] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092531] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092534] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x500
+[16334.092535] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x500
+[16334.092536] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092537] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092540] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x600
+[16334.092541] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x600
+[16334.092543] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092544] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092547] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x700
+[16334.092548] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x700
+[16334.092549] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092551] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092554] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x800
+[16334.092555] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x800
+[16334.092556] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092557] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092560] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x900
+[16334.092561] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x900
+[16334.092562] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092564] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092566] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xa00
+[16334.092568] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xa00
+[16334.092569] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092570] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092573] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xb00
+[16334.092574] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xb00
+[16334.092575] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092576] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092579] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xc00
+[16334.092581] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xc00
+[16334.092582] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092583] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092586] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xd00
+[16334.092587] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xd00
+[16334.092588] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092590] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092592] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xe00
+[16334.092594] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xe00
+[16334.092595] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092596] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092599] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0xf00
+[16334.092600] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0xf00
+[16334.092601] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092602] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092605] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1000
+[16334.092606] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1000
+[16334.092608] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092609] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092612] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1100
+[16334.092613] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1100
+[16334.092614] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092615] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092618] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1200
+[16334.092619] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1200
+[16334.092621] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092622] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092625] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1300
+[16334.092626] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1300
+[16334.092627] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092628] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092631] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1400
+[16334.092633] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1400
+[16334.092635] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092636] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092639] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1500
+[16334.092641] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1500
+[16334.092642] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092644] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092647] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1600
+[16334.092648] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1600
+[16334.092650] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092651] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092654] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1700
+[16334.092656] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1700
+[16334.092657] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092659] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092662] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1800
+[16334.092663] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1800
+[16334.092665] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092666] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092669] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1900
+[16334.092671] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1900
+[16334.092672] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092674] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092677] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1a00
+[16334.092678] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1a00
+[16334.092680] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092681] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092684] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1b00
+[16334.092686] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1b00
+[16334.092687] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092688] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092691] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1c00
+[16334.092693] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1c00
+[16334.092694] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092696] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092699] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1d00
+[16334.092701] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1d00
+[16334.092704] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092706] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092710] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1e00
+[16334.092712] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1e00
+[16334.092715] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092717] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092721] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x1f00
+[16334.092724] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x1f00
+[16334.092726] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092727] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092730] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2000
+[16334.092732] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2000
+[16334.092734] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092736] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092740] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2100
+[16334.092741] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2100
+[16334.092743] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092744] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092747] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2200
+[16334.092749] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2200
+[16334.092750] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092752] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092755] NovaCore: seq: GSP REG WRITE addr: 0x110114 val: 0x2300
+[16334.092756] NovaCore: seq: GSP REG WRITE addr: 0x11011c val: 0x2300
+[16334.092758] NovaCore: seq: GSP REG WRITE addr: 0x110118 val: 0x600
+[16334.092759] NovaCore: seq: GSP REG POLL addr: 0x110118 mask: 0x2 val: 0x2 timeout: 0
+[16334.092762] NovaCore: seq: GSP REG WRITE addr: 0x111210 val: 0x1f10
+[16334.092764] NovaCore: seq: GSP REG WRITE addr: 0x11119c val: 0x400
+[16334.092765] NovaCore: seq: GSP REG WRITE addr: 0x111198 val: 0x1
+[16334.092767] NovaCore: seq: GSP REG WRITE addr: 0x111180 val: 0x1
+[16334.092768] NovaCore: seq: GSP REG WRITE addr: 0x110040 val: 0xfe
+[16334.092770] NovaCore: seq: GSP REG WRITE addr: 0x110104 val: 0x100
+[16334.092771] NovaCore: seq: GSP Core Start
+[16334.092773] NovaCore: seq: GSP Core Wait for Halt
+[16334.095564] NovaCore: seq: GSP Core Resume
+[16334.095721] NovaCore: timeout
+[16334.180198] NovaCore: MSG RPC FN received: 4123, looking for 4097
+[16334.180199] NovaCore: USER SHARED DATA 0
+[16334.182945] NovaCore: MSG RPC FN received: 4108, looking for 4097
+[16334.182947] NovaCore: Unhandled 0x100c
+[16334.183293] NovaCore: MSG RPC FN received: 4108, looking for 4097
+[16334.183294] NovaCore: Unhandled 0x100c
+[16334.319949] NovaCore: MSG RPC FN received: 4097, looking for 4097
+[16334.323615] NovaCore: MSG RPC FN received: 65, looking for 65
+[16334.323617] NovaCore: MSG FUNC MATCHED 65
+[16334.323618] NovaCore: region 0: 0x0 0x60fffff true false false false
+[16334.323620] NovaCore: region 1: 0x6100000 0x5f16dffff false false true true
+[16334.323622] NovaCore: region 2: 0x5f16e0000 0x5f4b8ffff true false true true
+[16334.323624] NovaCore: region 3: 0x5f4b90000 0x5f4bfffff true false false false
+[16334.323626] NovaCore: region 4: 0x5f4c00000 0x5ff3fffff true false false false
+[16334.323628] NovaCore: node 24832 6206944
+[16334.323629] NovaCore: node 24832 6231776
+[16334.323874] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.323875] NovaCore: MSG FUNC MATCHED 76
+[16334.323876] NovaCore: kernel table params 28
+[16334.323999] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.324000] NovaCore: MSG FUNC MATCHED 76
+[16334.324141] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.324142] NovaCore: MSG FUNC MATCHED 76
+[16334.324143] NovaCore: fifo device 1 GR 0
+[16334.324145] NovaCore: fifo device 37 NVENC 0
+[16334.324147] NovaCore: fifo device 29 NVDEC 0
+[16334.324148] NovaCore: fifo device 9 CE 0
+[16334.324149] NovaCore: fifo device 10 CE 1
+[16334.324150] NovaCore: fifo device 11 CE 2
+[16334.324151] NovaCore: fifo device 12 CE 3
+[16334.324153] NovaCore: fifo device 13 CE 4
+[16334.324154] NovaCore: fifo device 61 OFA 0
+[16334.324514] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.324515] NovaCore: MSG FUNC MATCHED 76
+[16334.324517] NovaCore: engine 0: 1409792/4096
+[16334.324518] NovaCore: engine 1: 4294967295/4294967295
+[16334.324519] NovaCore: engine 2: 4294967295/4294967295
+[16334.324521] NovaCore: engine 3: 4294967295/4294967295
+[16334.324522] NovaCore: engine 4: 4294967295/4294967295
+[16334.324523] NovaCore: engine 5: 4294967295/4294967295
+[16334.324524] NovaCore: engine 6: 4294967295/4294967295
+[16334.324525] NovaCore: engine 7: 4294967295/4294967295
+[16334.324527] NovaCore: engine 8: 1150464/4096
+[16334.324528] NovaCore: engine 9: 72704/4096
+[16334.324529] NovaCore: engine 10: 22020096/4096
+[16334.324531] NovaCore: engine 11: 2337792/4096
+[16334.324532] NovaCore: engine 12: 2508800/256
+[16334.324533] NovaCore: engine 13: 131072/256
+[16334.324534] NovaCore: engine 14: 8655488/4096
+[16334.324536] NovaCore: engine 15: 532480/256
+[16334.324538] NovaCore: engine 16: 20480/4096
+[16334.324539] NovaCore: engine 17: 12288/256
+[16334.324541] NovaCore: engine 18: 131072/256
+[16334.324543] NovaCore: engine 19: 8720896/4096
+[16334.324545] NovaCore: engine 20: 524288/256
+[16334.324547] NovaCore: engine 21: 0/4096
+[16334.324549] NovaCore: engine 22: 1124/4096
+[16334.324551] NovaCore: engine 23: 65536/4096
+[16334.324553] NovaCore: engine 24: 524288/4096
+[16334.324560] NovaCore: pushing engine 0 GR 0
+[16334.324561] NovaCore: pushing engine 6 NVENC 0
+[16334.324562] NovaCore: pushing engine 3 NVDEC 0
+[16334.324563] NovaCore: pushing engine 0 CE 0
+[16334.324565] NovaCore: pushing engine 0 CE 1
+[16334.324566] NovaCore: pushing engine 1 CE 2
+[16334.324567] NovaCore: pushing engine 2 CE 3
+[16334.324568] NovaCore: pushing engine 8 CE 4
+[16334.324570] NovaCore: pushing engine 7 OFA 0
+[16334.324840] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.324841] NovaCore: MSG FUNC MATCHED 76
+[16334.324843] NovaCore: fault buffer size 20480
+[16334.325016] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.325017] NovaCore: MSG FUNC MATCHED 76
+[16334.325022] NovaCore: vma drop fwsec 0xfbe60000 0xf000
+[16334.325033] NovaCore: instobj new 4096 0
+[16334.325035] NovaCore: tail a:0x1 s:0x5f16df e:0x5f16e0 c:0x0
+[16334.325037] NovaCore: allocated vram: 0x5f16df000 0x1000 1
+[16334.325038] NovaCore: BAR 2 INIT VMM 0x1000000
+[16334.325040] NovaCore: new 4 2
+[16334.325074] NovaCore: instobj new 32 4096
+[16334.325076] NovaCore: tail a:0x1 s:0x5f16de e:0x5f16df c:0x0
+[16334.325077] NovaCore: allocated vram: 0x5f16de000 0x1000 1
+[16334.325080] NovaCore: MmuPt: addr: 0x5f16de000
+[16334.325083] NovaCore: new 512 9
+[16334.328587] NovaCore: instobj new 4096 4096
+[16334.328592] NovaCore: tail a:0x1 s:0x5f16dd e:0x5f16de c:0x0
+[16334.328593] NovaCore: allocated vram: 0x5f16dd000 0x1000 1
+[16334.328718] NovaCore: MmuPt: addr: 0x5f16dd000
+[16334.328719] NovaCore: new 512 9
+[16334.332242] NovaCore: instobj new 4096 4096
+[16334.332245] NovaCore: tail a:0x1 s:0x5f16dc e:0x5f16dd c:0x0
+[16334.332247] NovaCore: allocated vram: 0x5f16dc000 0x1000 1
+[16334.332377] NovaCore: MmuPt: addr: 0x5f16dc000
+[16334.332380] NovaCore: new 256 8
+[16334.334386] NovaCore: instobj new 4096 4096
+[16334.334389] NovaCore: tail a:0x1 s:0x5f16db e:0x5f16dc c:0x0
+[16334.334391] NovaCore: allocated vram: 0x5f16db000 0x1000 1
+[16334.334516] NovaCore: MmuPt: addr: 0x5f16db000
+[16334.334518] NovaCore: new 512 9
+[16334.334519] NovaCore: Setting up SPT 9 5
+[16334.334521] NovaCore: instobj new 4096 4096
+[16334.334522] NovaCore: tail a:0x1 s:0x5f16da e:0x5f16db c:0x0
+[16334.334524] NovaCore: allocated vram: 0x5f16da000 0x1000 1
+[16334.334648] NovaCore: MmuPt: addr: 0x5f16da000
+[16334.334650] NovaCore: new 512 9
+[16334.334651] NovaCore: Setting up SPT 9 5
+[16334.334652] NovaCore: instobj new 4096 4096
+[16334.334653] NovaCore: tail a:0x1 s:0x5f16d9 e:0x5f16da c:0x0
+[16334.334655] NovaCore: allocated vram: 0x5f16d9000 0x1000 1
+[16334.334781] NovaCore: MmuPt: addr: 0x5f16d9000
+[16334.334782] NovaCore: new 512 9
+[16334.334783] NovaCore: Setting up SPT 9 5
+[16334.334785] NovaCore: instobj new 4096 4096
+[16334.334786] NovaCore: tail a:0x1 s:0x5f16d8 e:0x5f16d9 c:0x0
+[16334.334787] NovaCore: allocated vram: 0x5f16d8000 0x1000 1
+[16334.334911] NovaCore: MmuPt: addr: 0x5f16d8000
+[16334.334913] NovaCore: new 512 9
+[16334.334914] NovaCore: Setting up SPT 9 5
+[16334.334915] NovaCore: instobj new 4096 4096
+[16334.334916] NovaCore: tail a:0x1 s:0x5f16d7 e:0x5f16d8 c:0x0
+[16334.334918] NovaCore: allocated vram: 0x5f16d7000 0x1000 1
+[16334.335043] NovaCore: MmuPt: addr: 0x5f16d7000
+[16334.335044] NovaCore: new 512 9
+[16334.335045] NovaCore: Setting up SPT 9 5
+[16334.335047] NovaCore: instobj new 4096 4096
+[16334.335048] NovaCore: tail a:0x1 s:0x5f16d6 e:0x5f16d7 c:0x0
+[16334.335049] NovaCore: allocated vram: 0x5f16d6000 0x1000 1
+[16334.335173] NovaCore: MmuPt: addr: 0x5f16d6000
+[16334.335175] NovaCore: new 512 9
+[16334.335176] NovaCore: Setting up SPT 9 5
+[16334.335177] NovaCore: instobj new 4096 4096
+[16334.335178] NovaCore: tail a:0x1 s:0x5f16d5 e:0x5f16d6 c:0x0
+[16334.335180] NovaCore: allocated vram: 0x5f16d5000 0x1000 1
+[16334.335316] NovaCore: MmuPt: addr: 0x5f16d5000
+[16334.335318] NovaCore: new 512 9
+[16334.335320] NovaCore: Setting up SPT 9 5
+[16334.335321] NovaCore: instobj new 4096 4096
+[16334.335323] NovaCore: tail a:0x1 s:0x5f16d4 e:0x5f16d5 c:0x0
+[16334.335325] NovaCore: allocated vram: 0x5f16d4000 0x1000 1
+[16334.335450] NovaCore: MmuPt: addr: 0x5f16d4000
+[16334.335452] NovaCore: new 512 9
+[16334.335453] NovaCore: Setting up SPT 9 5
+[16334.335454] NovaCore: instobj new 4096 4096
+[16334.335456] NovaCore: tail a:0x1 s:0x5f16d3 e:0x5f16d4 c:0x0
+[16334.335459] NovaCore: allocated vram: 0x5f16d3000 0x1000 1
+[16334.335584] NovaCore: MmuPt: addr: 0x5f16d3000
+[16334.335590] NovaCore: mapping post valid 5 7 5 12
+[16334.335594] NovaCore: kmap inst 0x0 0x1000
+[16334.335616] NovaCore: mapping post valid 5 7 5 12
+[16334.335618] NovaCore: kmap inst 0x1000 0x1000
+[16334.335623] NovaCore: mapping post valid 5 7 5 12
+[16334.335626] NovaCore: kmap inst 0x2000 0x1000
+[16334.335631] NovaCore: mapping post valid 5 7 5 12
+[16334.335634] NovaCore: kmap inst 0x3000 0x1000
+[16334.335639] NovaCore: mapping post valid 5 7 5 12
+[16334.335641] NovaCore: kmap inst 0x4000 0x1000
+[16334.335645] NovaCore: mapping post valid 5 7 5 12
+[16334.335648] NovaCore: kmap inst 0x5000 0x1000
+[16334.335652] NovaCore: mapping post valid 5 7 5 12
+[16334.335655] NovaCore: kmap inst 0x6000 0x1000
+[16334.335658] NovaCore: mapping post valid 5 7 5 12
+[16334.335661] NovaCore: kmap inst 0x7000 0x1000
+[16334.335895] NovaCore: MSG RPC FN received: 70, looking for 70
+[16334.335897] NovaCore: mapping post valid 5 7 5 12
+[16334.335904] NovaCore: instobj new 4096 0
+[16334.335906] NovaCore: tail a:0x1 s:0x5f16d2 e:0x5f16d3 c:0x0
+[16334.335907] NovaCore: allocated vram: 0x5f16d2000 0x1000 1
+[16334.335908] NovaCore: BAR 1 INIT VMM 0x10000000
+[16334.335910] NovaCore: new 4 2
+[16334.336270] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.336535] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.336772] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.336774] NovaCore: instobj new 73728 0
+[16334.336776] NovaCore: tail a:0x12 s:0x5f16c0 e:0x5f16d2 c:0x0
+[16334.336778] NovaCore: allocated vram: 0x5f16c0000 0x12000 1
+[16334.336780] NovaCore: mapping post valid 5 7 5 12
+[16334.338784] NovaCore: new 4 2
+[16334.338818] NovaCore: instobj new 32 4096
+[16334.338819] NovaCore: tail a:0x1 s:0x5f16bf e:0x5f16c0 c:0x0
+[16334.338821] NovaCore: allocated vram: 0x5f16bf000 0x1000 1
+[16334.338823] NovaCore: mapping post valid 5 7 5 12
+[16334.338829] NovaCore: MmuPt: addr: 0x5f16bf000
+[16334.338831] NovaCore: new 512 9
+[16334.342341] NovaCore: instobj new 4096 4096
+[16334.342345] NovaCore: tail a:0x1 s:0x5f16be e:0x5f16bf c:0x0
+[16334.342347] NovaCore: allocated vram: 0x5f16be000 0x1000 1
+[16334.342350] NovaCore: mapping post valid 5 7 5 12
+[16334.342478] NovaCore: MmuPt: addr: 0x5f16be000
+[16334.342479] NovaCore: new 512 9
+[16334.345999] NovaCore: instobj new 4096 4096
+[16334.346003] NovaCore: tail a:0x1 s:0x5f16bd e:0x5f16be c:0x0
+[16334.346005] NovaCore: allocated vram: 0x5f16bd000 0x1000 1
+[16334.346008] NovaCore: mapping post valid 5 7 5 12
+[16334.346135] NovaCore: MmuPt: addr: 0x5f16bd000
+[16334.346498] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.347160] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.347163] NovaCore: alloc flags 0x200020 0x15
+[16334.347165] NovaCore: instobj 0x5f16c0000 0x12000
+[16334.348577] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.348580] NovaCore: instobj new 1675264 65536
+[16334.348582] NovaCore: tail a:0x1a0 s:0x5f1510 e:0x5f16bd c:0xd
+[16334.348584] NovaCore: allocated vram: 0x5f1510000 0x1a0000 1
+[16334.348587] NovaCore: mapping post valid 5 7 5 12
+[16334.393792] NovaCore: instobj new 131072 65536
+[16334.393793] NovaCore: tail a:0x20 s:0x5f14f0 e:0x5f1510 c:0x0
+[16334.393795] NovaCore: allocated vram: 0x5f14f0000 0x20000 1
+[16334.393796] NovaCore: instobj new 20480 4096
+[16334.393798] NovaCore: tail a:0x5 s:0x5f16b8 e:0x5f16bd c:0x0
+[16334.393799] NovaCore: allocated vram: 0x5f16b8000 0x5000 1
+[16334.393801] NovaCore: mapping post valid 5 7 5 12
+[16334.394362] NovaCore: instobj new 12288 4096
+[16334.394364] NovaCore: tail a:0x3 s:0x5f16b5 e:0x5f16b8 c:0x0
+[16334.394365] NovaCore: allocated vram: 0x5f16b5000 0x3000 1
+[16334.394367] NovaCore: instobj new 8720896 2097152
+[16334.394368] NovaCore: tail a:0xa00 s:0x5f0a00 e:0x5f14f0 c:0xf0
+[16334.394370] NovaCore: allocated vram: 0x5f0a00000 0xa00000 1
+[16334.394371] NovaCore: instobj new 524288 65536
+[16334.394373] NovaCore: tail a:0x80 s:0x5f1470 e:0x5f14f0 c:0x0
+[16334.394374] NovaCore: allocated vram: 0x5f1470000 0x80000 1
+[16334.394376] NovaCore: instobj new 65536 65536
+[16334.394378] NovaCore: tail a:0x10 s:0x5f1460 e:0x5f1470 c:0x0
+[16334.394380] NovaCore: allocated vram: 0x5f1460000 0x10000 1
+[16334.394382] NovaCore: mapping post valid 5 7 5 12
+[16334.396157] NovaCore: instobj new 524288 65536
+[16334.396159] NovaCore: tail a:0x80 s:0x5f0980 e:0x5f0a00 c:0x0
+[16334.396160] NovaCore: allocated vram: 0x5f0980000 0x80000 1
+[16334.396162] NovaCore: mapping post valid 5 7 5 12
+[16334.410320] NovaCore: instobj new 524288 65536
+[16334.410322] NovaCore: tail a:0x80 s:0x5f0900 e:0x5f0980 c:0x0
+[16334.410323] NovaCore: allocated vram: 0x5f0900000 0x80000 1
+[16334.410325] NovaCore: mapping post valid 5 7 5 12
+[16334.424485] NovaCore: map valid: Illegal alignment 0x10000 0x1a0000 0x0 21 16
+[16334.424489] NovaCore: mapping post valid 4 7 7 16
+[16334.424491] NovaCore: new 256 8
+[16334.426325] NovaCore: instobj new 4096 4096
+[16334.426328] NovaCore: tail a:0x1 s:0x5f16b4 e:0x5f16b5 c:0x0
+[16334.426330] NovaCore: allocated vram: 0x5f16b4000 0x1000 1
+[16334.426332] NovaCore: mapping post valid 5 7 5 12
+[16334.426457] NovaCore: MmuPt: addr: 0x5f16b4000
+[16334.426459] NovaCore: new 32 5
+[16334.426460] NovaCore: Setting up LPT 32
+[16334.426461] NovaCore: instobj new 256 256
+[16334.426462] NovaCore: tail a:0x1 s:0x5f16b3 e:0x5f16b4 c:0x0
+[16334.426464] NovaCore: allocated vram: 0x5f16b3000 0x1000 1
+[16334.426466] NovaCore: mapping post valid 5 7 5 12
+[16334.426479] NovaCore: MmuPt: addr: 0x5f16b3000
+[16334.426496] NovaCore: map valid: Illegal alignment 0x1b0000 0x20000 0x0 21 16
+[16334.426499] NovaCore: mapping post valid 4 7 7 16
+[16334.426503] NovaCore: map valid: Illegal alignment 0x1000 0x5000 0x0 21 12
+[16334.426505] NovaCore: map valid: Illegal alignment 0x1000 0x5000 0x0 16 12
+[16334.426507] NovaCore: mapping post valid 5 7 7 12
+[16334.426508] NovaCore: instobj new 4096 4096
+[16334.426510] NovaCore: tail a:0x1 s:0x5f16b2 e:0x5f16b3 c:0x0
+[16334.426511] NovaCore: allocated vram: 0x5f16b2000 0x1000 1
+[16334.426513] NovaCore: mapping post valid 5 7 5 12
+[16334.426628] NovaCore: MmuPt: addr: 0x5f16b2000
+[16334.426632] NovaCore: map valid: Illegal alignment 0x6000 0x3000 0x0 21 12
+[16334.426634] NovaCore: map valid: Illegal alignment 0x6000 0x3000 0x0 16 12
+[16334.426636] NovaCore: mapping post valid 5 7 7 12
+[16334.426640] NovaCore: mapping post valid 3 7 7 21
+[16334.426646] NovaCore: map valid: Illegal alignment 0x1d0000 0x80000 0x0 21 16
+[16334.426648] NovaCore: mapping post valid 4 7 7 16
+[16334.426650] NovaCore: new 32 5
+[16334.426651] NovaCore: Setting up LPT 32
+[16334.426652] NovaCore: instobj new 256 256
+[16334.426653] NovaCore: tail a:0x1 s:0x5f16b1 e:0x5f16b2 c:0x0
+[16334.426655] NovaCore: allocated vram: 0x5f16b1000 0x1000 1
+[16334.426657] NovaCore: mapping post valid 5 7 5 12
+[16334.426668] NovaCore: MmuPt: addr: 0x5f16b1000
+[16334.426679] NovaCore: map valid: Illegal alignment 0x250000 0x10000 0x0 21 16
+[16334.426681] NovaCore: mapping post valid 4 7 7 16
+[16334.426684] NovaCore: map valid: Illegal alignment 0x260000 0x80000 0x0 21 16
+[16334.426686] NovaCore: mapping post valid 4 7 7 16
+[16334.426690] NovaCore: promote_gr: dev:0xc1d00000 chan:0xf1f00000 ents:9
+[16334.426692] NovaCore: promote 0: pa:0x5f1510000/0x4 sz 0x199000 va 0x10000 init:true nm:false
+[16334.426694] NovaCore: promote 4: pa:0x0/0x0 sz 0x0 va 0x1b0000 init:false nm:false
+[16334.426696] NovaCore: promote 2: pa:0x5f16b8000/0x4 sz 0x5000 va 0x1000 init:true nm:false
+[16334.426698] NovaCore: promote 3: pa:0x0/0x0 sz 0x0 va 0x6000 init:false nm:false
+[16334.426700] NovaCore: promote 5: pa:0x0/0x0 sz 0x0 va 0x1000000 init:false nm:false
+[16334.426702] NovaCore: promote 6: pa:0x0/0x0 sz 0x0 va 0x1d0000 init:false nm:false
+[16334.426704] NovaCore: promote 9: pa:0x5f1460000/0x4 sz 0x10000 va 0x250000 init:true nm:false
+[16334.426705] NovaCore: promote 10: pa:0x5f0980000/0x4 sz 0x80000 va 0x0 init:true nm:true
+[16334.426707] NovaCore: promote 11: pa:0x5f0900000/0x4 sz 0x80000 va 0x260000 init:true nm:false
+[16334.433275] NovaCore: MSG RPC FN received: 76, looking for 76
+[16334.486399] NovaCore: MSG RPC FN received: 103, looking for 103
+[16334.487351] NovaCore: MSG RPC FN received: 10, looking for 10
+[16334.487588] NovaCore: MSG RPC FN received: 4123, looking for 10
+[16334.487590] NovaCore: USER SHARED DATA 1
+[16334.487872] NovaCore: MSG RPC FN received: 4100, looking for 10
+[16334.487873] NovaCore: RC TRIGGERED engn:0x1 chid:0 type:45, scope:1 part:233
+[16334.488164] NovaCore: MSG RPC FN received: 4123, looking for 10
+[16334.488165] NovaCore: USER SHARED DATA 2
+[16334.488938] NovaCore: MSG RPC FN received: 10, looking for 10
+[16334.489168] NovaCore: MSG RPC FN received: 10, looking for 10
+[16334.489182] NovaCore: Dropping MmuPt 0x5f16b2000
+[16334.489184] NovaCore: kunmap inst 0x2d5000
+[16334.489191] NovaCore: freeing vram 0x5f16b2 0x1
+[16334.489199] NovaCore: Dropping MmuPt 0x5f16b3000
+[16334.489200] NovaCore: kunmap inst 0x2d4000
+[16334.489204] NovaCore: freeing vram 0x5f16b3 0x1
+[16334.489206] NovaCore: Dropping VmmPt
+[16334.489212] NovaCore: Dropping MmuPt 0x5f16b4000
+[16334.489213] NovaCore: kunmap inst 0x2d3000
+[16334.489217] NovaCore: freeing vram 0x5f16b4 0x1
+[16334.489219] NovaCore: Dropping VmmPt
+[16334.489219] NovaCore: Dropping VmmPt
+[16334.489220] NovaCore: Dropping MmuPt 0x5f16b1000
+[16334.489221] NovaCore: kunmap inst 0x2d6000
+[16334.489225] NovaCore: freeing vram 0x5f16b1 0x1
+[16334.489645] NovaCore: Dropping MmuPt 0x5f16be000
+[16334.489646] NovaCore: kunmap inst 0x1c000
+[16334.489651] NovaCore: freeing vram 0x5f16be 0x1
+[16334.489653] NovaCore: Dropping VmmPt
+[16334.489653] NovaCore: Dropping VmmPt
+[16334.489654] NovaCore: Dropping MmuPt 0x5f16bd000
+[16334.489655] NovaCore: kunmap inst 0x1d000
+[16334.489660] NovaCore: freeing vram 0x5f16bd 0x1
+[16334.492422] NovaCore: Dropping VmmPt
+[16334.492424] NovaCore: Dropping MmuPt 0x5f16bf000
+[16334.492426] NovaCore: kunmap inst 0x1b000
+[16334.492440] NovaCore: freeing vram 0x5f16bf 0x1
+[16334.492446] NovaCore: kunmap inst 0x9000
+[16334.492456] NovaCore: freeing vram 0x5f16c0 0x12
+[16334.492722] NovaCore: MSG RPC FN received: 10, looking for 10
+[16334.492974] NovaCore: MSG RPC FN received: 10, looking for 10
+[16334.493153] NovaCore: MSG RPC FN received: 10, looking for 10
+[16335.309101] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16336.310242] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16337.311351] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16338.312468] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16339.313575] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16340.314687] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16341.315795] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16342.316906] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16343.318015] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16344.319120] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16345.322224] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16346.325987] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16347.329791] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16348.333614] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16349.337370] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16350.341104] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16351.344974] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16352.348773] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16353.352449] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16354.356260] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16355.360074] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16356.363898] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16357.367561] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16358.371293] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16359.375046] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16360.378855] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16361.382649] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16362.386482] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16363.390268] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16364.394045] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16365.397873] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16366.401664] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16367.405461] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16368.409232] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16369.413071] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16370.416891] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16371.420685] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16372.424525] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16373.428382] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16374.432194] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16375.436020] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16376.439810] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16377.443612] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16378.447415] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16379.451189] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16380.454930] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16381.458791] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16382.462651] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16383.466445] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16384.470222] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16385.474038] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16386.477866] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16387.481690] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16388.485466] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16389.489228] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16390.493056] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16391.496808] NovaCore: MSG RPC FN received: 4104, looking for 0
+[16392.500575] NovaCore: MSG RPC FN received: 4104, looking for 0
