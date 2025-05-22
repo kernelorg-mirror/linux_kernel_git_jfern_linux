@@ -445,7 +445,7 @@ r535_gsp_cmdq_push(struct nvkm_gsp *gsp, void *rpc)
 		len -= size;
 	} while (len);
 
-	nvkm_trace(&gsp->subdev, "cmdq: wptr %d\n", wptr);
+	nvkm_info(&gsp->subdev, "cmdq: wptr %d\n", wptr);
 	wmb();
 	(*gsp->cmdq.wptr) = wptr;
 	mb();
@@ -1994,6 +1994,83 @@ r535_gsp_msg_post_event(void *priv, u32 fn, void *repv, u32 repc)
 }
 
 /**
+ * print_bytes - Print a byte array with bytes_per_line bytes on each line
+ * @subdev: subdev for printing
+ * @bytes: pointer to the byte array
+ * @len: length of the byte array
+ * @bytes_per_line: number of bytes to print per line
+ *
+ * Each line is formatted as [0xAA, 0xBB, ...]
+ */
+static void 
+print_bytes(struct nvkm_subdev *subdev, const u8 *bytes, size_t len, size_t bytes_per_line)
+{
+	size_t i, j;
+	
+	for (i = 0; i < len; i += bytes_per_line) {
+		// Print opening bracket
+		pr_err("[");
+		
+		// Print each byte with comma separators
+		for (j = 0; j < bytes_per_line && i + j < len; j++) {
+			if (j > 0)
+				pr_cont(", ");
+			pr_cont("0x%02X", bytes[i + j]);
+		}
+		
+		// Print closing bracket and newline
+		pr_cont("]\n");
+	}
+}
+
+/**
+ * dump_bytes - Dump byte data from the RPC message
+ * @gsp: gsp pointer
+ * @data: pointer to the data
+ * @len: length of the data
+ *
+ * Dumps the RPC header, run structure, and opcode data
+ */
+static void 
+dump_bytes(struct nvkm_gsp *gsp, const void *data, size_t len)
+{
+	struct nvkm_subdev *subdev = &gsp->subdev;
+	const u8 *bytes = data;
+	// RPC header size
+	const size_t rpc_header_size = sizeof(struct nvfw_gsp_rpc);
+	
+	// Dump RPC header
+	pr_err("RPC header (%zu bytes):", rpc_header_size);
+	if (rpc_header_size > 0 && len >= rpc_header_size) {
+		print_bytes(subdev, bytes, rpc_header_size, 20);
+	} else {
+		pr_err("(RPC header not available or size unknown)");
+	}
+	
+	// Dump run structure (seq_info)
+	const size_t run_struct_size = sizeof(rpc_run_cpu_sequencer_v17_00);
+	const size_t run_struct_start = rpc_header_size;
+	
+	pr_err("Run structure (%zu bytes):", run_struct_size);
+	if (len >= run_struct_start + run_struct_size) {
+		print_bytes(subdev, bytes + run_struct_start, run_struct_size, 20);
+	} else {
+		pr_err("(Run structure not available or not enough data)");
+	}
+	
+	// Dump opcode data (first 200 bytes)
+	const size_t opcode_data_start = run_struct_start + run_struct_size;
+	
+	pr_err("First 200 bytes of opcode data:");
+	if (len > opcode_data_start) {
+		const size_t opcode_data_len = min_t(size_t, 200, len - opcode_data_start);
+		print_bytes(subdev, bytes + opcode_data_start, opcode_data_len, 20);
+	} else {
+		pr_err("(Opcode data not available or not enough data)");
+	}
+}
+
+/**
  * r535_gsp_msg_run_cpu_sequencer() -- process I/O commands from the GSP
  * @priv: gsp pointer
  * @fn: function number (ignored)
@@ -2013,7 +2090,10 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 	rpc_run_cpu_sequencer_v17_00 *seq = repv;
 	int ptr = 0, ret;
 
-	nvkm_debug(subdev, "seq: %08x %08x\n", seq->bufferSizeDWord, seq->cmdIndex);
+	pr_err("seq: %08x %08x riscv_active:%d\n", seq->bufferSizeDWord, seq->cmdIndex, nvkm_falcon_riscv_active(&gsp->falcon));
+	
+	// Dump the byte data to help with debugging
+	dump_bytes(gsp, repv, repc);
 
 	while (ptr < seq->cmdIndex) {
 		GSP_SEQUENCER_BUFFER_CMD *cmd = (void *)&seq->commandBuffer[ptr];
@@ -2026,7 +2106,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 			u32 addr = cmd->payload.regWrite.addr;
 			u32 data = cmd->payload.regWrite.val;
 
-			nvkm_trace(subdev, "seq wr32 %06x %08x\n", addr, data);
+			pr_err("seq wr32 %06x %08x\n", addr, data);
 			nvkm_wr32(device, addr, data);
 		}
 			break;
@@ -2035,7 +2115,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 			u32 mask = cmd->payload.regModify.mask;
 			u32 data = cmd->payload.regModify.val;
 
-			nvkm_trace(subdev, "seq mask %06x %08x %08x\n", addr, mask, data);
+			pr_err("seq mask %06x %08x %08x\n", addr, mask, data);
 			nvkm_mask(device, addr, mask, data);
 		}
 			break;
@@ -2046,7 +2126,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 			u32 usec = cmd->payload.regPoll.timeout ?: 4000000;
 			//u32 error = cmd->payload.regPoll.error;
 
-			nvkm_trace(subdev, "seq poll %06x %08x %08x %d\n", addr, mask, data, usec);
+			pr_err("seq poll %06x %08x %08x %d\n", addr, mask, data, usec);
 			nvkm_rd32(device, addr);
 			nvkm_usec(device, usec,
 				if ((nvkm_rd32(device, addr) & mask) == data)
@@ -2057,7 +2137,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 		case GSP_SEQ_BUF_OPCODE_DELAY_US: {
 			u32 usec = cmd->payload.delayUs.val;
 
-			nvkm_trace(subdev, "seq usec %d\n", usec);
+			pr_err("seq usec %d\n", usec);
 			udelay(usec);
 		}
 			break;
@@ -2066,25 +2146,25 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 			u32 slot = cmd->payload.regStore.index;
 
 			seq->regSaveArea[slot] = nvkm_rd32(device, addr);
-			nvkm_trace(subdev, "seq save %08x -> %d: %08x\n", addr, slot,
+			pr_err("seq save %08x -> %d: %08x\n", addr, slot,
 				   seq->regSaveArea[slot]);
 		}
 			break;
 		case GSP_SEQ_BUF_OPCODE_CORE_RESET:
-			nvkm_trace(subdev, "seq core reset\n");
+			pr_err("seq core reset\n");
 			nvkm_falcon_reset(&gsp->falcon);
 			nvkm_falcon_mask(&gsp->falcon, 0x624, 0x00000080, 0x00000080);
 			nvkm_falcon_wr32(&gsp->falcon, 0x10c, 0x00000000);
 			break;
 		case GSP_SEQ_BUF_OPCODE_CORE_START:
-			nvkm_trace(subdev, "seq core start\n");
+			pr_err("seq core start\n");
 			if (nvkm_falcon_rd32(&gsp->falcon, 0x100) & 0x00000040)
 				nvkm_falcon_wr32(&gsp->falcon, 0x130, 0x00000002);
 			else
 				nvkm_falcon_wr32(&gsp->falcon, 0x100, 0x00000002);
 			break;
 		case GSP_SEQ_BUF_OPCODE_CORE_WAIT_FOR_HALT:
-			nvkm_trace(subdev, "seq core wait halt\n");
+			pr_err("seq core wait halt\n");
 			nvkm_msec(device, 2000,
 				if (nvkm_falcon_rd32(&gsp->falcon, 0x100) & 0x00000010)
 					break;
@@ -2094,7 +2174,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 			struct nvkm_sec2 *sec2 = device->sec2;
 			u32 mbox0;
 
-			nvkm_trace(subdev, "seq core resume\n");
+			pr_err("seq core resume\n");
 
 			ret = gsp->func->reset(gsp);
 			if (WARN_ON(ret))
@@ -2121,6 +2201,9 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 
 			if (WARN_ON(!nvkm_falcon_riscv_active(&gsp->falcon)))
 				return -EIO;
+			else {
+				pr_err("seq core: riscv is active\n");
+			}
 		}
 			break;
 		default:
