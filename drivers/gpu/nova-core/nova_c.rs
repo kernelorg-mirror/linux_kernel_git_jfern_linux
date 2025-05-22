@@ -27,6 +27,7 @@ pub mod core_api;
 pub mod vgpu_mgr;
 
 use crate::driver::NovaCoreDriver;
+use kernel::{pr_info, pr_cont};
 
 kernel::module_pci_driver! {
     type: NovaCoreDriver,
@@ -34,6 +35,26 @@ kernel::module_pci_driver! {
     author: "Danilo Krummrich",
     description: "Nova Core GPU driver",
     license: "GPL v2",
+}
+
+/// Print a byte slice using pr_info, with bytes_per_line bytes on each line.
+/// Each line is formatted as [0xAA, 0xBB, ...].
+pub(crate) fn print_bytes(bytes: &[u8], bytes_per_line: usize) {
+    for chunk in bytes.chunks(bytes_per_line) {
+        // Print opening bracket
+        pr_info!("[");
+        
+        // Print each byte with comma separators
+        for (i, byte) in chunk.iter().enumerate() {
+            if i > 0 {
+                pr_cont!(", ");
+            }
+            pr_cont!("0x{:02X}", byte);
+        }
+        
+        // Print closing bracket and newline
+        pr_cont!("]\n");
+    }
 }
 
 pub(crate) fn align64(value: u64, alignment: u64) -> u64 {

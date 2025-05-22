@@ -13,7 +13,7 @@ use crate::gsp::gsp_falcon;
 use crate::accel::fifo::EventHandler;
 
 use crate::gsp::*;
-
+use crate::print_bytes;
 #[versions(GSP)]
 pub(crate) struct Notifiers {
 }
@@ -34,6 +34,12 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
     cmd_index = run_cpu.get_cmdIndex() as usize;
 
     let mut ptr: usize = 0;
+    
+    // Print the first 100 bytes of opcode data
+    let opcode_data_ptr = unsafe { msg.as_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize + fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as isize) };
+    pr_info!("First 100 bytes of sequencer data:");
+    let opcode_data_slice = unsafe { core::slice::from_raw_parts(opcode_data_ptr, 100) };
+    print_bytes(opcode_data_slice, 10);
 
     while ptr < cmd_index {
         let base_ptr = unsafe { msg.as_mut_ptr().byte_offset(RpcMsg::ver::get_gsp_rpc_hdr_size() as isize + fw::ver::gen::s_rpc_run_cpu_sequencer_v17_00::str_size() as isize + (ptr * 4) as isize) };
@@ -45,20 +51,20 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
 
         match opcode {
             0 => { // GSP REG WRITE
-                pr_info!("seq: GSP REG WRITE");
                 let regwrite = cmd.new_S_payload_regWrite();
                 let addr = regwrite.get_addr() as usize;
                 let val = regwrite.get_val();
+                pr_info!("seq: GSP REG WRITE addr: {:#x} val: {:#x}", addr, val);
                 bar.try_writel(val, addr)?;
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_WRITE::str_size() / 4;
             },
             1 => { // GSP REG MODIFY
-                pr_info!("seq: GSP REG MODIFY");
                 let regmod = cmd.new_S_payload_regModify();
 
                 let val = regmod.get_val();
                 let mask = regmod.get_mask();
                 let addr = regmod.get_addr() as usize;
+                pr_info!("seq: GSP REG MODIFY addr: {:#x} val: {:#x} mask: {:#x}", addr, val, mask);
 
                 let temp = bar.try_readl(addr)?;
                 bar.try_writel((temp & !mask) | val, addr)?;
@@ -66,7 +72,6 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_MODIFY::str_size() / 4;
             },
             2 => { // GSP REG POLL
-                pr_info!("seq: GSP REG POLL");
                 let regpoll = cmd.new_S_payload_regPoll();
 
                 let addr = regpoll.get_addr() as usize;
@@ -74,6 +79,7 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 let val = regpoll.get_val();
                 let mut timeout = regpoll.get_timeout() as u64;
                 let _error = regpoll.get_error();
+                pr_info!("seq: GSP REG POLL addr: {:#x} mask: {:#x} val: {:#x} timeout: {}", addr, mask, val, timeout);
 
                 if timeout == 0 {
                     timeout = 4000000;
@@ -88,16 +94,16 @@ pub(crate) fn run_cpu_sequencer(gsp_falcon: &gsp_falcon::GspFalcon,
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_REG_POLL::str_size() / 4;
             }
             3 => { // GSP DELAY US
-                pr_info!("seq: GSP DELAY US");
                 let delay = cmd.new_S_payload_delayUs();
                 let delay_val : u32 = delay.get_val();
+                pr_info!("seq: GSP DELAY US {}", delay_val);
 
                 sleep(Duration::from_micros(delay_val as u64));
                 ptr += fw::ver::gen::s_GSP_SEQ_BUF_PAYLOAD_DELAY_US::str_size() / 4;
             }
             4 => { // GSP RegStore
-                pr_info!("seq: GSP RegStore");
                 let regstore = cmd.new_S_payload_regStore();
+                pr_info!("seq: GSP RegStore index: {}, addr: {:#x}", regstore.get_index(), regstore.get_addr());
 
                 reg_save_area[regstore.get_index() as usize] = bar.try_readl(regstore.get_addr() as usize)?;
                 run_cpu.set_regSaveArea(reg_save_area);
