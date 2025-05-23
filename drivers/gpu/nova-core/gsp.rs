@@ -5,6 +5,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::MaybeUninit;
+use core::time::Duration;
 
 use kernel::bindings;
 use kernel::device;
@@ -24,8 +25,10 @@ use crate::gsp::fb::FbLayout;
 use crate::nvfw::r570_144 as fw;
 use crate::regs::NV_PGSP_FALCON_ENGINE;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
+use crate::util::wait_on;
 
 pub(crate) mod fb;
+pub(crate) mod sequencer;
 
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
@@ -439,20 +442,174 @@ impl<'a> GspCmdq<'a> {
         Ok(unsafe { result.assume_init() })
     }
 
-    pub(crate) fn receive(self: &mut Self) -> Result<KBox<dyn GspMessageElement>> {
+    pub(crate) fn receive(self: &mut Self) -> Result<(u32, KBox<dyn GspMessageElement>)> {
         let (msg, rpc, args_ptr, size) = self.receive_headers()?;
         pr_info!("Got fn 0x{:x}\n", rpc.function);
 
         let result = match rpc.function {
             fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
-                GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, size)
+                let args_vec: &[u8] = unsafe { core::slice::from_raw_parts(args_ptr as *mut u8, rpc.length as usize) };
+
+                // Create and run the GSP sequencer
+                match sequencer::GspSequencer::new(args_vec, self.bar, self.sec2_falcon,
+                                                   self.gsp_falcon, self.libos_dma_handle,
+                                                   self.fw) {
+                    Ok(sequencer) => {
+                        if let Err(e) = sequencer.run() {
+                            pr_info!("Error running CPU sequencer: {:?}\n", e);
+                        }
+                    },
+                    Err(e) => {
+                        pr_info!("Error creating CPU sequencer: {:?}\n", e);
+                    }
+                }
+                GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, rpc.length)
+            }
+
+            fw::NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD => {
+                pr_info!("Received GSP_POST_NOCAT_RECORD event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_GSP_INIT_DONE => {
+                pr_info!("Received GSP_INIT_DONE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_POST_EVENT => {
+                pr_info!("Received POST_EVENT event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_RC_TRIGGERED => {
+                pr_info!("Received RC_TRIGGERED event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_MMU_FAULT_QUEUED => {
+                pr_info!("Received MMU_FAULT_QUEUED event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_OS_ERROR_LOG => {
+                pr_info!("Received OS_ERROR_LOG event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_RG_LINE_INTR => {
+                pr_info!("Received RG_LINE_INTR event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES => {
+                pr_info!("Received GPUACCT_PERFMON_UTIL_SAMPLES event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_SIM_READ => {
+                pr_info!("Received SIM_READ event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_SIM_WRITE => {
+                pr_info!("Received SIM_WRITE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_SEMAPHORE_SCHEDULE_CALLBACK => {
+                pr_info!("Received SEMAPHORE_SCHEDULE_CALLBACK event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_UCODE_LIBOS_PRINT => {
+                pr_info!("Received UCODE_LIBOS_PRINT event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_VGPU_GSP_PLUGIN_TRIGGERED => {
+                pr_info!("Received VGPU_GSP_PLUGIN_TRIGGERED event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_PERF_GPU_BOOST_SYNC_LIMITS_CALLBACK => {
+                pr_info!("Received PERF_GPU_BOOST_SYNC_LIMITS_CALLBACK event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_PERF_BRIDGELESS_INFO_UPDATE => {
+                pr_info!("Received PERF_BRIDGELESS_INFO_UPDATE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_VGPU_CONFIG => {
+                pr_info!("Received VGPU_CONFIG event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_DISPLAY_MODESET => {
+                pr_info!("Received DISPLAY_MODESET event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_EXTDEV_INTR_SERVICE => {
+                pr_info!("Received EXTDEV_INTR_SERVICE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_256 => {
+                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_256 event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_512 => {
+                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_512 event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_1024 => {
+                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_1024 event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_2048 => {
+                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_2048 event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_4096 => {
+                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_4096 event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_TIMED_SEMAPHORE_RELEASE => {
+                pr_info!("Received TIMED_SEMAPHORE_RELEASE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_IS_GPU_DEGRADED => {
+                pr_info!("Received NVLINK_IS_GPU_DEGRADED event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_PFM_REQ_HNDLR_STATE_SYNC_CALLBACK => {
+                pr_info!("Received PFM_REQ_HNDLR_STATE_SYNC_CALLBACK event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_FAULT_UP => {
+                pr_info!("Received NVLINK_FAULT_UP event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_GSP_LOCKDOWN_NOTICE => {
+                pr_info!("Received GSP_LOCKDOWN_NOTICE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_MIG_CI_CONFIG_UPDATE => {
+                pr_info!("Received MIG_CI_CONFIG_UPDATE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_UPDATE_GSP_TRACE => {
+                pr_info!("Received UPDATE_GSP_TRACE event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_NVLINK_FATAL_ERROR_RECOVERY => {
+                pr_info!("Received NVLINK_FATAL_ERROR_RECOVERY event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_FECS_ERROR => {
+                pr_info!("Received FECS_ERROR event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+            }
+            fw::NV_VGPU_MSG_EVENT_RECOVERY_ACTION => {
+                pr_info!("Received RECOVERY_ACTION event\n");
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
             }
             _ => Err(ENOTSUPP),
         };
 
         // TODO: Increment by what we actually received
         let mut rptr = self.cpu_rptr()?;
-        rptr += 1;
+
+        let msg_header_size = size_of::<GspMsgHeader>();
+        let rpc_header_size = size_of::<GspRpcHeader>();
+        let total_msg_size = msg_header_size + rpc_header_size + size as usize;
+        let pages_consumed = (total_msg_size + GSP_PAGE_SIZE - 1) / GSP_PAGE_SIZE;
+
+        rptr = rptr + pages_consumed as u32;
 
         // TODO: Figure out Rust barriers
         unsafe {
@@ -461,7 +618,7 @@ impl<'a> GspCmdq<'a> {
         };
 
         // TODO: Validate checksum, etc.
-        result
+        Ok((rpc.function, result?))
     }
 
     pub(crate) fn test(self: &mut Self) -> Result<()> {
@@ -487,6 +644,17 @@ impl<'a> GspCmdq<'a> {
             }
         }
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn receive_until(&mut self, rpc_function: u32, timeout: Duration) -> Result {
+        wait_on(timeout, || {
+            match self.receive() {
+                Ok((function, _)) if function == rpc_function => Some(()),
+                Ok(_) => None,
+                Err(_) => None,
+            }
+        })
     }
 }
 

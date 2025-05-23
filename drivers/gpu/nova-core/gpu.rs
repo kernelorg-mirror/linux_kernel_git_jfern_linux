@@ -3,6 +3,8 @@
 use kernel::dma::CoherentAllocation;
 use kernel::{device, devres::Devres, error::code::*, pci, prelude::*};
 
+use core::time::Duration;
+
 use crate::devinit;
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
@@ -356,7 +358,15 @@ impl Gpu {
 
         dev_info!(pdev.as_ref(), "GPU instance built\n");
 
-        libos.cmdq.receive()?.dump();
+        pr_info!("Waiting for INIT_DONE...\n");
+        if let Err(e) = libos.cmdq.receive_until(
+            fw::NV_VGPU_MSG_EVENT_GSP_INIT_DONE as u32,
+            Duration::from_secs(2)
+        ) {
+            pr_err!("Error receiving INIT_DONE: {:?}\n", e);
+        } else {
+            pr_info!("INIT_DONE received. GSP is running.\n");
+        }
 
         Ok(pin_init!(Self {
             spec,
