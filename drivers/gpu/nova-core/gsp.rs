@@ -28,6 +28,8 @@ use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
 
+pub(crate) mod sequencer;
+
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
@@ -576,20 +578,43 @@ impl<'a> GspCmdq<'a> {
         Ok(unsafe { result.assume_init() })
     }
 
-    pub(crate) fn receive(self: &mut Self) -> Result<KBox<dyn GspMessageElement>> {
+    pub(crate) fn receive(self: &mut Self) -> Result<(u32, KBox<dyn GspMessageElement>)> {
         let (msg, rpc, args_ptr, size) = self.receive_headers()?;
         pr_info!("Got fn 0x{:x}\n", rpc.function);
 
         let result = match rpc.function {
             fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
-                GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, size)
+                let args_vec: &[u8] = unsafe { core::slice::from_raw_parts(args_ptr as *mut u8, rpc.length as usize) };
+
+                // Create and run the GSP sequencer
+                self.bar.try_access_with(|bar| {
+                    match sequencer::GspSequencer::new(args_vec, bar, self.sec2_falcon,
+                                                       self.gsp_falcon, self.libos_dma_handle,
+                                                       self.fw) {
+                        Ok(sequencer) => {
+                            if let Err(e) = sequencer.run() {
+                                pr_info!("Error running CPU sequencer: {:?}\n", e);
+                            }
+                        },
+                        Err(e) => {
+                            pr_info!("Error creating CPU sequencer: {:?}\n", e);
+                        }
+                    }
+                });
+                GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, rpc.length)
             }
             _ => Err(ENOTSUPP),
         };
 
         // TODO: Increment by what we actually received
         let mut rptr = self.cpu_rptr()?;
-        rptr += 1;
+
+        let msg_header_size = size_of::<GspMsgHeader>();
+        let rpc_header_size = size_of::<GspRpcHeader>();
+        let total_msg_size = msg_header_size + rpc_header_size + size as usize;
+        let pages_consumed = (total_msg_size + GSP_PAGE_SIZE - 1) / GSP_PAGE_SIZE;
+
+        rptr = rptr + pages_consumed as u32;
 
         // TODO: Figure out Rust barriers
         unsafe {
@@ -598,7 +623,7 @@ impl<'a> GspCmdq<'a> {
         };
 
         // TODO: Validate checksum, etc.
-        result
+        Ok((rpc.function, result?))
     }
 }
 
