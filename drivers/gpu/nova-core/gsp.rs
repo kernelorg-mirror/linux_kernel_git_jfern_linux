@@ -468,7 +468,15 @@ impl<'a> GspCmdq<'a> {
 
         // TODO: Increment by what we actually received
         let mut rptr = self.cpu_rptr()?;
-        rptr += 1;
+
+        let msg_header_size = size_of::<GspMsgHeader>();
+        let rpc_header_size = size_of::<GspRpcHeader>();
+        let total_msg_size = msg_header_size + rpc_header_size + size as usize;
+        let pages_consumed = (total_msg_size + GSP_PAGE_SIZE - 1) / GSP_PAGE_SIZE;
+
+        pr_info!("JOEL: pages_consumed: {}\n", pages_consumed);
+
+        rptr = rptr + pages_consumed as u32;
 
         // TODO: Figure out Rust barriers
         unsafe {

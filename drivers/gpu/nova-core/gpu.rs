@@ -384,6 +384,20 @@ impl Gpu {
 
         libos.cmdq.receive()?.dump();
 
+        // Supposed to receive INIT_DONE or somethign else but receving
+        // 'NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD'. Code this be an error
+        // record?
+        //
+        // Note that on r570 (and unlike r535), we don't have
+        // NV_VGPU_MSG_EVENT_GSP_SEND_USER_SHARED_DATA so we expect something
+        // other than that next, or just INIT_DONE. Need to dump the messages
+        // on Ben's r570 Nouveau changes and see what message to expect next.
+        libos.cmdq.receive()?.dump();
+
+        // These just return from this function as no further messages received.
+        libos.cmdq.receive()?.dump();
+        libos.cmdq.receive()?.dump();
+
         Ok(pin_init!(Self {
             spec,
             bar,
