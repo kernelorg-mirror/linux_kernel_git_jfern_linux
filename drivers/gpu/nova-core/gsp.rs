@@ -26,6 +26,8 @@ use crate::regs::NV_PGSP_QUEUE_HEAD;
 use crate::sbuffer::{SBuffer, SBufferIteratorMut};
 use crate::util::wait_on;
 
+pub(crate) mod sequencer;
+
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
@@ -161,6 +163,8 @@ struct GspMem {
     cpuq: Msgq,
     gspq: Msgq,
 }
+
+impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {}
 
 // Needed for CoherentAllocation
 unsafe impl FromBytes for GspMem {}
@@ -446,7 +450,7 @@ impl<'a> GspCmdq<'a> {
         let sbuf = if rpc.length + header_size < remaining {
             SBuffer::new((
                 &mut msg_slice[(header_size as usize)..(header_size + rpc.length) as usize],
-                None
+                None,
             ))?
         } else {
             let slice_1 =
