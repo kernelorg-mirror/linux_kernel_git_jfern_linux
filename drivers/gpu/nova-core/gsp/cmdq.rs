@@ -143,7 +143,6 @@ pub(crate) struct GspQueueMessage<'a> {
 }
 
 impl<'a> GspQueueMessage<'a> {
-    #[expect(unused)]
     pub(crate) fn try_as<M: GspMessageFromGsp>(
         &'a self,
     ) -> Result<(&'a M, Option<SBuffer<core::array::IntoIter<&[u8], 2>>>)> {
@@ -164,7 +163,6 @@ impl<'a> GspQueueMessage<'a> {
         Ok((msg, sbuf))
     }
 
-    #[expect(unused)]
     pub(crate) fn ack(self) -> Result {
         self.cmdq.ack_msg(self.rpc_header.length)?;
 
@@ -457,7 +455,6 @@ impl GspCmdq {
         true
     }
 
-    #[expect(unused)]
     pub(crate) fn wait_for_msg_from_gsp(self: &Self, timeout: Delta) -> Result {
         wait_on(timeout, || {
             if self.msg_from_gsp_available() {
@@ -468,7 +465,6 @@ impl GspCmdq {
         })
     }
 
-    #[expect(unused)]
     pub(crate) fn receive_msg_from_gsp<'a>(self: &'a mut Self) -> Result<GspQueueMessage<'a>> {
         const HEADER_SIZE: u32 = (size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>()) as u32;
 
