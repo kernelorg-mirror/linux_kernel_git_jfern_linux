@@ -186,6 +186,9 @@ r535_gsp_msgq_wait(struct nvkm_gsp *gsp, u32 gsp_rpc_len, int *ptime)
 	if (WARN_ON(!size || size >= gsp->msgq.cnt))
 		return -EINVAL;
 
+	nvkm_info(&gsp->subdev, "Waiting for message: required_size=%u pages, request_len=%u bytes\n", 
+		  size, gsp_rpc_len);
+
 	do {
 		u32 wptr = *gsp->msgq.wptr;
 
@@ -198,8 +201,14 @@ r535_gsp_msgq_wait(struct nvkm_gsp *gsp, u32 gsp_rpc_len, int *ptime)
 		usleep_range(1, 2);
 	} while (--(*ptime));
 
-	if (WARN_ON(!*ptime))
+	if (WARN_ON(!*ptime)) {
+		nvkm_error(&gsp->subdev, "Timeout waiting for message, used=%d, needed=%u\n", 
+			   used, size);
 		return -ETIMEDOUT;
+	}
+
+	nvkm_info(&gsp->subdev, "Message available: used=%d pages, rptr=%u, wptr=%u\n", 
+		  used, *gsp->msgq.rptr, *gsp->msgq.wptr);
 
 	return used;
 }
@@ -300,6 +309,9 @@ r535_gsp_msgq_recv_one_elem(struct nvkm_gsp *gsp,
 	len = ((gsp->msgq.cnt - rptr) * GSP_PAGE_SIZE) - sizeof(*mqe);
 	len = min_t(u32, expected, len);
 
+	nvkm_info(&gsp->subdev, "Receiving element: expected=%u, actual_len=%u bytes, %s\n", 
+		  expected, len, info->continuation ? "continuation" : "initial");
+
 	if (info->continuation)
 		memcpy(buf, mqe->data + sizeof(struct nvfw_gsp_rpc),
 		       len - sizeof(struct nvfw_gsp_rpc));
@@ -311,6 +323,7 @@ r535_gsp_msgq_recv_one_elem(struct nvkm_gsp *gsp,
 	if (expected) {
 		mqe = (void *)((u8 *)gsp->shm.msgq.ptr + 0x1000 + 0 * 0x1000);
 		memcpy(buf + len, mqe, expected);
+		nvkm_info(&gsp->subdev, "Received additional %u bytes from next page\n", expected);
 	}
 
 	rptr = (rptr + DIV_ROUND_UP(size, GSP_PAGE_SIZE)) % gsp->msgq.cnt;
@@ -351,6 +364,10 @@ r535_gsp_msgq_recv(struct nvkm_gsp *gsp, u32 gsp_rpc_len, int *retries)
 		return buf;
 	}
 
+	nvkm_info(&gsp->subdev, "RPC received: function=%d, size=%u bytes\n", 
+		  ((struct nvfw_gsp_rpc *)buf)->function, 
+		  ((struct nvfw_gsp_rpc *)buf)->length);
+
 	if (expected <= max_rpc_size)
 		return buf;
 
@@ -368,6 +385,9 @@ r535_gsp_msgq_recv(struct nvkm_gsp *gsp, u32 gsp_rpc_len, int *retries)
 
 		info.gsp_rpc_len = rpc->length;
 		info.continuation = true;
+
+		nvkm_info(&gsp->subdev, "RPC continuation received: size=%u bytes\n", 
+			  rpc->length);
 
 		rpc = r535_gsp_msgq_recv_one_elem(gsp, &info);
 		if (IS_ERR_OR_NULL(rpc)) {
@@ -502,11 +522,16 @@ retry:
 	if (IS_ERR_OR_NULL(rpc))
 		return rpc;
 
+	nvkm_info(subdev, "GSP message peek: function=%d, length=%u bytes\n", 
+		  rpc->function, rpc->length);
+
 	rpc = r535_gsp_msgq_recv(gsp, gsp_rpc_len, &retries);
 	if (IS_ERR_OR_NULL(rpc))
 		return rpc;
 
 	if (rpc->rpc_result) {
+		nvkm_error(subdev, "GSP message error: function=%d, result=0x%x\n", 
+			   rpc->function, rpc->rpc_result);
 		r535_gsp_msg_dump(gsp, rpc, NV_DBG_ERROR);
 		r535_gsp_msg_done(gsp, rpc);
 		return ERR_PTR(-EINVAL);
@@ -524,6 +549,8 @@ retry:
 				return ERR_PTR(-EIO);
 			}
 
+			nvkm_info(subdev, "Returning message: function=%d, length=%u bytes\n", 
+				  rpc->function, rpc->length);
 			return rpc;
 		}
 
@@ -535,6 +562,8 @@ retry:
 		struct nvkm_gsp_msgq_ntfy *ntfy = &gsp->msgq.ntfy[i];
 
 		if (ntfy->fn == rpc->function) {
+			nvkm_info(subdev, "Dispatching notification: function=%d, length=%u bytes\n", 
+				  rpc->function, rpc->length);
 			if (ntfy->func)
 				ntfy->func(ntfy->priv, ntfy->fn, rpc->data,
 					   rpc->length - sizeof(*rpc));
@@ -2091,6 +2120,7 @@ r535_gsp_msg_run_cpu_sequencer(void *priv, u32 fn, void *repv, u32 repc)
 	int ptr = 0, ret;
 
 	pr_err("seq: %08x %08x riscv_active:%d\n", seq->bufferSizeDWord, seq->cmdIndex, nvkm_falcon_riscv_active(&gsp->falcon));
+	pr_err("JOEL # of commands: %d\n", seq->cmdIndex);
 	
 	// Dump the byte data to help with debugging
 	dump_bytes(gsp, repv, repc);
