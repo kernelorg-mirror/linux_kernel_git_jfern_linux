@@ -13,7 +13,7 @@ use kernel::dma::CoherentAllocation;
 use kernel::pci;
 use kernel::prelude::*;
 use kernel::transmute::{AsBytes, FromBytes};
-use kernel::{asm, dma_read, dma_write, pr_info};
+use kernel::{asm, dma_read, dma_write, pr_info, pr_err};
 
 use crate::dma::DmaObject;
 use crate::driver::Bar0;
@@ -27,6 +27,7 @@ use crate::regs::NV_PGSP_QUEUE_HEAD;
 
 pub(crate) mod fb;
 pub(crate) mod sequencer;
+pub(crate) mod diag;
 
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
@@ -462,6 +463,17 @@ impl<'a> GspCmdq<'a> {
                     }
                 }
                 GspCmdq::create_result::<fw::rpc_run_cpu_sequencer_v17_00>(args_ptr, size)
+            }
+            fw::NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD => {
+                pr_info!("Received GSP_POST_NOCAT_RECORD event\n");
+                
+                // Parse and display the NOCAT record
+                if let Err(e) = diag::parse_nocat_record(args_ptr) {
+                    pr_err!("Failed to parse NOCAT record: {:?}\n", e);
+                }
+                
+                // Return a dummy result for now
+                GspCmdq::create_result::<NoArgs>(args_ptr, 0)
             }
             _ => Err(ENOTSUPP),
         };

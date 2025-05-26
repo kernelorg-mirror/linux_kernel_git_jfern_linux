@@ -46,6 +46,7 @@ mod macros {
 }
 
 mod devinit;
+mod diag;
 mod dma;
 mod driver;
 mod falcon;
