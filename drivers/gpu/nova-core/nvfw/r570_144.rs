@@ -30,3 +30,6 @@ include!(concat!(
     env!("OBJTREE"),
     "/drivers/gpu/nova-core/nvfw/r570_144_bindings.rs"
 ));
+
+#[cfg(any(rustdoc, rust_analyzer))]
+include!("/home/joelaf/repo/linux-nova-sequencer/drivers/gpu/nova-core/nvfw/r570_144_bindings.rs");
