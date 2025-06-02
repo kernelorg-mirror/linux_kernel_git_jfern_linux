@@ -4,6 +4,21 @@
 
 #[macro_use]
 mod macros {
+    /// trace_printk! macro for kernel tracing
+    macro_rules! trace_printk {
+        ($fmt:literal $(, $($arg:tt)*)?) => {{
+            use kernel::bindings;
+            use kernel::ffi;
+            // SAFETY: trace_printk is safe to call from kernel context
+            unsafe {
+                bindings::__trace_printk(
+                    0, // ip parameter, 0 is fine for our use case
+                    concat!($fmt, "\0").as_ptr() as *const ffi::c_char
+                    $(, $($arg)*)?
+                );
+            }
+        }};
+    }
     /// Convenience macro to run a closure while holding [`crate::driver::Bar0`].
     ///
     /// If the bar cannot be acquired, then `ENXIO` is returned.
