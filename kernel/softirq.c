@@ -638,6 +638,10 @@ void irq_enter(void)
 
 static inline void tick_irq_exit(void)
 {
+	rcu_read_lock();
+	WRITE_ONCE(current->rcu_read_unlock_special.b.need_qs, true);
+	rcu_read_unlock();
+
 #ifdef CONFIG_NO_HZ_COMMON
 	int cpu = smp_processor_id();
 
