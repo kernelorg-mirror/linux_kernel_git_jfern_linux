@@ -28,9 +28,9 @@ pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
 
 pub(crate) struct GspMemObjects {
     libos: DmaObject,
-    pub _loginit: DmaObject,
-    pub _logintr: DmaObject,
-    pub _logrm: DmaObject,
+    pub loginit: DmaObject,
+    pub logintr: DmaObject,
+    pub logrm: DmaObject,
     _rmargs: CoherentAllocation<fw::GSP_ARGUMENTS_CACHED>,
     pub cmdq: GspCmdq,
 }
@@ -183,9 +183,9 @@ impl GspMemObjects {
     pub(crate) fn new(pdev: &pci::Device<device::Bound>, bar: &Bar0) -> Result<Self> {
         let dev = pdev.as_ref();
         let mut libos = DmaObject::new(dev, GSP_PAGE_SIZE)?;
-        let _loginit = create_dma_object(dev, "LOGINIT", 0x10000, &mut libos, 0)?;
-        let _logintr = create_dma_object(dev, "LOGINTR", 0x10000, &mut libos, 1)?;
-        let _logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
+        let loginit = create_dma_object(dev, "LOGINIT", 0x10000, &mut libos, 0)?;
+        let logintr = create_dma_object(dev, "LOGINTR", 0x10000, &mut libos, 1)?;
+        let logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
 
         // Creates its own PTE array
         let mut cmdq = GspCmdq::new(dev)?;
@@ -215,9 +215,9 @@ impl GspMemObjects {
 
         Ok(GspMemObjects {
             libos,
-            _loginit,
-            _logintr,
-            _logrm,
+            loginit,
+            logintr,
+            logrm,
             _rmargs: rmargs,
             cmdq,
         })
