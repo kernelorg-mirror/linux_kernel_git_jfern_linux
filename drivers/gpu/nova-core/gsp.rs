@@ -853,9 +853,9 @@ unsafe impl AsBytes for fw::GSP_ARGUMENTS_CACHED {}
 #[allow(unused)]
 pub(crate) struct GspSharedMemObjects<'a> {
     pub libos: DmaObject,
-    loginit: DmaObject,
-    logintr: DmaObject,
-    logrm: DmaObject,
+    pub loginit: DmaObject,
+    pub logintr: DmaObject,
+    pub logrm: DmaObject,
     pub rmargs: CoherentAllocation<fw::GSP_ARGUMENTS_CACHED>,
     // kern: Option<DmaObject>,
     pub cmdq: GspCmdq<'a>,

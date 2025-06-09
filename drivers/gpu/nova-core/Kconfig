@@ -25,3 +25,11 @@ config NVIDIA_OPEN_GPU_KERNEL_PATH
 
 	  If unset the existing in-tree Nouveau copy of these headers will be used
 	  instead.
+
+config NOVA_DEBUGFS
+	bool "Nova Core debugfs support"
+	depends on NOVA_CORE
+	depends on DEBUG_FS
+	default y
+	help
+	  Enable debugfs support for the Nova.
