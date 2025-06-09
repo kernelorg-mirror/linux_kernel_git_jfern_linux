@@ -67,6 +67,7 @@ mod nvfw;
 mod regs;
 mod util;
 mod vbios;
+mod debugfs;
 
 kernel::module_pci_driver! {
     type: driver::NovaCore,

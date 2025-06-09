@@ -24,3 +24,14 @@ config NVIDIA_OPEN_GPU_KERNEL_PATH
 
 	  If unset the existing in-tree Nouveau copy of these headers will be used
 	  instead.
+
+config NOVA_DEBUGFS
+	bool "Nova Core debugfs support"
+	depends on NOVA_CORE
+	depends on DEBUG_FS
+	default y
+	help
+	  Enable debugfs support for the Nova driver. Pass the debugfs file to
+	  xxd -r -p to get the binary file and then pass that to nvlog_decoder:
+	  nvlog_decoder --input-file rm_log.bin --elf gsp_log.bin --d none
+                        --fake-nvlog-libos GSP_LIBOS3 -t RM

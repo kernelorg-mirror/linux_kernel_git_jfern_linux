@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::dma::CoherentAllocation;
-use kernel::{device, devres::Devres, error::code::*, pci, prelude::*};
+use kernel::{device, devres::Devres, error::code::*, pci, prelude::*, c_str};
 
 use core::time::Duration;
 
@@ -18,6 +18,10 @@ use crate::regs;
 use crate::util;
 use crate::vbios::Vbios;
 use core::fmt;
+use crate::debugfs::NovaDebugfs;
+use kernel::sync::{Arc, Mutex};
+
+static mut NOVA_DEBUGFS: Option<Arc<Mutex<NovaDebugfs>>> = None;
 
 macro_rules! define_chipset {
     ({ $($variant:ident = $value:expr),* $(,)* }) =>
@@ -366,6 +370,38 @@ impl Gpu {
             pr_err!("Error receiving INIT_DONE: {:?}\n", e);
         } else {
             pr_info!("INIT_DONE received. GSP is running.\n");
+
+            // debugfs files for GSP log
+            unsafe {
+                if NOVA_DEBUGFS.is_none() {
+                    match NovaDebugfs::new("nova") {
+                        Ok(debugfs) => {
+                            match Arc::pin_init(
+                                Mutex::new(debugfs, c_str!("nova_debugfs"), kernel::static_lock_class!()),
+                                GFP_KERNEL
+                            ) {
+                                Ok(arc) => {
+                                    NOVA_DEBUGFS = Some(arc);
+                                    pr_info!("Created nova debugfs directory\n");
+                                }
+                                Err(e) => {
+                                    pr_err!("Failed to create Arc for debugfs: {:?}\n", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            pr_err!("Failed to create debugfs: {:?}\n", e);
+                        }
+                    }
+                }
+
+                if let Some(ref debugfs_arc) = NOVA_DEBUGFS {
+                    let mut debugfs = debugfs_arc.lock();
+                    if let Err(e) = debugfs.create_log_files(&libos) {
+                        pr_err!("Failed to create debugfs log files: {:?}\n", e);
+                    }
+                }
+            }
         }
 
         Ok(pin_init!(Self {
