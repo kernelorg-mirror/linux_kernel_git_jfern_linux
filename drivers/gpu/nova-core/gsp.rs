@@ -248,6 +248,11 @@ impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
     }
 }
 
+// Empty struct for GSP events that have no arguments
+#[repr(C)]
+struct NoArgs;
+impl GspMessageElement for NoArgs {}
+
 // Needed for CoherentAllocation
 unsafe impl FromBytes for GspMem {}
 unsafe impl AsBytes for GspMem {}
