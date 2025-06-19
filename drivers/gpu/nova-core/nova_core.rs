@@ -37,6 +37,7 @@ mod nvfw;
 mod regs;
 mod util;
 mod vbios;
+mod debugfs;
 
 pub(crate) const MODULE_NAME: &kernel::str::CStr = <LocalModule as kernel::ModuleMetadata>::NAME;
 
