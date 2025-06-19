@@ -362,8 +362,10 @@ pub(crate) struct GspCmdq<'a> {
 impl<'a> GspCmdq<'a> {
     /// Get GSP static configuration info including internal handles
     pub fn get_gsp_static_info(&mut self) -> Result<KBox<fw::GspStaticConfigInfo_t>> {
-        // Send the RPC with no arguments
-        match self.send(fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO, &NoArgs{}) {
+        // Allocate uninitialized memory on heap and zero it out manually to avoid stack allocation
+        let mut heap_info = unsafe { KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?.assume_init() };
+        // Send the RPC with the heap_info as argument
+        match self.send(fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO, &*heap_info) {
             Ok(_) => {
                 // Receive the response
                 let (response_fn, response_data) = self.receive()?;
@@ -381,16 +383,14 @@ impl<'a> GspCmdq<'a> {
                     // The response_data is KBox<dyn GspMessageElement>, we need to downcast
                     match response_data.as_any().downcast_ref::<fw::GspStaticConfigInfo_t>() {
                         Some(static_info) => {
-                            // Allocate on heap and copy field by field to avoid stack copy
-                            let mut heap_info = KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?;
                             unsafe {
                                 // Use ptr::copy_nonoverlapping to avoid stack copy
                                 core::ptr::copy_nonoverlapping(
                                     static_info as *const fw::GspStaticConfigInfo_t,
-                                    heap_info.as_mut_ptr(),
+                                    &mut *heap_info as *mut fw::GspStaticConfigInfo_t,
                                     1
                                 );
-                                Ok(heap_info.assume_init())
+                                Ok(heap_info)
                             }
                         },
                         None => {
