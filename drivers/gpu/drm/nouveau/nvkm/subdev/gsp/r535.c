@@ -904,7 +904,7 @@ r535_gsp_rpc_rm_ctrl_get(struct nvkm_gsp_object *object, u32 cmd, u32 params_siz
 	struct nvkm_gsp *gsp = client->gsp;
 	rpc_gsp_rm_control_v03_00 *rpc;
 
-	nvkm_debug(&gsp->subdev, "cli:0x%08x obj:0x%08x ctrl cmd:0x%08x params_size:%d\n",
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG rm_ctrl_get: cli:0x%08x obj:0x%08x ctrl cmd:0x%08x params_size:%d\n",
 		   client->object.handle, object->handle, cmd, params_size);
 
 	rpc = nvkm_gsp_rpc_get(gsp, NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL,
@@ -917,6 +917,15 @@ r535_gsp_rpc_rm_ctrl_get(struct nvkm_gsp_object *object, u32 cmd, u32 params_siz
 	rpc->cmd	= cmd;
 	rpc->status     = 0;
 	rpc->paramsSize = params_size;
+	
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG rm_ctrl RPC structure:\n");
+	nvkm_error(&gsp->subdev, "  hClient: 0x%08x\n", rpc->hClient);
+	nvkm_error(&gsp->subdev, "  hObject: 0x%08x\n", rpc->hObject);
+	nvkm_error(&gsp->subdev, "  cmd: 0x%08x\n", rpc->cmd);
+	nvkm_error(&gsp->subdev, "  status: 0x%08x\n", rpc->status);
+	nvkm_error(&gsp->subdev, "  paramsSize: %u\n", rpc->paramsSize);
+	nvkm_error(&gsp->subdev, "  flags: 0x%08x\n", rpc->flags);
+	
 	return rpc->params;
 }
 
@@ -944,6 +953,14 @@ r535_gsp_rpc_get(struct nvkm_gsp *gsp, u32 fn, u32 payload_size)
 	rpc->rpc_result = 0xffffffff;
 	rpc->rpc_result_private = 0xffffffff;
 	rpc->length = sizeof(*rpc) + payload_size;
+	
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG rpc_get allocated RPC header:\n");
+	nvkm_error(&gsp->subdev, "  header_version: 0x%08x\n", rpc->header_version);
+	nvkm_error(&gsp->subdev, "  signature: 0x%08x ('CPRV')\n", rpc->signature);
+	nvkm_error(&gsp->subdev, "  function: 0x%08x\n", rpc->function);
+	nvkm_error(&gsp->subdev, "  length: %u\n", rpc->length);
+	nvkm_error(&gsp->subdev, "  rpc addr: %p, data addr: %p\n", rpc, rpc->data);
+	
 	return rpc->data;
 }
 
@@ -1091,6 +1108,14 @@ r535_gsp_intr_get_table(struct nvkm_gsp *gsp)
 {
 	NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS *ctrl;
 	int ret = 0;
+
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG: Getting interrupt table\n");
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG: internal.client handle: 0x%08x\n", 
+		   gsp->internal.client.object.handle);
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG: internal.device handle: 0x%08x\n", 
+		   gsp->internal.device.object.handle);
+	nvkm_error(&gsp->subdev, "NOUVEAU DEBUG: internal.device.subdevice handle: 0x%08x\n", 
+		   gsp->internal.device.subdevice.handle);
 
 	ctrl = nvkm_gsp_rm_ctrl_get(&gsp->internal.device.subdevice,
 				    NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE, sizeof(*ctrl));

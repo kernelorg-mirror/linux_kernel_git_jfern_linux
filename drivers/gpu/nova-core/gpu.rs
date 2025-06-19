@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::dma::CoherentAllocation;
-use kernel::{device, devres::Devres, error::code::*, pci, prelude::*};
+use kernel::{device, devres::Devres, error::code::*, pci, prelude::*, c_str};
 
 use core::time::Duration;
 
@@ -18,6 +18,10 @@ use crate::regs;
 use crate::util;
 use crate::vbios::Vbios;
 use core::fmt;
+use crate::debugfs::NovaDebugfs;
+use kernel::sync::{Arc, Mutex};
+
+static mut NOVA_DEBUGFS: Option<Arc<Mutex<NovaDebugfs>>> = None;
 
 macro_rules! define_chipset {
     ({ $($variant:ident = $value:expr),* $(,)* }) =>
@@ -383,6 +387,17 @@ impl Gpu {
                     if let Err(e) = debugfs.create_log_files(&libos) {
                         pr_err!("Failed to create debugfs log files: {:?}\n", e);
                     }
+                }
+            }
+
+            // Test interrupt table retrieval
+            pr_info!("Testing interrupt table retrieval...\n");
+            match crate::irq::Irq::get_interrupt_table(&gsp_falcon, &mut libos.cmdq) {
+                Ok(table) => {
+                    pr_info!("Successfully retrieved interrupt table with {} entries\n", table.len());
+                },
+                Err(e) => {
+                    pr_err!("Failed to retrieve interrupt table: {:?}\n", e);
                 }
             }
         }

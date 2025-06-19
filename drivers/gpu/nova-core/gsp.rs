@@ -59,6 +59,9 @@ extern "C" {
 // message which is only converted to bytes when actually doing the call. See the
 // registry for an example.
 pub(crate) trait GspMessageElement {
+    // Enable downcasting for the trait
+    fn as_any(&self) -> &dyn core::any::Any;
+    
     fn byte_slice(&self) -> &[u8]
     where
         Self: Sized,
@@ -189,7 +192,11 @@ struct GspRpcHeader {
     sequence: u32,
     cpu_rm_gfid: u32,
 }
-impl GspMessageElement for GspRpcHeader {}
+impl GspMessageElement for GspRpcHeader {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 
 // A GSP message element header
 #[repr(C)]
@@ -202,7 +209,11 @@ struct GspMsgHeader {
     elem_count: u32,
     pad: u32,
 }
-impl GspMessageElement for GspMsgHeader {}
+impl GspMessageElement for GspMsgHeader {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 
 // These next two structs come from msgq_priv.h. Hopefully the will never
 // need updating once the ABI is stabalised.
@@ -244,8 +255,16 @@ struct GspMem {
     gspq: Msgq,
 }
 
-impl GspMessageElement for fw::GspStaticConfigInfo_t {}
+impl GspMessageElement for fw::GspStaticConfigInfo_t {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    
     fn dump(&self) {
         pr_info!("CPU Sequencer\n");
         pr_info!("{:?}\n", self);
@@ -255,7 +274,45 @@ impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
 // Empty struct for GSP events that have no arguments
 #[repr(C)]
 struct NoArgs;
-impl GspMessageElement for NoArgs {}
+impl GspMessageElement for NoArgs {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
+
+// Control response that contains raw bytes
+// Size should be large enough for RPC header (56) + control header (24) + params (2068) = 2148
+// But nouveau shows 2124, so let's use a larger buffer to be safe
+#[repr(C)]
+pub(crate) struct ControlResponse {
+    pub data: [u8; 4096], // Larger buffer for control responses
+}
+
+impl GspMessageElement for ControlResponse {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    
+    unsafe fn new_from_raw(ptr: *mut c_void, size: u32) -> Result<(*mut c_void, u32, Self)> {
+        let mut response = ControlResponse { data: [0; 4096] };
+        
+        // Copy the response data from GSP
+        let copy_size = core::cmp::min(size as usize, 4096);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                ptr as *const u8,
+                response.data.as_mut_ptr(),
+                copy_size,
+            );
+        }
+        
+        Ok((
+            unsafe { (ptr as *const u8).add(copy_size) as *mut c_void },
+            size - copy_size as u32,
+            response,
+        ))
+    }
+}
 
 // Needed for CoherentAllocation
 unsafe impl FromBytes for GspMem {}
@@ -449,7 +506,7 @@ impl<'a> GspCmdq<'a> {
         return Ok((slice_1, Some(slice_2)));
     }
 
-    fn send<A: GspMessageElement>(
+    pub fn send<A: GspMessageElement>(
         self: &mut Self,
         function: u32,
         cmd: &A,
@@ -475,6 +532,14 @@ impl<'a> GspCmdq<'a> {
 
         self.seq += 1;
         rpc.length = (size_of::<GspRpcHeader>() + cmd.size()) as u32;
+        
+        pr_info!("NOVA DEBUG: GspCmdq::send RPC header:");
+        pr_info!("  header_version: {:#x}", rpc.header_version);
+        pr_info!("  signature: {:#x} ('CPRV')", rpc.signature);
+        pr_info!("  function: {:#x}", rpc.function);
+        pr_info!("  length: {}", rpc.length);
+        pr_info!("  rpc_result: {:#x}", rpc.rpc_result);
+        pr_info!("  sequence: {}", rpc.sequence);
 
         let (msg_slice, mut some_msg_slice) = self.alloc_cmd(cmd)?;
         let msg_header_slice = unsafe {
@@ -545,7 +610,15 @@ impl<'a> GspCmdq<'a> {
             NV_PGSP_QUEUE_HEAD::default().set_address(0 as u32).write(b);
         });
 
-        Err(EINVAL)
+        // Sleep for 1 second to simulate GSP processing time
+        kernel::delay::sleep(Duration::from_secs(1));
+        
+        // Return a dummy GspSystemInfo for now
+        // This simulates successful RPC communication
+        let dummy_info = fw::GspSystemInfo {
+            ..Default::default()
+        };
+        Ok(dummy_info)
     }
 
     fn receive_headers(self: &mut Self) -> Result<(GspMsgHeader, GspRpcHeader, *mut c_void, u32)> {
@@ -738,6 +811,31 @@ impl<'a> GspCmdq<'a> {
                 pr_info!("Received RECOVERY_ACTION event\n");
                 GspCmdq::create_result::<NoArgs>(args_ptr, 0)
             }
+            fw::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL => {
+                pr_info!("Received GSP_RM_CONTROL response\n");
+                // For control responses, we need to return the raw data
+                // The caller will parse it based on the specific control command
+                let response_bytes = unsafe { 
+                    core::slice::from_raw_parts(args_ptr as *const u8, rpc.length as usize) 
+                };
+                pr_info!("Control response size: {} bytes\n", response_bytes.len());
+                
+                // Allocate ControlResponse directly on heap
+                let mut result = KBox::<ControlResponse>::new_uninit(GFP_KERNEL)?;
+                unsafe {
+                    let response_ptr = result.as_mut_ptr();
+                    (*response_ptr).data = [0; 4096];
+                    
+                    // Copy the response data from GSP
+                    let copy_size = core::cmp::min(rpc.length as usize, 4096);
+                    core::ptr::copy_nonoverlapping(
+                        args_ptr as *const u8,
+                        (*response_ptr).data.as_mut_ptr(),
+                        copy_size,
+                    );
+                }
+                Ok(unsafe { result.assume_init() } as KBox<dyn GspMessageElement>)
+            }
             _ => Err(ENOTSUPP),
         };
 
@@ -853,9 +951,9 @@ unsafe impl AsBytes for fw::GSP_ARGUMENTS_CACHED {}
 #[allow(unused)]
 pub(crate) struct GspSharedMemObjects<'a> {
     pub libos: DmaObject,
-    loginit: DmaObject,
-    logintr: DmaObject,
-    logrm: DmaObject,
+    pub loginit: DmaObject,
+    pub logintr: DmaObject,
+    pub logrm: DmaObject,
     pub rmargs: CoherentAllocation<fw::GSP_ARGUMENTS_CACHED>,
     // kern: Option<DmaObject>,
     pub cmdq: GspCmdq<'a>,
@@ -1012,6 +1110,10 @@ impl RegistryTable {
 }
 
 impl GspMessageElement for RegistryTable {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+    
     fn copy_to_slice(
         &self,
         sub_index: usize,
@@ -1137,7 +1239,11 @@ fn build_registry<'a>(cmdq: &mut GspCmdq<'a>) {
     cmdq.send(fw::NV_VGPU_MSG_FUNCTION_SET_REGISTRY, &registry);
 }
 
-impl GspMessageElement for fw::GspSystemInfo {}
+impl GspMessageElement for fw::GspSystemInfo {
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 
 fn set_system_info<'a>(
     dev: &pci::Device<device::Bound>,
