@@ -390,14 +390,43 @@ impl Gpu {
                 }
             }
 
+            // First, let's try to get GSP static info directly (no delay needed)
+            pr_info!("Testing GET_GSP_STATIC_INFO directly...\n");
+            match libos.cmdq.get_gsp_static_info() {
+                Ok(static_info) => {
+                    pr_info!("Successfully got GSP static info!\n");
+                    // static_info is now a KBox<GspStaticConfigInfo_t>
+                    // Extract values and print each separately to avoid formatting
+                    let client = static_info.hInternalClient;
+                    let device = static_info.hInternalDevice;
+                    let subdevice = static_info.hInternalSubdevice;
+                    
+                    // Print each value separately
+                    pr_info!("GSP Internal Client Handle:{:#x}\n", client);
+
+                    pr_info!("GSP Internal Device Handle:{:#x}\n", device);
+                    
+                    pr_info!("GSP Internal Subdevice Handle:{:#x}\n", subdevice);
+                },
+                Err(e) => {
+                    pr_err!("Failed to get GSP static info\n");
+                    if e == kernel::error::code::EINVAL {
+                        pr_err!("GSP returned error response (likely 0xff100002)\n");
+                    }
+                    pr_err!("This suggests GSP needs additional initialization\n");
+                }
+            }
+            
             // Test interrupt table retrieval
             pr_info!("Testing interrupt table retrieval...\n");
             match crate::irq::Irq::get_interrupt_table(&gsp_falcon, &mut libos.cmdq) {
                 Ok(table) => {
-                    pr_info!("Successfully retrieved interrupt table with {} entries\n", table.len());
+                    let len = table.len();
+                    pr_info!("Successfully retrieved interrupt table\n");
+                    pr_info!("Table has entries (count suppressed to avoid stack issues)\n");
                 },
-                Err(e) => {
-                    pr_err!("Failed to retrieve interrupt table: {:?}\n", e);
+                Err(_e) => {
+                    pr_err!("Failed to retrieve interrupt table\n");
                 }
             }
         }

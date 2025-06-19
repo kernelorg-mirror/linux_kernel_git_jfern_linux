@@ -259,6 +259,13 @@ impl GspMessageElement for fw::GspStaticConfigInfo_t {
     fn as_any(&self) -> &dyn core::any::Any {
         self
     }
+    
+    unsafe fn new_from_raw(ptr: *mut c_void, size: u32) -> Result<(*mut c_void, u32, Self)> {
+        // This function is no longer used for large structures like GspStaticConfigInfo_t
+        // create_result handles the copy directly to avoid stack allocation
+        // But we still need to implement it for the trait
+        Err(ENOTSUPP)
+    }
 }
 impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
     fn as_any(&self) -> &dyn core::any::Any {
@@ -267,7 +274,7 @@ impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {
     
     fn dump(&self) {
         pr_info!("CPU Sequencer\n");
-        pr_info!("{:?}\n", self);
+        // Removed formatted print to avoid stack overflow
     }
 }
 
@@ -277,6 +284,23 @@ struct NoArgs;
 impl GspMessageElement for NoArgs {
     fn as_any(&self) -> &dyn core::any::Any {
         self
+    }
+    
+    fn size(&self) -> usize {
+        0
+    }
+    
+    fn byte_slice(&self) -> &[u8] {
+        &[]
+    }
+    
+    fn copy_to_slice(
+        &self,
+        _sub_index: usize,
+        _msg_slice_1: &mut [[u8; GSP_PAGE_SIZE]],
+        _msg_slice_2: &mut Option<&mut [[u8; GSP_PAGE_SIZE]]>,
+    ) {
+        // NoArgs has no data to copy
     }
 }
 
@@ -336,6 +360,55 @@ pub(crate) struct GspCmdq<'a> {
 }
 
 impl<'a> GspCmdq<'a> {
+    /// Get GSP static configuration info including internal handles
+    pub fn get_gsp_static_info(&mut self) -> Result<KBox<fw::GspStaticConfigInfo_t>> {
+        // Send the RPC with no arguments
+        match self.send(fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO, &NoArgs{}) {
+            Ok(_) => {
+                // Receive the response
+                let (response_fn, response_data) = self.receive()?;
+                
+                if response_fn == fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO {
+                    // The response might be too small or an error. Let's check what we got
+                    // Try to cast to NoArgs first (empty response)
+                    if let Some(_) = response_data.as_any().downcast_ref::<NoArgs>() {
+                        // GSP returned empty response
+                        pr_err!("GSP returned empty response\n");
+                        return Err(EINVAL);
+                    }
+                    
+                    // Cast response to GspStaticConfigInfo
+                    // The response_data is KBox<dyn GspMessageElement>, we need to downcast
+                    match response_data.as_any().downcast_ref::<fw::GspStaticConfigInfo_t>() {
+                        Some(static_info) => {
+                            // Allocate on heap and copy field by field to avoid stack copy
+                            let mut heap_info = KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?;
+                            unsafe {
+                                // Use ptr::copy_nonoverlapping to avoid stack copy
+                                core::ptr::copy_nonoverlapping(
+                                    static_info as *const fw::GspStaticConfigInfo_t,
+                                    heap_info.as_mut_ptr(),
+                                    1
+                                );
+                                Ok(heap_info.assume_init())
+                            }
+                        },
+                        None => {
+                            pr_err!("GSP returned invalid response\n");
+                            Err(EINVAL)
+                        }
+                    }
+                } else {
+                    pr_err!("GSP returned invalid function\n");
+                    Err(EINVAL)
+                }
+            },
+            Err(_e) => {
+                pr_err!("GSP returned error\n");
+                Err(EINVAL)
+            }
+        }
+    }
     // This is equivalent to gsp_shared_init()
     fn new(
         dev: &device::Device<device::Bound>,
@@ -482,7 +555,8 @@ impl<'a> GspCmdq<'a> {
         &mut [[u8; GSP_PAGE_SIZE]],
         Option<&mut [[u8; GSP_PAGE_SIZE]]>,
     )> {
-        let msg_size = msg.size().div_ceil(GSP_PAGE_SIZE) as usize;
+        // Need at least 1 page for headers even if message is empty
+        let msg_size = core::cmp::max(1, msg.size().div_ceil(GSP_PAGE_SIZE) as usize);
 
         while self.get_free_tx_pages() < msg_size as u32 {}
         let wptr = self.cpu_wptr().unwrap() as usize;
@@ -634,7 +708,7 @@ impl<'a> GspCmdq<'a> {
         let (rpc_ptr, size, msg) = unsafe { GspMsgHeader::new_from_raw(msg_ptr, size)? };
         let (args_ptr, size, rpc) = unsafe { GspRpcHeader::new_from_raw(rpc_ptr, size)? };
 
-        pr_info!("Got {}/{} bytes\n", size, rpc.length);
+        // Removed print to avoid stack overflow
 
         Ok((msg, rpc, args_ptr, size))
     }
@@ -645,9 +719,19 @@ impl<'a> GspCmdq<'a> {
     ) -> Result<KBox<dyn GspMessageElement>> {
         let mut result = KBox::<A>::new_uninit(GFP_KERNEL)?;
 
+        // For large structures, copy directly to avoid stack allocation
         unsafe {
-            let (_, _, msg) = A::new_from_raw(ptr, size)?;
-            msg.copy_to(result.as_mut_ptr() as *mut c_void);
+            // Validate size
+            if size < size_of::<A>() as u32 {
+                return Err(EINVAL);
+            }
+            
+            // Copy directly from GSP buffer to our heap allocation
+            core::ptr::copy_nonoverlapping(
+                ptr as *const u8,
+                result.as_mut_ptr() as *mut u8,
+                size_of::<A>(),
+            );
         };
 
         Ok(unsafe { result.assume_init() })
@@ -655,7 +739,7 @@ impl<'a> GspCmdq<'a> {
 
     pub(crate) fn receive(self: &mut Self) -> Result<(u32, KBox<dyn GspMessageElement>)> {
         let (msg, rpc, args_ptr, size) = self.receive_headers()?;
-        pr_info!("Got fn 0x{:x}\n", rpc.function);
+        // Removed hex formatting print to avoid stack overflow
 
         let result = match rpc.function {
             fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
@@ -835,6 +919,36 @@ impl<'a> GspCmdq<'a> {
                     );
                 }
                 Ok(unsafe { result.assume_init() } as KBox<dyn GspMessageElement>)
+            }
+            fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO => {
+                pr_info!("Received GET_GSP_STATIC_INFO response\n");
+                // No prints to avoid stack overflow
+                if rpc.rpc_result == 0xff100002 || (rpc.rpc_result != 0 && rpc.rpc_result != 0xffffffff) || rpc.length == 0 {
+                    pr_err!("GSP returned error response:{:#x}, rpc.length:{:#x}\n", rpc.rpc_result, rpc.length);
+                    // Return empty response for any error
+                    GspCmdq::create_result::<NoArgs>(args_ptr, 0)
+                } else {
+                    // Special handling for large GspStaticConfigInfo_t to avoid stack allocation
+                    // Allocate directly on heap and copy data
+                    let mut result = KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?;
+                    unsafe {
+                        // Validate size
+                        if rpc.length < size_of::<fw::GspStaticConfigInfo_t>() as u32 {
+                            pr_info!("Invalid size for GspStaticConfigInfo_t\n");
+                            return Err(EINVAL);
+                        }
+                        
+                        // Copy directly from GSP buffer to heap allocation
+                        core::ptr::copy_nonoverlapping(
+                            args_ptr as *const u8,
+                            result.as_mut_ptr() as *mut u8,
+                            size_of::<fw::GspStaticConfigInfo_t>(),
+                        );
+                        
+                        // Return as boxed trait object
+                        Ok(result.assume_init() as KBox<dyn GspMessageElement>)
+                    }
+                }
             }
             _ => Err(ENOTSUPP),
         };

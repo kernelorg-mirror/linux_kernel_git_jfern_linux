@@ -118,20 +118,22 @@ impl Irq {
         _gsp_falcon: &Falcon<Gsp>,
         cmdq: &mut GspCmdq<'_>,
         cmd: u32,
+        h_client: u32,
+        h_object: u32,
         params: &mut NV2080CtrlInternalIntrGetKernelTableParams,
     ) -> Result<()> {
         pr_info!("Nova IRQ: rm_control called with cmd {:#x}", cmd);
         pr_info!("Nova IRQ: Building control message with:");
-        pr_info!("  hClient: {:#x}", GSP_INTERNAL_CLIENT_HANDLE);
-        pr_info!("  hObject: {:#x}", GSP_INTERNAL_SUBDEVICE_HANDLE);
+        pr_info!("  hClient: {:#x}", h_client);
+        pr_info!("  hObject: {:#x}", h_object);
         pr_info!("  cmd: {:#x}", cmd);
         pr_info!("  paramsSize: {} bytes", size_of::<NV2080CtrlInternalIntrGetKernelTableParams>());
         
         // Allocate control message on heap to avoid stack overflow
         let msg = kernel::alloc::KBox::new(ControlMessage {
             control: RpcGspRmControl {
-                hClient: GSP_INTERNAL_CLIENT_HANDLE,
-                hObject: GSP_INTERNAL_SUBDEVICE_HANDLE,
+                hClient: h_client,
+                hObject: h_object,
                 cmd,
                 status: 0,
                 paramsSize: size_of::<NV2080CtrlInternalIntrGetKernelTableParams>() as u32,
@@ -213,12 +215,22 @@ impl Irq {
     /// 1. Fixed structure size to match nouveau (128 entries + subtreeMap)
     /// 2. Fixed stack overflow by allocating large structures on heap
     /// 3. Now sending correct RPC size (2124 bytes) matching nouveau
+    /// 4. Implemented GET_GSP_STATIC_INFO RPC infrastructure
     /// 
-    /// Remaining issue:
-    /// Nova-core needs to create internal GSP client/device/subdevice objects
-    /// during GSP initialization before we can use their handles. Nouveau creates
-    /// these during gsp_r535_oneinit(), but nova-core doesn't have equivalent code yet.
+    /// GET_GSP_STATIC_INFO findings:
+    /// - RPC returns error 0xff100002 (indicates missing prerequisite)
+    /// - Response is only 32 bytes (RPC header only, no payload)
+    /// - This error means GSP internal client objects must be created first
     /// 
+    /// Next steps to get valid handles:
+    /// 1. Create GSP internal client (NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC with specific params)
+    /// 2. Create internal device object under the client
+    /// 3. Create internal subdevice object under the device
+    /// 4. Then GET_GSP_STATIC_INFO should return the allocated handles
+    /// 5. Use those handles instead of hardcoded values for interrupt table query
+    /// 
+    /// The hardcoded handles work in nouveau because nouveau creates these objects
+    /// during GSP initialization. Nova-core needs to do the same.
     /// Next steps required:
     /// 1. Implement GSP internal client creation during GSP init (equivalent to nouveau's
     ///    r535_gsp_client_ctor for internal client)
@@ -229,25 +241,31 @@ impl Irq {
     /// 6. Consider implementing a proper RM API wrapper for object allocation/management
 
     pub fn get_interrupt_table<'a>(gsp_falcon: &Falcon<Gsp>, cmdq: &mut GspCmdq<'a>) -> Result<kernel::alloc::Vec<InterruptTableEntry, kernel::alloc::allocator::Kmalloc>> {
-        pr_info!("Nova IRQ: Retrieving interrupt table from GSP...");
+        pr_info!("Nova IRQ: Retrieving interrupt table from GSP...\n");
+        
+        // Step 1: Get GSP static info to retrieve internal handles
+        // No prints here to avoid stack overflow when called from deep stack
+        // let _static_info_result = cmdq.get_gsp_static_info();
         
         // Allocate params structure on heap to avoid stack overflow
         let mut params = kernel::alloc::KBox::new(NV2080CtrlInternalIntrGetKernelTableParams::default(), kernel::alloc::flags::GFP_KERNEL)?;
         
-        // Send control command
+        // Send control command using hardcoded handles (for now)
         Self::rm_control(
             gsp_falcon,
             cmdq,
             NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
+            GSP_INTERNAL_CLIENT_HANDLE,
+            GSP_INTERNAL_SUBDEVICE_HANDLE,
             &mut *params
         )?;
         
         // Convert to Rust vector
         let mut entries = kernel::alloc::Vec::new();
         
-        pr_info!("Nova IRQ: GA102 Interrupt Table (Retrieved from GSP)");
-        pr_info!("Nova IRQ: | Entry | Engine Index | Engine Type | Stall Vector | Non-Stall Vector |");
-        pr_info!("Nova IRQ: |-------|-------------|-------------|--------------|------------------|");
+        pr_info!("Nova IRQ: GA102 Interrupt Table (Retrieved from GSP)\n");
+        pr_info!("Nova IRQ: | Entry | Engine Index | Engine Type | Stall Vector | Non-Stall Vector |\n");
+        pr_info!("Nova IRQ: |-------|-------------|-------------|--------------|------------------|\n");
         
         // Process the returned table
         for i in 0..params.tableLen as usize {
