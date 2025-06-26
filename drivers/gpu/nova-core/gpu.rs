@@ -427,6 +427,13 @@ impl Gpu {
 
         libos.cmdq.gsp_init_done(Delta::from_secs(10))?;
 
+        libos.cmdq.get_gsp_info()?;
+        let info = libos.cmdq.get_gsp_info()?;
+        pr_info!(
+            "GPU name: {}\n",
+            core::str::from_utf8(&info.gpu_name).unwrap_or("invalid")
+        );
+
         Ok(pin_init!(Self {
             spec,
             bar: devres_bar,
