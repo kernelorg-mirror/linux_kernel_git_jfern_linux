@@ -2,15 +2,82 @@
 
 use kernel::bindings;
 use kernel::device;
+use kernel::dma::CoherentAllocation;
+use kernel::dma_write;
 use kernel::pci;
 use kernel::prelude::*;
+use kernel::transmute::AsBytes;
+use kernel::transmute::FromBytes;
 
 use crate::dma::DmaObject;
+use crate::fb::FbLayout;
+use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
+
+unsafe impl FromBytes for fw::GspFwWprMeta {}
+unsafe impl AsBytes for fw::GspFwWprMeta {}
+unsafe impl FromBytes for fw::GspSystemInfo {}
+unsafe impl AsBytes for fw::GspSystemInfo {}
+
+pub(crate) fn build_wpr_meta(
+    dev: &device::Device<device::Bound>,
+    fw: &Firmware,
+    fb_layout: &FbLayout,
+) -> Result<CoherentAllocation<fw::GspFwWprMeta>> {
+    let wpr_meta =
+        CoherentAllocation::<fw::GspFwWprMeta>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
+    dma_write!(
+        wpr_meta[0] = fw::GspFwWprMeta {
+            magic: fw::GSP_FW_WPR_META_MAGIC as u64,
+            revision: fw::GSP_FW_WPR_META_REVISION as u64,
+            sysmemAddrOfRadix3Elf: fw.gsp.lvl0_dma_handle() as u64,
+            sizeOfRadix3Elf: fw.gsp.size() as u64,
+            sysmemAddrOfBootloader: fw.bootloader.ucode.dma_handle(),
+            sizeOfBootloader: fw.bootloader.ucode.size() as u64,
+            bootloaderCodeOffset: fw.bootloader.code_offset as u64,
+            bootloaderDataOffset: fw.bootloader.data_offset as u64,
+            bootloaderManifestOffset: fw.bootloader.manifest_offset as u64,
+            __bindgen_anon_1: fw::GspFwWprMeta__bindgen_ty_1 {
+                __bindgen_anon_1: fw::GspFwWprMeta__bindgen_ty_1__bindgen_ty_1 {
+                    sysmemAddrOfSignature: fw.gsp_sigs.dma_handle() as u64,
+                    sizeOfSignature: fw.gsp_sigs.size() as u64,
+                }
+            },
+            gspFwRsvdStart: fb_layout.heap.start,
+            nonWprHeapOffset: fb_layout.heap.start,
+            nonWprHeapSize: fb_layout.heap.end - fb_layout.heap.start,
+            gspFwWprStart: fb_layout.wpr2.start,
+            gspFwHeapOffset: fb_layout.wpr2_heap.start,
+            gspFwHeapSize: fb_layout.wpr2_heap.end - fb_layout.wpr2_heap.start,
+            gspFwOffset: fb_layout.elf.start,
+            bootBinOffset: fb_layout.boot.start,
+            frtsOffset: fb_layout.frts.start,
+            frtsSize: fb_layout.frts.end - fb_layout.frts.start,
+            gspFwWprEnd: fb_layout.vga_workspace.start & !(0x20000 - 1),
+            gspFwHeapVfPartitionCount: fb_layout.vf_partition_count,
+            fbSize: fb_layout.fb.end - fb_layout.fb.start,
+            vgaWorkspaceOffset: fb_layout.vga_workspace.start,
+            vgaWorkspaceSize: fb_layout.vga_workspace.end - fb_layout.vga_workspace.start,
+            bootCount: 0,
+            __bindgen_anon_2: fw::GspFwWprMeta__bindgen_ty_2 {
+                __bindgen_anon_1: fw::GspFwWprMeta__bindgen_ty_2__bindgen_ty_1 {
+                    partitionRpcAddr: 0,
+                    partitionRpcRequestOffset: 0,
+                    partitionRpcReplyOffset: 0,
+                    ..Default::default()
+                },
+            },
+            verified: 0,
+            ..Default::default()
+        }
+    )?;
+
+    Ok(wpr_meta)
+}
 
 #[allow(unused)]
 pub(crate) struct GspMemObjects {
