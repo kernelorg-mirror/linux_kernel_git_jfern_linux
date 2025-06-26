@@ -10,6 +10,7 @@ use crate::fb::SysmemFlush;
 use crate::firmware::fwsec::{FwsecCommand, FwsecFirmware};
 use crate::firmware::{Firmware, FIRMWARE_VERSION};
 use crate::gfw;
+use crate::gsp::commands::gsp_init_done;
 use crate::gsp::{self, GspMemObjects};
 use crate::nvfw::r570_144 as fw;
 use crate::regs;
@@ -365,6 +366,8 @@ impl Gpu {
             &bar,
             Delta::from_secs(10),
         )?;
+
+        gsp_init_done(&mut libos.cmdq, Delta::from_secs(10))?;
 
         Ok(pin_init!(Self {
             spec,
