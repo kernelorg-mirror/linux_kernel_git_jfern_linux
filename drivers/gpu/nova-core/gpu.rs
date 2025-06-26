@@ -401,6 +401,7 @@ impl Gpu {
             }
         }
 
+
         // Create and run the GSP sequencer
         match gsp::sequencer::GspSequencer::new(
             &mut libos.cmdq,
@@ -423,6 +424,8 @@ impl Gpu {
                 return Err(e);
             }
         }
+
+        libos.cmdq.gsp_init_done(Delta::from_secs(10))?;
 
         Ok(pin_init!(Self {
             spec,
