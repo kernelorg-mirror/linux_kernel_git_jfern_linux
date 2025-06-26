@@ -310,7 +310,7 @@ pub(crate) struct RmRiscvUCodeDesc {
     bootloader_param_size: u32,
     riscv_elf_offset: u32,
     riscv_elf_size: u32,
-    app_version: u32,
+    pub app_version: u32,
     manifest_offset: u32,
     manifest_size: u32,
     monitor_data_offset: u32,
