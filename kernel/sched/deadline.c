@@ -1657,7 +1657,7 @@ void dl_server_start(struct sched_dl_entity *dl_se)
 		u64 runtime =  50 * NSEC_PER_MSEC;
 		u64 period = 1000 * NSEC_PER_MSEC;
 
-		if (dl_server_apply_params(dl_se, runtime, period, 1))
+		if (WARN_ON_ONCE(dl_server_apply_params(dl_se, runtime, period, 1)))
 			return;
 		dl_se->dl_server = 1;
 		dl_se->dl_defer = 1;
