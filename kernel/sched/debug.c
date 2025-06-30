@@ -351,7 +351,6 @@ static ssize_t sched_server_write_common(struct file *filp, const char __user *u
 	long cpu = (long) ((struct seq_file *) filp->private_data)->private;
 	struct rq *rq = cpu_rq(cpu);
 	struct sched_dl_entity *dl_se = (struct sched_dl_entity *)server;
-	bool was_active = false;
 	u64 runtime, period;
 	int retval = 0;
 	size_t err;
@@ -362,6 +361,8 @@ static ssize_t sched_server_write_common(struct file *filp, const char __user *u
 		return err;
 
 	scoped_guard (rq_lock_irqsave, rq) {
+		bool is_active;
+		
 		runtime  = dl_se->dl_runtime;
 		period = dl_se->dl_period;
 
@@ -384,8 +385,8 @@ static ssize_t sched_server_write_common(struct file *filp, const char __user *u
 			return  -EINVAL;
 		}
 
-		if (dl_server_active(dl_se)) {
-			was_active = true;
+		is_active = dl_server_active(dl_se);
+		if (is_active) {
 			update_rq_clock(rq);
 			dl_server_stop(dl_se);
 		}
@@ -401,7 +402,7 @@ static ssize_t sched_server_write_common(struct file *filp, const char __user *u
 						cpu_of(rq));
 		}
 
-		if (was_active)
+		if (is_active)
 			dl_server_start(dl_se);
 
 		if (retval < 0)
