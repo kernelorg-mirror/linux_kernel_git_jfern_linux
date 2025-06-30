@@ -393,14 +393,9 @@ static ssize_t sched_server_write_common(struct file *filp, const char __user *u
 
 		retval = dl_server_apply_params(dl_se, runtime, period, 0);
 
-		if (!runtime) {
-			if (server == &rq->fair_server)
-				printk_deferred("Fair server disabled on CPU %d, system may crash due to starvation.\n",
-						cpu_of(rq));
-			else
-				printk_deferred("Ext server disabled on CPU %d, system may crash due to starvation.\n",
-						cpu_of(rq));
-		}
+		if (!runtime)
+			printk_deferred("%s server disabled on CPU %d, system may crash due to starvation.\n",
+					server == &rq->fair_server ? "Fair" : "Ext", cpu_of(rq));
 
 		if (is_active)
 			dl_server_start(dl_se);
