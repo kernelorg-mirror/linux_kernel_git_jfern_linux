@@ -515,7 +515,7 @@ impl<'a> GspCmdq<'a> {
         Ok(())
     }
 
-    fn receive<A: GspMessageElement>(self: &mut Self, function: u32) -> Result<A> {
+    pub(crate) fn receive<A: GspMessageElement>(self: &mut Self, function: u32) -> Result<A> {
         let header_size = (size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>()) as u32;
 
         // Used pages contains the total number of pages available to consume
