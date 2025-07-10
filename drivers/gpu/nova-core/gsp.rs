@@ -267,10 +267,6 @@ pub(crate) struct GspCmdq<'a> {
     gsp_mem: CoherentAllocation<GspMem>,
     nr_ptes: u32,
     bar: &'a Devres<Bar0>,
-    gsp_falcon: &'a Falcon<Gsp>,
-    sec2_falcon: &'a Falcon<Sec2>,
-    libos_dma_handle: u64,
-    fw: &'a Firmware,
 }
 
 impl<'a> GspCmdq<'a> {
@@ -278,10 +274,6 @@ impl<'a> GspCmdq<'a> {
     fn new(
         dev: &device::Device<device::Bound>,
         bar: &'a Devres<Bar0>,
-        gsp_falcon: &'a Falcon<Gsp>,
-        sec2_falcon: &'a Falcon<Sec2>,
-        libos_dma_handle: u64,
-        fw: &'a Firmware,
     ) -> Result<GspCmdq<'a>> {
         let mut gsp_mem =
             CoherentAllocation::<GspMem>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
@@ -320,10 +312,6 @@ impl<'a> GspCmdq<'a> {
             gsp_mem,
             nr_ptes: nr_ptes as u32,
             bar,
-            gsp_falcon,
-            sec2_falcon,
-            libos_dma_handle,
-            fw,
         })
     }
 
@@ -961,9 +949,6 @@ impl<'a> GspMemObjects<'a> {
     pub(crate) fn new(
         pdev: &pci::Device<device::Bound>,
         bar: &'a Devres<Bar0>,
-        gsp_falcon: &'a Falcon<Gsp>,
-        sec2_falcon: &'a Falcon<Sec2>,
-        fw: &'a Firmware,
     ) -> Result<Self> {
         let dev = pdev.as_ref();
         let mut libos = DmaObject::new(dev, GSP_PAGE_SIZE)?;
@@ -972,7 +957,7 @@ impl<'a> GspMemObjects<'a> {
         let logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
 
         // Creates its own PTE array
-        let mut cmdq = GspCmdq::new(dev, bar, gsp_falcon, sec2_falcon, libos.dma_handle(), fw)?;
+        let mut cmdq = GspCmdq::new(dev, bar)?;
         let rmargs =
             create_coherent_dma_object::<fw::GSP_ARGUMENTS_CACHED>(dev, "RMARGS", &mut libos, 3)?;
         dma_write!(
