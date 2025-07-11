@@ -25,6 +25,7 @@ use crate::fb::FbLayout;
 use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
+use crate::util::wait_on_result;
 
 pub(crate) mod sequencer;
 
@@ -548,6 +549,16 @@ impl<'a> GspCmdq<'a> {
         };
 
         result
+    }
+
+    /// Wait to receive a message matching `function`. If a different message is
+    /// in the queue this will return `Err(ERANGE)`.
+    fn receive_wait<R: GspMessageElement>(&mut self, timeout: Delta, function: u32) -> Result<R> {
+        wait_on_result(timeout, || match self.receive::<R>(function) {
+            Ok(x) => Some(Ok(x)),
+            Err(EAGAIN) => None,
+            Err(e) => Some(Err(e)),
+        })
     }
 }
 
