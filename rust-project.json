@@ -83,7 +83,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/compiler_builtins.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/compiler_builtins.rs"
         },
         {
             "cfg": [],
@@ -104,8 +104,8 @@
             },
             "is_proc_macro": true,
             "is_workspace_member": true,
-            "proc_macro_dylib_path": "/home/joelaf/repo/linux-nova-seq-rebase/rust/libmacros.so",
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/macros/lib.rs"
+            "proc_macro_dylib_path": "/home/joelaf/repo/linux-nova-sbuf/rust/libmacros.so",
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/macros/lib.rs"
         },
         {
             "cfg": [],
@@ -126,7 +126,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/build_error.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/build_error.rs"
         },
         {
             "cfg": [
@@ -140,8 +140,8 @@
             },
             "is_proc_macro": true,
             "is_workspace_member": true,
-            "proc_macro_dylib_path": "/home/joelaf/repo/linux-nova-seq-rebase/rust/libpin_init_internal.so",
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/pin-init/internal/src/lib.rs"
+            "proc_macro_dylib_path": "/home/joelaf/repo/linux-nova-sbuf/rust/libpin_init_internal.so",
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/pin-init/internal/src/lib.rs"
         },
         {
             "cfg": [
@@ -168,7 +168,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/pin-init/src/lib.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/pin-init/src/lib.rs"
         },
         {
             "cfg": [],
@@ -189,7 +189,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/ffi.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/ffi.rs"
         },
         {
             "cfg": [
@@ -5295,17 +5295,17 @@
             "display_name": "bindings",
             "edition": "2021",
             "env": {
-                "OBJTREE": "/home/joelaf/repo/linux-nova-seq-rebase",
+                "OBJTREE": "/home/joelaf/repo/linux-nova-sbuf",
                 "RUST_MODFILE": "This is only for rust-analyzer"
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/bindings/lib.rs",
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/bindings/lib.rs",
             "source": {
                 "exclude_dirs": [],
                 "include_dirs": [
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust/bindings",
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust"
+                    "/home/joelaf/repo/linux-nova-sbuf/rust/bindings",
+                    "/home/joelaf/repo/linux-nova-sbuf/rust"
                 ]
             }
         },
@@ -10413,17 +10413,17 @@
             "display_name": "uapi",
             "edition": "2021",
             "env": {
-                "OBJTREE": "/home/joelaf/repo/linux-nova-seq-rebase",
+                "OBJTREE": "/home/joelaf/repo/linux-nova-sbuf",
                 "RUST_MODFILE": "This is only for rust-analyzer"
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/uapi/lib.rs",
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/uapi/lib.rs",
             "source": {
                 "exclude_dirs": [],
                 "include_dirs": [
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust/uapi",
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust"
+                    "/home/joelaf/repo/linux-nova-sbuf/rust/uapi",
+                    "/home/joelaf/repo/linux-nova-sbuf/rust"
                 ]
             }
         },
@@ -15551,17 +15551,17 @@
             "display_name": "kernel",
             "edition": "2021",
             "env": {
-                "OBJTREE": "/home/joelaf/repo/linux-nova-seq-rebase",
+                "OBJTREE": "/home/joelaf/repo/linux-nova-sbuf",
                 "RUST_MODFILE": "This is only for rust-analyzer"
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/rust/kernel/lib.rs",
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/rust/kernel/lib.rs",
             "source": {
                 "exclude_dirs": [],
                 "include_dirs": [
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust/kernel",
-                    "/home/joelaf/repo/linux-nova-seq-rebase/rust"
+                    "/home/joelaf/repo/linux-nova-sbuf/rust/kernel",
+                    "/home/joelaf/repo/linux-nova-sbuf/rust"
                 ]
             }
         },
@@ -20673,7 +20673,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_driver_pci.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_driver_pci.rs"
         },
         {
             "cfg": [
@@ -25783,7 +25783,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_configfs.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_configfs.rs"
         },
         {
             "cfg": [
@@ -30893,7 +30893,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_driver_platform.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_driver_platform.rs"
         },
         {
             "cfg": [
@@ -36003,7 +36003,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_driver_auxiliary.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_driver_auxiliary.rs"
         },
         {
             "cfg": [
@@ -41113,7 +41113,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_driver_faux.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_driver_faux.rs"
         },
         {
             "cfg": [
@@ -46223,7 +46223,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_dma.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_dma.rs"
         },
         {
             "cfg": [
@@ -51333,7 +51333,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_misc_device.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_misc_device.rs"
         },
         {
             "cfg": [
@@ -56443,7 +56443,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_print_main.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_print_main.rs"
         },
         {
             "cfg": [
@@ -61553,7 +61553,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/samples/rust/rust_minimal.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/samples/rust/rust_minimal.rs"
         },
         {
             "cfg": [
@@ -66663,7 +66663,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/net/phy/qt2025.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/net/phy/qt2025.rs"
         },
         {
             "cfg": [
@@ -71773,7 +71773,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/net/phy/ax88796b_rust.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/net/phy/ax88796b_rust.rs"
         },
         {
             "cfg": [
@@ -76883,7 +76883,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/gpu/nova-core/nova_core.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/gpu/nova-core/nova_core.rs"
         },
         {
             "cfg": [
@@ -81993,7 +81993,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/gpu/drm/drm_panic_qr.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/gpu/drm/drm_panic_qr.rs"
         },
         {
             "cfg": [
@@ -87103,7 +87103,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/gpu/drm/nova/nova.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/gpu/drm/nova/nova.rs"
         },
         {
             "cfg": [
@@ -92213,7 +92213,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/cpufreq/rcpufreq_dt.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/cpufreq/rcpufreq_dt.rs"
         },
         {
             "cfg": [
@@ -97323,7 +97323,7 @@
             },
             "is_proc_macro": false,
             "is_workspace_member": true,
-            "root_module": "/home/joelaf/repo/linux-nova-seq-rebase/drivers/block/rnull.rs"
+            "root_module": "/home/joelaf/repo/linux-nova-sbuf/drivers/block/rnull.rs"
         }
     ],
     "sysroot": "/home/joelaf/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu"
