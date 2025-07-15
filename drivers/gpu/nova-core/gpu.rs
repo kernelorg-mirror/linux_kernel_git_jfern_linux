@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::dma::CoherentAllocation;
-use kernel::{c_str, device, devres::Devres, error::code::*, pci, prelude::*, time::Delta, pr_info};
+use kernel::{c_str, device, devres::Devres, error::code::*, pci, prelude::*, time::Delta};
 
 use crate::driver::Bar0;
 use crate::falcon::{gsp::Gsp, sec2::Sec2, Falcon};
@@ -11,7 +11,6 @@ use crate::firmware::fwsec::{FwsecCommand, FwsecFirmware};
 use crate::firmware::{Firmware, FIRMWARE_VERSION};
 use crate::gfw;
 use crate::gsp;
-use crate::irq;
 use crate::nvfw::r570_144 as fw;
 use crate::regs;
 use crate::util;
@@ -182,8 +181,6 @@ pub(crate) struct Gpu {
     /// PCIE into system memory.
     sysmem_flush: SysmemFlush,
     wpr_meta: CoherentAllocation<fw::GspFwWprMeta>,
-    /// GSP information
-    pub(crate) gsp_info: gsp::GspInfo,
 }
 
 #[pinned_drop]
@@ -290,8 +287,8 @@ impl Gpu {
             spec.revision
         );
 
-        pdev.dma_set_mask((1 << 48) - 1)?;
-        pdev.dma_set_coherent_mask((1 << 48) - 1)?;
+        pdev.as_ref().dma_set_mask((1 << 48) - 1)?;
+        pdev.as_ref().dma_set_coherent_mask((1 << 48) - 1)?;
 
         // We must wait for GFW_BOOT completion before doing any significant setup on the GPU.
         gfw::wait_gfw_boot_completion(bar)
@@ -325,8 +322,7 @@ impl Gpu {
 
         Self::run_fwsec_frts(pdev.as_ref(), &gsp_falcon, bar, &bios, &fb_layout)?;
 
-        let mut libos =
-            gsp::GspSharedMemObjects::new(pdev, &devres_bar, &gsp_falcon, &sec2_falcon, &fw)?;
+        let mut libos = gsp::GspMemObjects::new(pdev, &devres_bar, &gsp_falcon, &sec2_falcon, &fw)?;
         let libos_handle = libos.libos.dma_handle();
 
         let wpr_meta = gsp::build_wpr_meta(pdev.as_ref(), &fw, &fb_layout)?;
@@ -350,6 +346,18 @@ impl Gpu {
             Some((wpr_handle >> 32) as u32),
         )?;
         dev_info!(pdev.as_ref(), "MBOX: {:#x},{:#x}\n", mbox0, mbox1,);
+
+        // Match what Nouveau does here:
+        gsp_falcon.write_os_version(&bar, fw.gsp_desc.app_version())?;
+
+        // Poll for RISC-V to become active before running sequencer
+        util::wait_on(Delta::from_secs(5), || {
+            if gsp_falcon.is_riscv_active(&bar).unwrap_or(false) {
+                Some(())
+            } else {
+                None
+            }
+        })?;
 
         dev_info!(
             pdev.as_ref(),
@@ -395,27 +403,18 @@ impl Gpu {
 
         libos.cmdq.run_sequencer(Delta::from_secs(10))?;
         libos.cmdq.gsp_init_done(Delta::from_secs(10))?;
-        let gsp_info = libos.cmdq.get_gsp_info()?;
-
-        dev_info!(pdev.as_ref(), "GPU Name: {}\n", gsp_info.gpu_name.to_str().unwrap_or("invalid utf8"));
-        dev_info!(pdev.as_ref(), "GSP Handles: Client={:#x}, Device={:#x}, Subdevice={:#x}\n", 
-                  gsp_info.h_internal_client, gsp_info.h_internal_device, gsp_info.h_internal_subdevice);
-
-        // Call the dump function which properly passes parameters
-        if let Err(e) = irq::dump_table(&mut libos, &gsp_info) {
-            dev_err!(pdev.as_ref(), "Failed to test RM control: {:?}\n", e);
-        }
+        libos.cmdq.get_gsp_info()?;
+        let info = libos.cmdq.get_gsp_info()?;
+        pr_info!(
+            "GPU name: {}\n",
+            core::str::from_utf8(&info.gpu_name).unwrap_or("invalid")
+        );
 
         // TODO: Figure out how to convince the compiler that the lifetime
-        // parameter on GspSharedMemObjects is satisfied when we pass it to
+        // parameter on GspMemObjects is satisfied when we pass it to
         // pin_init below. For now we just leak the memory, which is not good
         // but is better than a use-after-free.
-        //
-        // JOEL(7/8/2025): THIS IS BROKEN and make its impossible to pass along
-        // GspSharedMemObjects or libos and satisfy the borrow checker. Rust
-        // still has lifetime issues.
-        //
-        // core::mem::forget(libos);
+        core::mem::forget(libos);
 
         Ok(pin_init!(Self {
             spec,
@@ -423,7 +422,6 @@ impl Gpu {
             fw,
             sysmem_flush,
             wpr_meta,
-            gsp_info,
         }))
     }
 }

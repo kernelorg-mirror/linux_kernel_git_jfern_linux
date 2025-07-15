@@ -1,4 +1,4 @@
-use crate::gsp::GspSharedMemObjects;
+use crate::gsp::GspMemObjects;
 use core::ffi::c_void;
 use core::ptr;
 use kernel::prelude::*;
@@ -74,7 +74,7 @@ impl NovaDebugfs {
         })
     }
 
-    pub(crate) fn create_log_files(&mut self, gsp_mem: &GspSharedMemObjects) -> Result {
+    pub(crate) fn create_log_files(&mut self, gsp_mem: &GspMemObjects) -> Result {
         self.loginit_info.data = gsp_mem.loginit.start_ptr() as *mut c_void;
         self.loginit_info.size = gsp_mem.loginit.size();
 

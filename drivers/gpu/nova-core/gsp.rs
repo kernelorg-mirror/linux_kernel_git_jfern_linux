@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use core::alloc::Layout;
-use core::cmp::min;
 use core::mem::MaybeUninit;
 
 use kernel::alloc::allocator::Kmalloc;
@@ -12,9 +11,8 @@ use kernel::device;
 use kernel::devres::Devres;
 use kernel::dma::CoherentAllocation;
 use kernel::pci;
-use kernel::{pr_info, pr_err};
+use kernel::pr_info;
 use kernel::prelude::*;
-use kernel::str::{CStr, CString};
 use kernel::time::Delta;
 use kernel::transmute::{AsBytes, FromBytes};
 use kernel::{dma_read, dma_write};
@@ -26,23 +24,14 @@ use crate::fb::FbLayout;
 use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
+use crate::sbuffer::{SBuffer, SBufferIteratorMut};
 use crate::util::wait_on_result;
 
 pub(crate) mod sequencer;
-pub(crate) mod rm_control;
 
 pub(crate) const GSP_PAGE_SHIFT: usize = 12;
 pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
 pub(crate) const GSP_HEAP_SHIFT: u64 = 1 << 20;
-
-/// Structure containing GSP information including handles and GPU name
-#[derive(Debug)]
-pub(crate) struct GspInfo {
-    pub h_internal_client: u32,
-    pub h_internal_device: u32,
-    pub h_internal_subdevice: u32,
-    pub gpu_name: CString,
-}
 
 unsafe impl FromBytes for fw::GSP_ARGUMENTS_CACHED {}
 unsafe impl AsBytes for fw::GSP_ARGUMENTS_CACHED {}
@@ -59,37 +48,26 @@ unsafe impl AsBytes for fw::GspSystemInfo {}
 // message which is only converted to bytes when actually doing the call. See the
 // registry for an example.
 pub(crate) trait GspMessageElement {
-    // Helper method to copy from a byte slice to ring buffer slices
-    fn copy_slice_to_ring_buffer(
-        &self,
-        cmd_slice: &[u8],
-        msg_slice_1: &mut [u8],
-        msg_slice_2: &mut Option<&mut [u8]>,
-    ) {
-        // Number of bytes of the command left to send
-        let mut bytes_remaining = cmd_slice.len();
-
-        let slice_len = min(msg_slice_1.len(), bytes_remaining);
-
-        // Copy the first bit of the command into the queue
-        msg_slice_1[0..slice_len].copy_from_slice(&cmd_slice[0..slice_len]);
-        bytes_remaining -= slice_len;
-
-        if let Some(some_msg_slice) = msg_slice_2 {
-            some_msg_slice[0..bytes_remaining].copy_from_slice(&cmd_slice[slice_len..]);
-        } else if bytes_remaining > 0 {
-            panic!("Impossible");
-        }
-    }
-
-    fn copy_to_slices(&self, msg_slice_1: &mut [u8], msg_slice_2: &mut Option<&mut [u8]>)
+    fn copy_to_sbuf(&self, sbuf: &mut SBufferIteratorMut<'_, '_>) -> Result
     where
         Self: Sized,
     {
         let cmd_slice =
             unsafe { core::slice::from_raw_parts(self as *const Self as *const u8, self.size()) };
+        sbuf.write_slice(cmd_slice)
+    }
 
-        self.copy_slice_to_ring_buffer(cmd_slice, msg_slice_1, msg_slice_2);
+    fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        return unsafe {
+            let mut result = MaybeUninit::<Self>::uninit();
+            let result_ptr = result.as_mut_ptr() as *mut u8;
+            let result_slice = core::slice::from_raw_parts_mut(result_ptr, size_of::<Self>());
+            sbuf.read(0, result_slice)?;
+            Ok(result.assume_init())
+        };
     }
 
     // Creates a new struct by copying bytes from the given byte slice.
@@ -103,43 +81,6 @@ pub(crate) trait GspMessageElement {
         }
 
         Ok(unsafe { core::ptr::read(slice.as_ptr() as *const Self) })
-    }
-
-    // Creates a new struct by copying bytes from up to two discontiguous byte slices.
-    // SAFETY: Assumes the given byte slices are a valid representation of self.
-    fn new_from_slices(slice_1: &[u8], slice_2: Option<&[u8]>) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        if let Some(some_slice) = slice_2 {
-            if slice_1.len() + some_slice.len() < size_of::<Self>() {
-                return Err(EINVAL);
-            }
-
-            let mut result = MaybeUninit::<Self>::uninit();
-            let result_ptr = result.as_mut_ptr() as *mut u8;
-            let mut offset = 0;
-            let copy_len = min(slice_1.len(), size_of::<Self>());
-            unsafe {
-                core::ptr::copy_nonoverlapping(slice_1.as_ptr(), result_ptr, copy_len);
-            }
-            offset += copy_len;
-            if offset < size_of::<Self>() {
-                let remaining = size_of::<Self>() - offset;
-                let copy_len = min(some_slice.len(), remaining);
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        some_slice.as_ptr(),
-                        result_ptr.add(offset),
-                        copy_len,
-                    );
-                }
-            }
-
-            Ok(unsafe { result.assume_init() })
-        } else {
-            Self::new_from_slice(slice_1)
-        }
     }
 
     fn size(&self) -> usize
@@ -156,35 +97,42 @@ pub(crate) struct GspSequencerInfo {
 }
 
 impl GspMessageElement for GspSequencerInfo {
-    fn new_from_slices(slice_1: &[u8], slice_2: Option<&[u8]>) -> Result<Self> {
-        // First, extract the info field from the beginning of the data
-        let info_size = size_of::<fw::rpc_run_cpu_sequencer_v17_00>();
-
-        // Check if we have enough data for the info field
-        let total_available = slice_1.len() + slice_2.map_or(0, |s| s.len());
-        if total_available < info_size {
-            return Err(EINVAL);
-        }
-
-        let info = fw::rpc_run_cpu_sequencer_v17_00::new_from_slices(slice_1, slice_2)?;
-
-        if slice_1.len() <= info_size {
-            return Err(EINVAL);
-        }
-
-        let mut data_len = slice_1.len() - info_size;
-        if let Some(slice) = slice_2 {
-            data_len += slice.len();
-        }
-
-        let mut cmd_data = KVec::with_capacity(data_len, GFP_KERNEL)?;
-        cmd_data.extend_from_slice(&slice_1[info_size..], GFP_KERNEL)?;
-
-        if let Some(slice) = slice_2 {
-            cmd_data.extend_from_slice(slice, GFP_KERNEL)?;
-        }
-
+    fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self> {
+        let info = fw::rpc_run_cpu_sequencer_v17_00::new_from_sbuf(sbuf)?;
+        let cmd_data = sbuf.read_kvec(size_of::<fw::rpc_run_cpu_sequencer_v17_00>())?;
         Ok(GspSequencerInfo { info, cmd_data })
+    }
+}
+
+pub(crate) struct GspStaticConfigInfo {
+    pub gpu_name: [u8; 40],
+}
+
+impl GspMessageElement for GspStaticConfigInfo {
+    fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self> {
+        let gpu_name_str = unsafe {
+            let static_info_ptr = sbuf.as_ptr::<fw::GspStaticConfigInfo_t>(0)?;
+            (*static_info_ptr)
+                .gpuNameString
+                .get(
+                    0..=(*static_info_ptr)
+                        .gpuNameString
+                        .iter()
+                        .position(|&b| b == 0)
+                        .unwrap_or((*static_info_ptr).gpuNameString.len() - 1),
+                )
+                .and_then(|bytes| CStr::from_bytes_with_nul(bytes).ok())
+                .and_then(|cstr| cstr.to_str().ok())
+                .unwrap_or("invalid utf8")
+        };
+
+        let mut gpu_name = [0u8; 40];
+        let bytes = gpu_name_str.as_bytes();
+        let copy_len = core::cmp::min(bytes.len(), gpu_name.len());
+        gpu_name[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        gpu_name[copy_len] = b'\0';
+
+        Ok(GspStaticConfigInfo { gpu_name })
     }
 }
 
@@ -262,6 +210,7 @@ struct GspMem {
     gspq: Msgq,
 }
 
+impl GspMessageElement for fw::GspStaticConfigInfo_t {}
 impl GspMessageElement for fw::rpc_run_cpu_sequencer_v17_00 {}
 
 // Needed for CoherentAllocation
@@ -281,62 +230,6 @@ pub(crate) struct GspCmdq<'a> {
     sec2_falcon: &'a Falcon<Sec2>,
     libos_dma_handle: u64,
     fw: &'a Firmware,
-}
-
-enum GspResponse {
-    Unsupported(#[allow(dead_code)] u32),
-    InitDone,
-    StaticConfigInfo(#[allow(dead_code)] KBox<fw::GspStaticConfigInfo_t>),
-    RunCpuSequencer(GspSequencerInfo),
-    RmControl {
-        status: u32,
-        data: KVec<u8>,
-    },
-}
-
-impl GspMessageElement for fw::GspStaticConfigInfo_t {}
-
-// Helper function to create KBox<GspStaticConfigInfo_t> directly from slices
-fn new_gsp_static_config_from_slices(slice_1: &[u8], slice_2: Option<&[u8]>) -> Result<KBox<fw::GspStaticConfigInfo_t>> {
-    if let Some(some_slice) = slice_2 {
-        if slice_1.len() + some_slice.len() < size_of::<fw::GspStaticConfigInfo_t>() {
-            return Err(EINVAL);
-        }
-
-        // Allocate on heap to avoid stack overflow
-        let mut boxed_result = KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?;
-        let result_ptr = boxed_result.as_mut_ptr() as *mut u8;
-        let mut offset = 0;
-        let copy_len = min(slice_1.len(), size_of::<fw::GspStaticConfigInfo_t>());
-        unsafe {
-            core::ptr::copy_nonoverlapping(slice_1.as_ptr(), result_ptr, copy_len);
-        }
-        offset += copy_len;
-        if offset < size_of::<fw::GspStaticConfigInfo_t>() {
-            let remaining = size_of::<fw::GspStaticConfigInfo_t>() - offset;
-            let copy_len = min(some_slice.len(), remaining);
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    some_slice.as_ptr(),
-                    result_ptr.add(offset),
-                    copy_len,
-                );
-            }
-        }
-
-        Ok(unsafe { boxed_result.assume_init() })
-    } else {
-        if slice_1.len() < size_of::<fw::GspStaticConfigInfo_t>() {
-            return Err(EINVAL);
-        }
-
-        let mut boxed_result = KBox::<fw::GspStaticConfigInfo_t>::new_uninit(GFP_KERNEL)?;
-        let result_ptr = boxed_result.as_mut_ptr() as *mut u8;
-        unsafe {
-            core::ptr::copy_nonoverlapping(slice_1.as_ptr(), result_ptr, size_of::<fw::GspStaticConfigInfo_t>());
-        }
-        Ok(unsafe { boxed_result.assume_init() })
-    }
 }
 
 impl<'a> GspCmdq<'a> {
@@ -442,15 +335,18 @@ impl<'a> GspCmdq<'a> {
         used
     }
 
-    fn calculate_checksum(sum: u32, msg_bytes: &[u8]) -> u32 {
-        let mut sum64: u64 = sum as u64;
-        for &byte in msg_bytes.iter().rev() {
-            sum64 = sum64.rotate_left(8) ^ (byte as u64);
+    fn calculate_checksum(sbuf: &SBuffer<'_>) -> u32 {
+        let mut sum64: u64 = 0;
+        {
+            let mut iter = sbuf.iter().rev();
+            while let Some(byte) = iter.next() {
+                sum64 = sum64.rotate_left(8) ^ (byte as u64);
+            }
         }
         ((sum64 >> 32) as u32) ^ (sum64 as u32)
     }
 
-    fn alloc_cmd(self: &mut Self, cmd_size: usize) -> Result<(&mut [u8], Option<&mut [u8]>)> {
+    fn alloc_cmd_sbuffer<'b>(self: &mut Self, cmd_size: usize) -> Result<SBuffer<'b>> {
         let msg_size = cmd_size.div_ceil(GSP_PAGE_SIZE);
 
         while self.get_free_tx_pages() < msg_size as u32 {}
@@ -464,7 +360,7 @@ impl<'a> GspCmdq<'a> {
                 core::slice::from_raw_parts_mut(ptr as *mut u8, msg_size * GSP_PAGE_SIZE)
             };
 
-            return Ok((slice, None));
+            return Ok(SBuffer::<'b>::new([slice]));
         }
 
         // First slice contains the remaining free pages in the queue
@@ -479,7 +375,7 @@ impl<'a> GspCmdq<'a> {
                 (msg_size - 0x3f + wptr) * GSP_PAGE_SIZE,
             )
         };
-        return Ok((slice_1, Some(slice_2)));
+        return Ok(SBuffer::<'b>::new([slice_1, slice_2]));
     }
 
     pub(crate) fn send<A: GspMessageElement>(
@@ -509,7 +405,9 @@ impl<'a> GspCmdq<'a> {
         self.seq += 1;
         rpc.length = (size_of::<GspRpcHeader>() + cmd.size()) as u32;
 
-        let (msg_slice, mut some_msg_slice) = self.alloc_cmd(cmd.size() as usize)?;
+        let mut sbuf = self.alloc_cmd_sbuffer(
+            size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>() + cmd.size() as usize,
+        )?;
         let msg_header_slice = unsafe {
             core::slice::from_raw_parts(
                 &msg_header as *const GspMsgHeader as *const u8,
@@ -523,45 +421,20 @@ impl<'a> GspCmdq<'a> {
             )
         };
 
-        let mut index = 0;
-        msg_slice[index..index + msg_header_slice.len()].copy_from_slice(msg_header_slice);
-        index += msg_header_slice.len();
-        msg_slice[index..index + rpc_slice.len()].copy_from_slice(rpc_slice);
-        index += rpc_slice.len();
+        let mut sbuf_iter = sbuf.iter_mut();
+        sbuf_iter.write_slice(msg_header_slice)?;
+        sbuf_iter.write_slice(rpc_slice)?;
+        cmd.copy_to_sbuf(&mut sbuf_iter)?;
 
-        let mut msg_slice_len = cmd.size();
-        let mut msg_slice_2 = if let Some(slice) = &mut some_msg_slice {
-            // Implies the full command didn't fit without wrapping the
-            // circular buffer so we need to split it and the rest will be in
-            // some_msg_slice.
-            // TODO: Untested
-            let remaining = msg_slice_len - index;
-            msg_slice_len = msg_slice.len() - index;
-            Some(&mut slice[0..remaining])
-        } else {
-            None
-        };
-
-        cmd.copy_to_slices(
-            &mut msg_slice[index..index + msg_slice_len],
-            &mut msg_slice_2,
-        );
         msg_header.checksum = 0;
-        let mut total_size = msg_slice.len();
-        if let Some(some_slice) = msg_slice_2 {
-            total_size += some_slice.len();
-        }
+        let total_size = sbuf.capacity;
         msg_header.elem_count = total_size.div_ceil(GSP_PAGE_SIZE) as u32;
 
         // Calculate checksum over the entire message
-        msg_header.checksum = GspCmdq::calculate_checksum(msg_header.checksum, msg_slice);
+        msg_header.checksum = GspCmdq::calculate_checksum(&sbuf);
 
-        if let Some(some_slice) = some_msg_slice {
-            msg_header.checksum = GspCmdq::calculate_checksum(msg_header.checksum, some_slice);
-        }
-
-        // Need to copy it again now that the checksum has been updated
-        msg_slice[0..msg_header_slice.len()].copy_from_slice(msg_header_slice);
+        // Re-write the message header with the updated element count and checksum
+        sbuf.write(0, msg_header_slice)?;
 
         let mut wptr = self.cpu_wptr().unwrap() as u32;
         wptr += msg_header.elem_count as u32;
@@ -581,7 +454,7 @@ impl<'a> GspCmdq<'a> {
         Ok(())
     }
 
-    fn receive(self: &mut Self) -> Result<GspResponse> {
+    fn receive<A: GspMessageElement>(self: &mut Self, function: u32) -> Result<A> {
         let header_size = (size_of::<GspMsgHeader>() + size_of::<GspRpcHeader>()) as u32;
 
         // Used pages contains the total number of pages available to consume
@@ -602,7 +475,8 @@ impl<'a> GspCmdq<'a> {
         let ptr = unsafe {
             core::ptr::addr_of_mut!((*self.gsp_mem.start_ptr_mut()).gspq.msgq[rptr as usize])
         };
-        let msg_slice = unsafe { core::slice::from_raw_parts(ptr as *mut u8, remaining as usize) };
+        let msg_slice =
+            unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, remaining as usize) };
 
         // TODO: Validating the checksum will read this
         let _msg = GspMsgHeader::new_from_slice(&msg_slice[0..size_of::<GspMsgHeader>()])?;
@@ -620,211 +494,26 @@ impl<'a> GspCmdq<'a> {
             return Err(EAGAIN);
         }
 
-        let (slice_1, slice_2) = if rpc.length + header_size < remaining {
-            (
-                &msg_slice[(header_size as usize)..(header_size + rpc.length) as usize],
-                None,
-            )
+        let sbuf = if rpc.length + header_size < remaining {
+            SBuffer::new([
+                &mut msg_slice[(header_size as usize)..(header_size + rpc.length) as usize]
+            ])
         } else {
-            let slice_1 = &msg_slice[(header_size as usize)..(header_size + remaining) as usize];
+            let slice_1 =
+                &mut msg_slice[(header_size as usize)..(header_size + remaining) as usize];
             let ptr =
                 unsafe { core::ptr::addr_of_mut!((*self.gsp_mem.start_ptr_mut()).gspq.msgq[0]) };
-            (
-                slice_1,
-                Some(unsafe {
-                    core::slice::from_raw_parts(ptr as *mut u8, rpc.length as usize - slice_1.len())
-                }),
-            )
+            let slice_2 = unsafe {
+                core::slice::from_raw_parts_mut(ptr as *mut u8, rpc.length as usize - slice_1.len())
+            };
+            SBuffer::new([slice_1, slice_2])
         };
 
-        let result = match rpc.function {
-            fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO => {
-                let gsp_static_info = new_gsp_static_config_from_slices(slice_1, slice_2)?;
-                Ok(GspResponse::StaticConfigInfo(gsp_static_info))
-            }
-            fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER => {
-                let gsp_sequencer_info = GspSequencerInfo::new_from_slices(slice_1, slice_2)?;
-                Ok(GspResponse::RunCpuSequencer(gsp_sequencer_info))
-            }
-            fw::NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD => {
-                pr_info!("Received GSP_POST_NOCAT_RECORD event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_GSP_INIT_DONE => {
-                pr_info!("Received GSP_INIT_DONE event\n");
-                Ok(GspResponse::InitDone)
-            }
-            fw::NV_VGPU_MSG_EVENT_POST_EVENT => {
-                pr_info!("Received POST_EVENT event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_RC_TRIGGERED => {
-                pr_info!("Received RC_TRIGGERED event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_MMU_FAULT_QUEUED => {
-                pr_info!("Received MMU_FAULT_QUEUED event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_OS_ERROR_LOG => {
-                pr_info!("Received OS_ERROR_LOG event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_RG_LINE_INTR => {
-                pr_info!("Received RG_LINE_INTR event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_GPUACCT_PERFMON_UTIL_SAMPLES => {
-                pr_info!("Received GPUACCT_PERFMON_UTIL_SAMPLES event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_SIM_READ => {
-                pr_info!("Received SIM_READ event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_SIM_WRITE => {
-                pr_info!("Received SIM_WRITE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_SEMAPHORE_SCHEDULE_CALLBACK => {
-                pr_info!("Received SEMAPHORE_SCHEDULE_CALLBACK event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_UCODE_LIBOS_PRINT => {
-                pr_info!("Received UCODE_LIBOS_PRINT event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_VGPU_GSP_PLUGIN_TRIGGERED => {
-                pr_info!("Received VGPU_GSP_PLUGIN_TRIGGERED event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_PERF_GPU_BOOST_SYNC_LIMITS_CALLBACK => {
-                pr_info!("Received PERF_GPU_BOOST_SYNC_LIMITS_CALLBACK event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_PERF_BRIDGELESS_INFO_UPDATE => {
-                pr_info!("Received PERF_BRIDGELESS_INFO_UPDATE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_VGPU_CONFIG => {
-                pr_info!("Received VGPU_CONFIG event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_DISPLAY_MODESET => {
-                pr_info!("Received DISPLAY_MODESET event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_EXTDEV_INTR_SERVICE => {
-                pr_info!("Received EXTDEV_INTR_SERVICE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_256 => {
-                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_256 event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_512 => {
-                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_512 event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_1024 => {
-                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_1024 event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_2048 => {
-                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_2048 event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_INBAND_RECEIVED_DATA_4096 => {
-                pr_info!("Received NVLINK_INBAND_RECEIVED_DATA_4096 event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_TIMED_SEMAPHORE_RELEASE => {
-                pr_info!("Received TIMED_SEMAPHORE_RELEASE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_IS_GPU_DEGRADED => {
-                pr_info!("Received NVLINK_IS_GPU_DEGRADED event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_PFM_REQ_HNDLR_STATE_SYNC_CALLBACK => {
-                pr_info!("Received PFM_REQ_HNDLR_STATE_SYNC_CALLBACK event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_FAULT_UP => {
-                pr_info!("Received NVLINK_FAULT_UP event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_GSP_LOCKDOWN_NOTICE => {
-                pr_info!("Received GSP_LOCKDOWN_NOTICE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_MIG_CI_CONFIG_UPDATE => {
-                pr_info!("Received MIG_CI_CONFIG_UPDATE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_UPDATE_GSP_TRACE => {
-                pr_info!("Received UPDATE_GSP_TRACE event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_NVLINK_FATAL_ERROR_RECOVERY => {
-                pr_info!("Received NVLINK_FATAL_ERROR_RECOVERY event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_FECS_ERROR => {
-                pr_info!("Received FECS_ERROR event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_EVENT_RECOVERY_ACTION => {
-                pr_info!("Received RECOVERY_ACTION event\n");
-                Ok(GspResponse::Unsupported(rpc.function))
-            }
-            fw::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL => {
-                // Parse RM control response
-                // RmControlRpc header followed by response data
-
-
-                let rm_header_size = 24; // 6 u32 fields
-                if slice_1.len() < rm_header_size {
-                    pr_err!("RM Control response too small: {} bytes\n", slice_1.len());
-                    return Err(EINVAL);
-                }
-                
-                // Extract the status from the header (4th u32)
-                let status_offset = 12; // 3 * sizeof(u32)
-                let status = u32::from_ne_bytes(
-                    slice_1[status_offset..status_offset + 4]
-                        .try_into()
-                        .map_err(|_| EINVAL)?
-                );
-                
-                // Extract params_size from the header (5th u32)
-                let params_size_offset = 16; // 4 * sizeof(u32)
-                let params_size = u32::from_ne_bytes(
-                    slice_1[params_size_offset..params_size_offset + 4]
-                        .try_into()
-                        .map_err(|_| EINVAL)?
-                ) as usize;
-                
-                // Collect response data (after header)
-                let mut data = KVec::with_capacity(params_size, GFP_KERNEL)?;
-                
-                if slice_1.len() > rm_header_size {
-                    let data_in_slice1 = core::cmp::min(slice_1.len() - rm_header_size, params_size);
-                    data.extend_from_slice(&slice_1[rm_header_size..rm_header_size + data_in_slice1], GFP_KERNEL)?;
-                    
-                    if data_in_slice1 < params_size {
-                        if let Some(slice_2) = slice_2 {
-                            let remaining = params_size - data_in_slice1;
-                            let data_in_slice2 = core::cmp::min(slice_2.len(), remaining);
-                            data.extend_from_slice(&slice_2[..data_in_slice2], GFP_KERNEL)?;
-                        }
-                    }
-                }
-                
-                pr_info!("RM Control response: status={:#x}, data_len={}\n", status, data.len());
-                Ok(GspResponse::RmControl { status, data })
-            }
-            _ => Err(ENOTSUPP),
+        let result = if rpc.function == function {
+            Ok(A::new_from_sbuf(&sbuf)?)
+        } else {
+            pr_info!("Got unexpected function {}\n", rpc.function);
+            Err(ERANGE)
         };
 
         let mut rptr = self.cpu_rptr()?;
@@ -840,15 +529,37 @@ impl<'a> GspCmdq<'a> {
         result
     }
 
-    pub(crate) fn run_sequencer(self: &mut Self, timeout: Delta) -> Result {
-        let seq_info = wait_on_result(timeout, || match self.receive() {
-            Ok(GspResponse::RunCpuSequencer(seq_info)) => Some(Ok(seq_info)),
-
-            // We don't expect any other response at this stage.
-            Ok(_) => Some(Err(EINVAL)),
+    /// Wait to receive a message matching `function`. If a different message is
+    /// in the queue this will return `Err(ERANGE)`.
+    fn receive_wait<R: GspMessageElement>(&mut self, timeout: Delta, function: u32) -> Result<R> {
+        wait_on_result(timeout, || match self.receive::<R>(function) {
+            Ok(x) => Some(Ok(x)),
             Err(EAGAIN) => None,
             Err(e) => Some(Err(e)),
-        })?;
+        })
+    }
+
+    /// Same as the `receive_wait()` method but will consume and ingnore
+    /// unexpected messages. Ie. messages with a different function to the passed
+    /// `function` parameter.
+    fn receive_wait_ignore<R: GspMessageElement>(
+        &mut self,
+        timeout: Delta,
+        function: u32,
+    ) -> Result<R> {
+        wait_on_result(timeout, || match self.receive::<R>(function) {
+            Ok(x) => Some(Ok(x)),
+            Err(EAGAIN) => None,
+            Err(ERANGE) => None,
+            Err(e) => Some(Err(e)),
+        })
+    }
+
+    pub(crate) fn run_sequencer(self: &mut Self, timeout: Delta) -> Result {
+        let seq_info = self.receive_wait::<GspSequencerInfo>(
+            timeout,
+            fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER,
+        )?;
         self.bar.try_access_with(|bar| {
             match sequencer::GspSequencer::new(
                 seq_info,
@@ -873,56 +584,21 @@ impl<'a> GspCmdq<'a> {
     }
 
     pub(crate) fn gsp_init_done(&mut self, timeout: Delta) -> Result {
-        wait_on_result(timeout, || match self.receive() {
-            Ok(GspResponse::InitDone) => Some(Ok(())),
-            Ok(GspResponse::Unsupported(_)) => None,
-            // We don't expect any other response at this stage.
-            Ok(_) => Some(Err(EINVAL)),
-            Err(EAGAIN) => None,
-            Err(e) => Some(Err(e)),
-        })?;
-
-        Ok(())
+        self.receive_wait_ignore::<EmptyCmd>(timeout, fw::NV_VGPU_MSG_EVENT_GSP_INIT_DONE)
+            .map(|_| ())
     }
 
-    pub(crate) fn get_gsp_info(&mut self) -> Result<GspInfo> {
+    pub(crate) fn get_gsp_info(&mut self) -> Result<GspStaticConfigInfo> {
         self.send(
             fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO,
             &EmptyCmd {
                 size: size_of::<fw::GspStaticConfigInfo_t>(),
             },
         )?;
-        let info = wait_on_result(Delta::from_secs(5), || match self.receive() {
-            Ok(GspResponse::StaticConfigInfo(gsp_static_info)) => Some(Ok(gsp_static_info)),
-            // We don't expect any other response at this stage.
-            Ok(_) => Some(Err(EINVAL)),
-            Err(EAGAIN) => None,
-            Err(e) => Some(Err(e)),
-        })?;
-        // The GPU Name byte array has a long list of zeroes at the end, but we don't want to pass
-        // those to pr_info!(). Instead, stop at the first terminating null.
-        let gpu_name = info.gpuNameString
-            .get(0..=info.gpuNameString.iter().position(|&b| b == 0).unwrap_or(info.gpuNameString.len() - 1))
-            .and_then(|bytes| CStr::from_bytes_with_nul(bytes).ok())
-            .and_then(|cstr| cstr.to_str().ok())
-            .unwrap_or("GPU Name: invalid utf8");
-
-        Ok(GspInfo {
-            h_internal_client: info.hInternalClient,
-            h_internal_device: info.hInternalDevice,
-            h_internal_subdevice: info.hInternalSubdevice,
-            gpu_name: CString::try_from_fmt(fmt!("{}", gpu_name))?,
-        })
-    }
-
-    pub(crate) fn get_rm_control(&mut self, timeout: Delta) -> Result<(u32, KVec<u8>)> {
-        wait_on_result(timeout, || match self.receive() {
-            Ok(GspResponse::RmControl { status, data }) => Some(Ok((status, data))),
-            // We don't expect any other response at this stage.
-            Ok(_) => Some(Err(EINVAL)),
-            Err(EAGAIN) => None,
-            Err(e) => Some(Err(e)),
-        })
+        self.receive_wait::<GspStaticConfigInfo>(
+            Delta::from_secs(5),
+            fw::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO,
+        )
     }
 }
 
@@ -935,11 +611,18 @@ impl GspMessageElement for EmptyCmd {
         self.size
     }
 
-    fn copy_to_slices(&self, msg_slice_1: &mut [u8], msg_slice_2: &mut Option<&mut [u8]>) {
-        msg_slice_1.fill(0);
-        if let Some(slice) = msg_slice_2 {
-            slice.fill(0);
+    fn copy_to_sbuf(&self, sbuf: &mut SBufferIteratorMut<'_, '_>) -> Result {
+        for i in 0..self.size() {
+            sbuf.write_byte(0)?;
         }
+
+        Ok(())
+    }
+
+    fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self> {
+        Ok(Self {
+            size: sbuf.capacity,
+        })
     }
 }
 
@@ -1013,7 +696,7 @@ pub(crate) fn build_wpr_meta(
 }
 
 #[allow(unused)]
-pub(crate) struct GspSharedMemObjects<'a> {
+pub(crate) struct GspMemObjects<'a> {
     pub libos: DmaObject,
     pub loginit: DmaObject,
     pub logintr: DmaObject,
@@ -1095,7 +778,7 @@ struct RegistryTable {
 }
 
 impl GspMessageElement for RegistryTable {
-    fn copy_to_slices(&self, msg_slice_1: &mut [u8], msg_slice_2: &mut Option<&mut [u8]>) {
+    fn copy_to_sbuf(&self, sbuf: &mut SBufferIteratorMut<'_, '_>) -> Result {
         let total_size = self.size();
         let align = core::mem::align_of::<fw::PACKED_REGISTRY_TABLE>();
         let layout = Layout::from_size_align(total_size, align)
@@ -1141,16 +824,17 @@ impl GspMessageElement for RegistryTable {
             core::slice::from_raw_parts(ptr as *const u8, layout.size())
         };
 
-        // Use the common copying logic from the trait
-        self.copy_slice_to_ring_buffer(cmd_slice, msg_slice_1, msg_slice_2);
+        sbuf.write_slice(cmd_slice)?;
 
-        // Free the allocated memory by converting slice back to pointer
+        // Free the allocated memory by converting slice back to pointer.
         unsafe {
             use core::ptr::NonNull;
             let ptr = cmd_slice.as_ptr() as *mut u8;
             let ptr_nn = NonNull::new_unchecked(ptr);
             Kmalloc::free(ptr_nn, layout);
         }
+
+        Ok(())
     }
 
     fn size(&self) -> usize {
@@ -1238,7 +922,7 @@ fn create_coherent_dma_object<A: AsBytes + FromBytes>(
     Ok(obj)
 }
 
-impl<'a> GspSharedMemObjects<'a> {
+impl<'a> GspMemObjects<'a> {
     pub(crate) fn new(
         pdev: &pci::Device<device::Bound>,
         bar: &'a Devres<Bar0>,
@@ -1270,7 +954,7 @@ impl<'a> GspSharedMemObjects<'a> {
         set_system_info(pdev, &mut cmdq)?;
         build_registry(&mut cmdq);
 
-        Ok(GspSharedMemObjects {
+        Ok(GspMemObjects {
             libos,
             loginit,
             logintr,
