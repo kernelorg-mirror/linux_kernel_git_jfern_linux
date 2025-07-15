@@ -360,7 +360,7 @@ impl<'a> GspCmdq<'a> {
                 core::slice::from_raw_parts_mut(ptr as *mut u8, msg_size * GSP_PAGE_SIZE)
             };
 
-            return Ok(SBuffer::<'b>::new([slice]));
+            return SBuffer::<'b>::new((slice, None));
         }
 
         // First slice contains the remaining free pages in the queue
@@ -375,7 +375,7 @@ impl<'a> GspCmdq<'a> {
                 (msg_size - 0x3f + wptr) * GSP_PAGE_SIZE,
             )
         };
-        return Ok(SBuffer::<'b>::new([slice_1, slice_2]));
+        return SBuffer::<'b>::new((slice_1, Some(slice_2)));
     }
 
     pub(crate) fn send<A: GspMessageElement>(
@@ -427,7 +427,7 @@ impl<'a> GspCmdq<'a> {
         cmd.copy_to_sbuf(&mut sbuf_iter)?;
 
         msg_header.checksum = 0;
-        let total_size = sbuf.capacity;
+        let total_size = sbuf.total_bytes;
         msg_header.elem_count = total_size.div_ceil(GSP_PAGE_SIZE) as u32;
 
         // Calculate checksum over the entire message
@@ -495,9 +495,10 @@ impl<'a> GspCmdq<'a> {
         }
 
         let sbuf = if rpc.length + header_size < remaining {
-            SBuffer::new([
-                &mut msg_slice[(header_size as usize)..(header_size + rpc.length) as usize]
-            ])
+            SBuffer::new((
+                &mut msg_slice[(header_size as usize)..(header_size + rpc.length) as usize],
+                None
+            ))?
         } else {
             let slice_1 =
                 &mut msg_slice[(header_size as usize)..(header_size + remaining) as usize];
@@ -506,7 +507,7 @@ impl<'a> GspCmdq<'a> {
             let slice_2 = unsafe {
                 core::slice::from_raw_parts_mut(ptr as *mut u8, rpc.length as usize - slice_1.len())
             };
-            SBuffer::new([slice_1, slice_2])
+            SBuffer::new((slice_1, Some(slice_2)))?
         };
 
         let result = if rpc.function == function {
@@ -612,7 +613,7 @@ impl GspMessageElement for EmptyCmd {
     }
 
     fn copy_to_sbuf(&self, sbuf: &mut SBufferIteratorMut<'_, '_>) -> Result {
-        for i in 0..self.size() {
+        for _i in 0..self.size {
             sbuf.write_byte(0)?;
         }
 
@@ -621,7 +622,7 @@ impl GspMessageElement for EmptyCmd {
 
     fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self> {
         Ok(Self {
-            size: sbuf.capacity,
+            size: sbuf.total_bytes,
         })
     }
 }
