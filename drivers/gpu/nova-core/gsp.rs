@@ -24,7 +24,7 @@ use crate::firmware::Firmware;
 use crate::nvfw::r570_144 as fw;
 use crate::regs::NV_PGSP_QUEUE_HEAD;
 use crate::sbuffer::{SBuffer, SBufferIteratorMut};
-use crate::util::wait_on;
+use crate::util::wait_on_result;
 
 pub(crate) mod rm_control;
 pub(crate) mod sequencer;
