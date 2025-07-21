@@ -542,34 +542,6 @@ impl<'a> GspCmdq<'a> {
         })
     }
 
-    pub(crate) fn run_sequencer(self: &mut Self, timeout: Delta) -> Result {
-        let seq_info = self.receive_wait::<GspSequencerInfo>(
-            timeout,
-            fw::NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER,
-        )?;
-        self.bar.try_access_with(|bar| {
-            match sequencer::GspSequencer::new(
-                seq_info,
-                bar,
-                self.sec2_falcon,
-                self.gsp_falcon,
-                self.libos_dma_handle,
-                self.fw,
-            ) {
-                Ok(sequencer) => {
-                    if let Err(e) = sequencer.run() {
-                        pr_info!("Error running CPU sequencer: {:?}\n", e);
-                    }
-                }
-                Err(e) => {
-                    pr_info!("Error creating CPU sequencer: {:?}\n", e);
-                }
-            }
-        });
-
-        Ok(())
-    }
-
     pub(crate) fn gsp_init_done(&mut self, timeout: Delta) -> Result {
         self.receive_wait_ignore::<EmptyCmd>(timeout, fw::NV_VGPU_MSG_EVENT_GSP_INIT_DONE)
             .map(|_| ())
