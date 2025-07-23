@@ -96,21 +96,28 @@ pub(crate) struct GspStaticConfigInfo {
 
 impl GspMessageElement for GspStaticConfigInfo {
     fn new_from_sbuf(sbuf: &SBuffer<'_>) -> Result<Self> {
-        let gpu_name_str = unsafe {
+        if size_of::<fw::GspStaticConfigInfo_t>() < sbuf.total_bytes {
+            return Err(EINVAL);
+        }
+
+        // SAFETY: We have confirmed the static info fits in the SBuffer
+        let static_info = unsafe {
             let static_info_ptr = sbuf.as_ptr::<fw::GspStaticConfigInfo_t>(0)?;
-            (*static_info_ptr)
-                .gpuNameString
-                .get(
-                    0..=(*static_info_ptr)
-                        .gpuNameString
-                        .iter()
-                        .position(|&b| b == 0)
-                        .unwrap_or((*static_info_ptr).gpuNameString.len() - 1),
-                )
-                .and_then(|bytes| CStr::from_bytes_with_nul(bytes).ok())
-                .and_then(|cstr| cstr.to_str().ok())
-                .unwrap_or("invalid utf8")
+            &*static_info_ptr
         };
+
+        let gpu_name_str = static_info
+            .gpuNameString
+            .get(
+                0..=static_info
+                    .gpuNameString
+                    .iter()
+                    .position(|&b| b == 0)
+                    .unwrap_or(static_info.gpuNameString.len() - 1),
+            )
+            .and_then(|bytes| CStr::from_bytes_with_nul(bytes).ok())
+            .and_then(|cstr| cstr.to_str().ok())
+            .unwrap_or("invalid utf8");
 
         let mut gpu_name = [0u8; 40];
         let bytes = gpu_name_str.as_bytes();
