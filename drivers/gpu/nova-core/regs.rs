@@ -12,6 +12,7 @@ use crate::falcon::{
     FalconModSelAlgo, FalconSecurityModel, PFalcon2Base, PFalconBase, PeregrineCoreSelect,
 };
 use crate::gpu::{Architecture, Chipset};
+use kernel::bits::genmask_u32;
 use kernel::prelude::*;
 
 // PMC
@@ -43,7 +44,8 @@ impl NV_PMC_BOOT_0 {
     }
 }
 
-// PBUS
+// PBUS - PBUS is a bus control unit, that helps the GPU communicate with the PCI bus.
+// Handles the BAR windows, decoding of MMIO read/writes on the BARs, etc.
 
 register!(NV_PBUS_SW_SCRATCH @ 0x00001400[64]  {});
 
@@ -51,6 +53,31 @@ register!(NV_PBUS_SW_SCRATCH_0E_FRTS_ERR => NV_PBUS_SW_SCRATCH[0xe],
     "scratch register 0xe used as FRTS firmware error code" {
     31:16   frts_err_code as u16;
 });
+
+// BAR0 window control register to configure the BAR0 window for PRAMIN access
+// (direct physical VRAM access).
+register!(NV_PBUS_BAR0_WINDOW @ 0x00001700, "BAR0 window control register" {
+    25:24   target as u8, "Target (0=VID_MEM, 1=SYS_MEM_COHERENT, 2=SYS_MEM_NONCOHERENT)";
+    23:0    window_base as u32, "Window base address (bits 39:16 of FB addr)";
+});
+
+impl NV_PBUS_BAR0_WINDOW {
+    /// Returns the 64-bit aligned VRAM address of the window.
+    pub(crate) fn get_window_addr(self) -> usize {
+        (self.window_base() as usize) << 16
+    }
+
+    /// Sets the window address from a framebuffer offset.
+    /// The fb_offset must be 64KB aligned (lower bits discared).
+    pub(crate) fn set_window_addr(self, fb_offset: usize) -> Self {
+        // Calculate window base (bits 39:16 of FB address)
+        // The total FB address is 40 bits, mask anything above. Since we are
+        // right shifting the offset by 16 bits, the mask is only 24 bits.
+        let mask = genmask_u32(0..=23) as usize;
+        let window_base = ((fb_offset >> 16) & mask) as u32;
+        self.set_window_base(window_base)
+    }
+}
 
 // PFB
 
