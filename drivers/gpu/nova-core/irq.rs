@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 
-use crate::rm::{RmControl, RmParams as RmControlParams, RmResponseElement as RmControlMessageElement};
 use crate::gsp::{GspCmdq, GspStaticConfigInfo};
 use crate::nvfw::r570_144 as fw;
+use crate::rm::control::RmControl;
+use crate::rm::RmResponseElement as RmControlMessageElement;
 use kernel::alloc::KVec;
 use kernel::prelude::*;
+use kernel::transmute::AsBytes;
 use kernel::{dev_info, device};
 
 // Category subtree map structure
@@ -32,19 +34,14 @@ struct IrqTableParams {
     pub table: [IrqTableEntry; fw::NV2080_CTRL_INTERNAL_INTR_MAX_TABLE_SIZE as usize],
     pub subtree_map: [SubtreeMap; fw::NV2080_INTR_CATEGORY_ENUM_COUNT as usize],
 }
+unsafe impl AsBytes for IrqTableParams {}
 
 impl_from_bytes!(IrqTableParams);
 
-impl RmControlParams for IrqTableParams {
-    fn to_bytes(&self) -> &[u8] {
-        // SAFETY: IrqTableParams is a fixed size struct whose size is known.
-        unsafe {
-            core::slice::from_raw_parts(
-                self as *const IrqTableParams as *const u8,
-                size_of::<IrqTableParams>(),
-            )
-        }
-    }
+impl RmControl for IrqTableParams {
+    const CONTROL: u32 = fw::NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE;
+
+    type Response = IrqTable;
 }
 
 // Parsed interrupt table structure
@@ -81,13 +78,6 @@ pub(crate) fn dump_table<'a>(
     gsp_info: &'a GspStaticConfigInfo,
     dev: &'a device::Device<device::Bound>,
 ) -> Result {
-    /*
-     * Temporary, till the core::mem::forget hack in gpu.rs is fixed.
-     */
-    let cmdq_ref: &'a mut GspCmdq = unsafe { core::mem::transmute(cmdq) };
-
-    let mut rm_control = RmControl::new_control(cmdq_ref, bar, gsp_info, dev);
-
     let params = IrqTableParams {
         table_len: 0,
         table: [IrqTableEntry {
@@ -102,10 +92,7 @@ pub(crate) fn dump_table<'a>(
         }; fw::NV2080_INTR_CATEGORY_ENUM_COUNT as usize],
     };
 
-    let table: IrqTable = rm_control.send_control(
-        fw::NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
-        Some(&params),
-    )?;
+    let table: IrqTable = cmdq.send_rm_control(dev, bar, gsp_info, &params)?;
 
     dev_info!(dev, "Interrupt table: {} entries\n", table.table_len);
     for (i, entry) in table.entries.iter().enumerate() {

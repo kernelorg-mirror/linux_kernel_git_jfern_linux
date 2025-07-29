@@ -3,92 +3,86 @@
 // RM Control implementation for nova-core
 // RM control commands are used to query and configure various GPU resources.
 
-use super::common::{RmApi, RmHeader, RmParams, RmResponseElement};
-use crate::gsp::{GspCmdq, GspStaticConfigInfo};
+use super::{RmCommand, RmHeader, RmMessage, RmResponseElement};
+use crate::driver::Bar0;
+use crate::gsp::{GspCmdq, GspCommand, GspStaticConfigInfo};
 use crate::nvfw::r570_144 as fw;
-use kernel::device;
-use kernel::prelude::*;
+use kernel::transmute::{AsBytes, FromBytesSized};
+use kernel::{device, prelude::*};
 
-/// RM Control RPC header structure
-#[repr(C)]
-#[derive(Debug)]
-pub(crate) struct RmControlHeader {
-    h_client: u32,
-    h_object: u32,
-    cmd: u32,
-    status: u32,
-    params_size: u32,
-    flags: u32,
+/// Wrapper for RM Control commands
+pub(crate) type RmControlCmd<'a> = RmMessage<'a, RmControlHeader>;
+
+impl<'a> GspCommand for RmControlCmd<'a> {
+    const FUNCTION: u32 = fw::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL;
 }
 
-// SAFETY: This struct is used in FFI with the GSP firmware
-unsafe impl kernel::transmute::FromBytesSized for RmControlHeader {}
-unsafe impl kernel::transmute::AsBytes for RmControlHeader {}
-
-impl RmHeader for RmControlHeader {
-    fn set_client(&mut self, client: u32) {
-        self.h_client = client;
-    }
-
-    fn set_status(&mut self, status: u32) {
-        self.status = status;
-    }
-
-    fn set_params_size(&mut self, size: u32) {
-        self.params_size = size;
-    }
-
-    fn get_status(&self) -> u32 {
-        self.status
-    }
-
-    fn set_flags(&mut self, flags: u32) {
-        self.flags = flags;
-    }
+impl<'a> RmCommand<'a> for RmControlCmd<'a> {
+    type Header = RmControlHeader;
 }
 
-impl RmControlHeader {
-    /// Create a new RM control header with the specified command and object
-    pub(crate) fn new(cmd: u32, h_object: u32) -> Self {
+impl<'a> RmControlCmd<'a> {
+    fn new<C: RmControl>(gsp_info: &GspStaticConfigInfo, params: &'a C) -> Self {
         Self {
-            h_client: 0, // Will be set by RmApi
-            h_object,
-            cmd,
-            status: 0,      // Will be set by RmApi
-            params_size: 0, // Will be set by RmApi
-            flags: 0,       // Will be set by RmApi
+            header: RmControlHeader::new(gsp_info, params),
+            params: params.as_bytes(),
         }
     }
 }
 
-/// Type alias for RM Control API
-pub(crate) type RmControl<'a> = RmApi<'a, RmControlHeader>;
+pub(crate) trait RmControl: AsBytes {
+    // The control code corresponding to this parameter.
+    const CONTROL: u32;
+
+    // The expected response type.
+    type Response: RmResponseElement;
+}
+
+/// RM Control header structure
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RmControlHeader {
+    h_client: u32,    // IN
+    h_object: u32,    // IN
+    cmd: u32,         // IN
+    status: u32,      // OUT
+    params_size: u32, // IN
+    flags: u32,       // IN
+}
+unsafe impl FromBytesSized for RmControlHeader {}
+
+impl RmControlHeader {
+    /// Creates a new control header with the specified object handle and command
+    pub(crate) fn new<C: RmControl>(gsp_info: &GspStaticConfigInfo, control: &C) -> Self {
+        Self {
+            h_client: gsp_info.h_internal_client,
+            h_object: gsp_info.h_internal_subdevice,
+            cmd: C::CONTROL,
+            status: 0,
+            params_size: control.as_bytes().len() as u32,
+            flags: 0,
+        }
+    }
+}
 
 /// Extensions specific to RM Control operations
-impl<'a> RmControl<'a> {
-    /// Create new RM control instance
-    pub(crate) fn new_control(
-        cmdq: &'a mut GspCmdq,
-        bar: &'a crate::driver::Bar0,
-        gsp_info: &'a GspStaticConfigInfo,
-        dev: &'a device::Device<device::Bound>,
-    ) -> Self {
-        Self::new(
-            cmdq,
-            bar,
-            gsp_info,
-            dev,
-            fw::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL,
-        )
-    }
-
-    /// Send an RM control command with automatic object handle setup
-    pub(crate) fn send_control<P: RmParams, T: RmResponseElement>(
+impl GspCmdq {
+    /// Send an RM command and get its response.
+    pub(crate) fn send_rm_control<C: RmControl>(
         &mut self,
-        cmd: u32,
-        params: Option<&P>,
-    ) -> Result<T> {
-        let header = RmControlHeader::new(cmd, self.subdevice_handle());
-        self.send(header, params)
+        // TODO: we should store an ARef of this in GspCmdq and remove this parameter. This is
+        // possible as the device does not need to be bound to use `dev_*`.
+        dev: &device::Device,
+        bar: &Bar0,
+        gsp_info: &GspStaticConfigInfo,
+        params: &C,
+    ) -> Result<C::Response> {
+        self.send_rm_command(dev, bar, &RmControlCmd::new(gsp_info, params))
+    }
+}
+
+impl RmHeader for RmControlHeader {
+    fn get_status(&self) -> u32 {
+        self.status
     }
 }
