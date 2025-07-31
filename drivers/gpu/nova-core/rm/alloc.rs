@@ -2,14 +2,15 @@
 //
 // RM alloc/free operation implementation
 
-use super::{RmCommand, RmHeader, RmMessage};
-use crate::gsp::GspCommand;
+use super::{RmCommand, RmHeader, RmCommandWithParams};
+use crate::gsp::{GspCommand};
 use crate::nvfw::r570_144 as fw;
 use kernel::transmute::FromBytesSized;
+use kernel::prelude::*;
 
 /// Wrapper for RM Alloc commands
 #[allow(dead_code)]
-pub(crate) type RmAllocCmd<'a> = RmMessage<'a, RmAllocHeader>;
+pub(crate) type RmAllocCmd<'a> = RmCommandWithParams<'a, RmAllocHeader>;
 
 impl<'a> GspCommand for RmAllocCmd<'a> {
     const FUNCTION: u32 = fw::NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC;
@@ -18,6 +19,7 @@ impl<'a> GspCommand for RmAllocCmd<'a> {
 impl<'a> RmCommand<'a> for RmAllocCmd<'a> {
     type Header = RmAllocHeader;
 }
+
 
 /// RM Alloc header structure (32 bytes)
 #[repr(C, packed)]

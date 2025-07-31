@@ -3,15 +3,15 @@
 // RM Control implementation for nova-core
 // RM control commands are used to query and configure various GPU resources.
 
-use super::{RmCommand, RmHeader, RmMessage, RmResponseElement};
+use super::{RmCommand, RmCommandWithParams, RmHeader, RmResponseElement};
 use crate::driver::Bar0;
 use crate::gsp::{GspCmdq, GspCommand, GspStaticConfigInfo};
 use crate::nvfw::r570_144 as fw;
-use kernel::transmute::{AsBytes, FromBytesSized};
+use kernel::transmute::{AsBytes, FromBytes, FromBytesSized};
 use kernel::{device, prelude::*};
 
 /// Wrapper for RM Control commands
-pub(crate) type RmControlCmd<'a> = RmMessage<'a, RmControlHeader>;
+pub(crate) type RmControlCmd<'a> = RmCommandWithParams<'a, RmControlHeader>;
 
 impl<'a> GspCommand for RmControlCmd<'a> {
     const FUNCTION: u32 = fw::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL;
@@ -27,6 +27,19 @@ impl<'a> RmControlCmd<'a> {
             header: RmControlHeader::new(gsp_info, params),
             params: params.as_bytes(),
         }
+    }
+}
+struct RmControlResponse {
+    header: RmControlHeader,
+    data: KVec<u8>,
+}
+
+impl RmResponseElement for RmControlResponse {
+    fn from_bytes(data: &[u8]) -> Result<Self> {
+        let header = *RmControlHeader::from_bytes(data).ok_or(EINVAL)?;
+        let mut kvec = KVec::new();
+        kvec.extend_from_slice(&data[size_of::<RmControlHeader>()..], GFP_KERNEL)?;
+        Ok(Self { header, data: kvec })
     }
 }
 
@@ -77,7 +90,8 @@ impl GspCmdq {
         gsp_info: &GspStaticConfigInfo,
         params: &C,
     ) -> Result<C::Response> {
-        self.send_rm_command(dev, bar, &RmControlCmd::new(gsp_info, params))
+        let response = self.send_rm_command(dev, bar, &RmControlCmd::new(gsp_info, params))?;
+        Ok(response)
     }
 }
 

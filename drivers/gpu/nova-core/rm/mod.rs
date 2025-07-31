@@ -46,12 +46,12 @@ impl<H: RmHeader> GspMessageElement for RmGspResponse<H> {
 
 /// Generic message wrapper for sending (header + optional params)
 /// TODO: Shall we combine this and RmGspResponse?
-pub(crate) struct RmMessage<'a, H: RmHeader> {
+pub(crate) struct RmCommandWithParams<'a, H: RmHeader> {
     pub(crate) header: H,
     pub(crate) params: &'a [u8],
 }
 
-impl<'a, H: RmHeader> GspCommandElement for RmMessage<'a, H> {
+impl<'a, H: RmHeader> GspCommandElement for RmCommandWithParams<'a, H> {
     fn copy_to_sbuf<'b, I: Iterator<Item = &'b mut [u8]>>(&self, sbuf: &mut SBuffer<I>) -> Result {
         // Write the header
         let header_bytes = unsafe {
