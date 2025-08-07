@@ -91,6 +91,8 @@ EXPORT_PER_CPU_SYMBOL_GPL(hardirq_context);
 DEFINE_PER_CPU(struct interrupt_disable_state, local_interrupt_disable_state);
 EXPORT_PER_CPU_SYMBOL_GPL(local_interrupt_disable_state);
 
+DEFINE_PER_CPU(unsigned int, nmi_nesting);
+
 /*
  * SOFTIRQ_OFFSET usage:
  *
