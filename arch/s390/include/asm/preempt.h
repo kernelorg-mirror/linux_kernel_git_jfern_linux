@@ -106,7 +106,8 @@ static __always_inline int __preempt_count_add_return(int val)
 	 */
 	if (!IS_ENABLED(CONFIG_PROFILE_ALL_BRANCHES)) {
 		if (__builtin_constant_p(val) && (val >= -128) && (val <= 127)) {
-			return val + __atomic_add_const(val, &get_lowcore()->preempt_count);
+			__atomic_add_const(val, &get_lowcore()->preempt_count);
+			return READ_ONCE(get_lowcore()->preempt_count) & ~PREEMPT_NEED_RESCHED;
 		}
 	}
 	return val + __atomic_add(val, &get_lowcore()->preempt_count);
