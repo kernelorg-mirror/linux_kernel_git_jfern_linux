@@ -27,6 +27,7 @@ pub(crate) struct GspMemObjects {
     pub _loginit: DmaObject,
     pub _logintr: DmaObject,
     pub _logrm: DmaObject,
+    _rmargs: CoherentAllocation<fw::GSP_ARGUMENTS_CACHED>,
     pub _cmdq: GspCmdq,
 }
 
@@ -67,6 +68,35 @@ fn create_dma_object(
 ) -> Result<DmaObject> {
     let mut obj = DmaObject::new(dev, size)?;
     create_pte_array(&mut obj, 1);
+
+    let arg_offset = libos_arg_nr * size_of::<fw::LibosMemoryRegionInitArgument>();
+    let libos_start_ptr = unsafe { libos.start_ptr_mut().add(arg_offset) };
+
+    let libos_mem_init_args = fw::LibosMemoryRegionInitArgument {
+        id8: id8(name),
+        pa: obj.dma_handle(),
+        size: obj.size() as u64,
+        kind: fw::LibosMemoryRegionKind_LIBOS_MEMORY_REGION_CONTIGUOUS as u8,
+        loc: fw::LibosMemoryRegionLoc_LIBOS_MEMORY_REGION_LOC_SYSMEM as u8,
+    };
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            &libos_mem_init_args as *const fw::LibosMemoryRegionInitArgument,
+            libos_start_ptr as *mut fw::LibosMemoryRegionInitArgument,
+            1,
+        );
+    };
+
+    Ok(obj)
+}
+
+fn create_coherent_dma_object<A: AsBytes + FromBytes>(
+    dev: &device::Device<device::Bound>,
+    name: &'static str,
+    libos: &mut DmaObject,
+    libos_arg_nr: usize,
+) -> Result<CoherentAllocation<A>> {
+    let obj = CoherentAllocation::<A>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
 
     let arg_offset = libos_arg_nr * size_of::<fw::LibosMemoryRegionInitArgument>();
     let libos_start_ptr = unsafe { libos.start_ptr_mut().add(arg_offset) };
@@ -154,14 +184,35 @@ impl GspMemObjects {
         let _logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
 
         // Creates its own PTE array
-        let _cmdq = GspCmdq::new(dev)?;
+        let cmdq = GspCmdq::new(dev)?;
+        let rmargs =
+            create_coherent_dma_object::<fw::GSP_ARGUMENTS_CACHED>(dev, "RMARGS", &mut libos, 3)?;
+        let (shared_mem_phys_addr, cmd_queue_offset, stat_queue_offset) = cmdq.get_cmdq_offsets();
+
+        dma_write!(
+            rmargs[0].messageQueueInitArguments = fw::MESSAGE_QUEUE_INIT_ARGUMENTS {
+                sharedMemPhysAddr: shared_mem_phys_addr,
+                pageTableEntryCount: cmdq.nr_ptes,
+                cmdQueueOffset: cmd_queue_offset,
+                statQueueOffset: stat_queue_offset,
+            }
+        )?;
+        dma_write!(
+            rmargs[0].srInitArguments = fw::GSP_SR_INIT_ARGUMENTS {
+                oldLevel: 0,
+                flags: 0,
+                bInPMTransition: 0,
+            }
+        )?;
+        dma_write!(rmargs[0].bDmemStack = 1)?;
 
         Ok(GspMemObjects {
             libos,
             _loginit,
             _logintr,
             _logrm,
-            _cmdq,
+            _rmargs: rmargs,
+            _cmdq: cmdq,
         })
     }
 
