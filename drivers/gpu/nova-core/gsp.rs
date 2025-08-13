@@ -10,9 +10,11 @@ use kernel::prelude::*;
 use kernel::transmute::{AsBytes, FromBytes};
 
 use crate::dma::DmaObject;
+use crate::driver::Bar0;
 use crate::fb::FbLayout;
 use crate::firmware::Firmware;
 use crate::gsp::cmdq::GspCmdq;
+use crate::gsp::commands::{build_registry, set_system_info};
 use crate::nvfw::r570_144 as fw;
 
 pub(crate) mod cmdq;
@@ -176,7 +178,7 @@ pub(crate) fn build_wpr_meta(
 }
 
 impl GspMemObjects {
-    pub(crate) fn new(pdev: &pci::Device<device::Bound>) -> Result<Self> {
+    pub(crate) fn new(pdev: &pci::Device<device::Bound>, bar: &Bar0) -> Result<Self> {
         let dev = pdev.as_ref();
         let mut libos = DmaObject::new(dev, GSP_PAGE_SIZE)?;
         let _loginit = create_dma_object(dev, "LOGINIT", 0x10000, &mut libos, 0)?;
@@ -184,7 +186,7 @@ impl GspMemObjects {
         let _logrm = create_dma_object(dev, "LOGRM", 0x10000, &mut libos, 2)?;
 
         // Creates its own PTE array
-        let cmdq = GspCmdq::new(dev)?;
+        let mut cmdq = GspCmdq::new(dev)?;
         let rmargs =
             create_coherent_dma_object::<fw::GSP_ARGUMENTS_CACHED>(dev, "RMARGS", &mut libos, 3)?;
         let (shared_mem_phys_addr, cmd_queue_offset, stat_queue_offset) = cmdq.get_cmdq_offsets();
@@ -205,6 +207,9 @@ impl GspMemObjects {
             }
         )?;
         dma_write!(rmargs[0].bDmemStack = 1)?;
+
+        set_system_info(&mut cmdq, pdev, bar)?;
+        build_registry(&mut cmdq, bar)?;
 
         Ok(GspMemObjects {
             libos,

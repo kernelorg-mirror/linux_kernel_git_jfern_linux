@@ -1,8 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0
 
+use core::alloc::Layout;
+
+use kernel::alloc::allocator::Kmalloc;
+use kernel::alloc::Allocator;
+use kernel::build_assert;
+use kernel::device;
+use kernel::pci;
+use kernel::prelude::*;
 use kernel::transmute::{AsBytes, FromBytes};
 
+use crate::driver::Bar0;
+use crate::gsp::cmdq::GspCommandToGsp;
+use crate::gsp::GspCmdq;
+use crate::gsp::GSP_PAGE_SIZE;
 use crate::nvfw::r570_144 as fw;
+use crate::sbuffer::SBuffer;
 
 unsafe impl FromBytes for fw::GSP_ARGUMENTS_CACHED {}
 unsafe impl AsBytes for fw::GSP_ARGUMENTS_CACHED {}
@@ -12,3 +25,149 @@ unsafe impl FromBytes for fw::GspFwWprMeta {}
 unsafe impl AsBytes for fw::GspFwWprMeta {}
 unsafe impl FromBytes for fw::GspSystemInfo {}
 unsafe impl AsBytes for fw::GspSystemInfo {}
+
+const GSP_REGISTRY_NUM_ENTRIES: usize = 2;
+struct RegistryEntry {
+    key: &'static str,
+    value: u32,
+}
+
+struct RegistryTable {
+    entries: [RegistryEntry; GSP_REGISTRY_NUM_ENTRIES],
+}
+
+struct GspRegistryTable;
+impl GspCommandToGsp for GspRegistryTable {
+    const FUNCTION: u32 = fw::NV_VGPU_MSG_FUNCTION_SET_REGISTRY;
+}
+
+impl RegistryTable {
+    fn copy_to_sbuf_iter(&self, mut sbuf: SBuffer<core::array::IntoIter<&mut [u8], 2>>) -> Result {
+        let total_size = self.size();
+        let align = core::mem::align_of::<fw::PACKED_REGISTRY_TABLE>();
+        let layout = Layout::from_size_align(total_size, align)
+            .map_err(|_| ENOMEM)
+            .unwrap();
+        let cmd_slice = unsafe {
+            // Use the kernel allocator which respects alignment
+            let allocation = Kmalloc::alloc(layout, GFP_KERNEL | __GFP_ZERO).unwrap();
+            let ptr = allocation.as_ptr() as *mut u8;
+
+            // Verify alignment (debug only)
+            debug_assert_eq!(ptr as usize % align, 0);
+
+            // Serialize the data into the allocated memory
+            let table = ptr as *mut fw::PACKED_REGISTRY_TABLE;
+            let mut table_data = ptr.add(
+                size_of::<fw::PACKED_REGISTRY_TABLE>()
+                    + GSP_REGISTRY_NUM_ENTRIES * size_of::<fw::PACKED_REGISTRY_ENTRY>(),
+            );
+
+            (*table).numEntries = GSP_REGISTRY_NUM_ENTRIES as u32;
+            (*table).size = total_size as u32;
+
+            for i in 0..GSP_REGISTRY_NUM_ENTRIES {
+                let entry_ptr = ptr.add(
+                    size_of::<fw::PACKED_REGISTRY_TABLE>()
+                        + i * size_of::<fw::PACKED_REGISTRY_ENTRY>(),
+                ) as *mut fw::PACKED_REGISTRY_ENTRY;
+
+                (*entry_ptr).nameOffset = table_data.offset_from(table as *const u8) as u32;
+                (*entry_ptr).type_ = fw::REGISTRY_TABLE_ENTRY_TYPE_DWORD as u8;
+                (*entry_ptr).data = self.entries[i].value;
+                (*entry_ptr).length = 0;
+
+                // Copy the key string to table_data and null terminate it
+                let key_bytes = self.entries[i].key.as_bytes();
+                core::ptr::copy_nonoverlapping(key_bytes.as_ptr(), table_data, key_bytes.len());
+                table_data = table_data.add(key_bytes.len());
+                *table_data = 0; // Add null terminator
+                table_data = table_data.add(1); // Move past null terminator
+            }
+
+            core::slice::from_raw_parts(ptr as *const u8, layout.size())
+        };
+
+        sbuf.write_all(cmd_slice)?;
+
+        // Free the allocated memory by converting slice back to pointer.
+        unsafe {
+            use core::ptr::NonNull;
+            let ptr = cmd_slice.as_ptr() as *mut u8;
+            let ptr_nn = NonNull::new_unchecked(ptr);
+            Kmalloc::free(ptr_nn, layout);
+        }
+
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        let mut key_size = 0;
+        for i in 0..GSP_REGISTRY_NUM_ENTRIES {
+            key_size += self.entries[i].key.len() + 1; // +1 for NULL terminator
+        }
+        size_of::<fw::PACKED_REGISTRY_TABLE>()
+            + GSP_REGISTRY_NUM_ENTRIES * size_of::<fw::PACKED_REGISTRY_ENTRY>()
+            + key_size
+    }
+}
+
+pub(crate) fn build_registry(cmdq: &mut GspCmdq, bar: &Bar0) -> Result {
+    let registry = RegistryTable {
+        entries: [
+            RegistryEntry {
+                key: "RMSecBusResetEnable",
+                value: 1,
+            },
+            RegistryEntry {
+                key: "RMForcePcieConfigSave",
+                value: 1,
+            },
+        ],
+    };
+    let mut msg = cmdq.alloc_gsp_queue_command(registry.size())?;
+    {
+        let (_, some_sbuf) = msg.try_as::<GspRegistryTable>();
+        let sbuf = some_sbuf.ok_or(ENOMEM)?;
+        registry.copy_to_sbuf_iter(sbuf)?;
+    }
+    msg.send_to_gsp(bar)?;
+
+    Ok(())
+}
+
+impl GspCommandToGsp for fw::GspSystemInfo {
+    const FUNCTION: u32 = fw::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO;
+}
+
+pub(crate) fn set_system_info(
+    cmdq: &mut GspCmdq,
+    dev: &pci::Device<device::Bound>,
+    bar: &Bar0,
+) -> Result {
+    build_assert!(size_of::<fw::GspSystemInfo>() < GSP_PAGE_SIZE);
+    let mut msg = cmdq.alloc_gsp_queue_command(size_of::<fw::GspSystemInfo>())?;
+    {
+        let (info, _) = msg.try_as::<fw::GspSystemInfo>();
+
+        info.gpuPhysAddr = dev.resource_start(0)?;
+        info.gpuPhysFbAddr = dev.resource_start(1)?;
+        info.gpuPhysInstAddr = dev.resource_start(3)?;
+        info.nvDomainBusDeviceFunc = dev.dev_id() as u64;
+
+        // Using TASK_SIZE in r535_gsp_rpc_set_system_info() seems wrong because
+        // TASK_SIZE is per-task. That's probably a design issue in GSP-RM though.
+        info.maxUserVa = (1 << 47) - 4096;
+        info.pciConfigMirrorBase = 0x088000;
+        info.pciConfigMirrorSize = 0x001000;
+
+        info.PCIDeviceID = ((dev.device_id() as u32) << 16) | dev.vendor_id() as u32;
+        info.PCISubDeviceID =
+            ((dev.subsystem_device_id() as u32) << 16) | dev.subsystem_vendor_id() as u32;
+        info.PCIRevisionID = dev.revision_id() as u32;
+        info.bIsPrimary = 0;
+        info.bPreserveVideoMemoryAllocations = 0;
+    }
+    msg.send_to_gsp(bar)?;
+    Ok(())
+}
