@@ -244,6 +244,47 @@ pub mod attrs {
     pub const DMA_ATTR_PRIVILEGED: Attrs = Attrs(bindings::DMA_ATTR_PRIVILEGED);
 }
 
+/// DMA data direction.
+///
+/// Corresponds to the C [`enum dma_data_direction`].
+///
+/// [`enum dma_data_direction`]: srctree/include/linux/dma-direction.h
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct DataDirection(bindings::dma_data_direction);
+
+impl DataDirection {
+    /// The DMA mapping is for bidirectional data transfer.
+    ///
+    /// This is used when the buffer can be both read from and written to by the device.
+    /// The cache for the corresponding memory region is both flushed and invalidated.
+    pub const BIDIRECTIONAL: DataDirection =
+        DataDirection(bindings::dma_data_direction_DMA_BIDIRECTIONAL);
+
+    /// The DMA mapping is for data transfer from memory to the device (write).
+    ///
+    /// The CPU has prepared data in the buffer, and the device will read it.
+    /// The cache for the corresponding memory region is flushed.
+    pub const TO_DEVICE: DataDirection = DataDirection(bindings::dma_data_direction_DMA_TO_DEVICE);
+
+    /// The DMA mapping is for data transfer from the device to memory (read).
+    ///
+    /// The device will write data into the buffer for the CPU to read.
+    /// The cache for the corresponding memory region is invalidated before CPU access.
+    pub const FROM_DEVICE: DataDirection =
+        DataDirection(bindings::dma_data_direction_DMA_FROM_DEVICE);
+
+    /// The DMA mapping is not for data transfer.
+    ///
+    /// This is primarily for debugging purposes. With this direction, the DMA mapping API
+    /// will not perform any cache coherency operations.
+    pub const NONE: DataDirection = DataDirection(bindings::dma_data_direction_DMA_NONE);
+
+    /// Returns the raw representation of [`enum dma_data_direction`].
+    pub fn as_raw(self) -> bindings::dma_data_direction {
+        self.0
+    }
+}
+
 /// An abstraction of the `dma_alloc_coherent` API.
 ///
 /// This is an abstraction around the `dma_alloc_coherent` API which is used to allocate and map
