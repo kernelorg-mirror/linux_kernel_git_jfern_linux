@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::{
-    auxiliary, bindings, c_str, device::Core, dma::Device, dma::DmaMask, pci, pci::Class,
-    prelude::*, sizes::SZ_16M, sync::Arc,
+    auxiliary, c_str,
+    device::Core,
+    dma::Device,
+    dma::DmaMask,
+    pci,
+    pci::{Class, Vendor},
+    prelude::*,
+    sizes::SZ_16M,
+    sync::Arc,
 };
 
 use crate::gpu::Gpu;
@@ -27,7 +34,7 @@ kernel::pci_device_table!(
             pci::DeviceId::from_class_and_vendor(
                 Class::DISPLAY_VGA,
                 Class::MASK_CLASS_SUBCLASS,
-                bindings::PCI_VENDOR_ID_NVIDIA
+                Vendor::NVIDIA
             ),
             ()
         ),
@@ -35,7 +42,7 @@ kernel::pci_device_table!(
             pci::DeviceId::from_class_and_vendor(
                 Class::DISPLAY_3D,
                 Class::MASK_CLASS_SUBCLASS,
-                bindings::PCI_VENDOR_ID_NVIDIA
+                Vendor::NVIDIA
             ),
             ()
         ),
