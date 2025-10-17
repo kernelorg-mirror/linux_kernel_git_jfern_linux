@@ -72,6 +72,7 @@
 /// - Field setters: `set_mode()`, `set_state()`, etc. (supports chaining with builder pattern).
 ///   Note that the compiler will error out if the size of the setter's arg exceeds the
 ///   struct's storage size.
+/// - Conversion from the underlying storage type (e.g., `From<u32>`).
 /// - Debug and Default implementations.
 ///
 /// Note: Field accessors and setters inherit the same visibility as the struct itself.
@@ -114,6 +115,12 @@ macro_rules! bitfield {
         impl ::core::convert::From<$name> for $storage {
             fn from(val: $name) -> $storage {
                 val.0
+            }
+        }
+
+        impl ::core::convert::From<$storage> for $name {
+            fn from(val: $storage) -> $name {
+                $name(val)
             }
         }
 
