@@ -97,7 +97,7 @@ should still be used. For instance:
 	// TODO: ...
 	fn f() {}
 
-One special kind of comments are the ``// SAFETY:`` comments. These must appear
+One special kind of comment is the ``// SAFETY:`` comment. These must appear
 before every ``unsafe`` block, and they explain why the code inside the block is
 correct/sound, i.e. why it cannot trigger undefined behavior in any case, e.g.:
 
@@ -166,7 +166,7 @@ in the kernel:
 - While not shown here, if a function may panic, the conditions under which
   that happens must be described under a ``# Panics`` section.
 
-  Please note that panicking should be very rare and used only with a good
+  Please note that panicking should be very rare and used only for a good
   reason. In almost all cases, a fallible approach should be used, typically
   returning a ``Result``.
 
