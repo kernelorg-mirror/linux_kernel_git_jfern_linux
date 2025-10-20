@@ -216,7 +216,7 @@ impl Gpu {
                 bar,
                 spec.chipset > Chipset::GA100,
             )
-            .inspect(|falcon| falcon.clear_swgen0_intr(bar))?,
+            .inspect(|falcon| falcon.clear_msgq_interrupt(bar))?,
 
             sec2_falcon: Falcon::new(pdev.as_ref(), spec.chipset, bar, true)?,
 

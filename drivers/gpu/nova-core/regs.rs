@@ -198,6 +198,16 @@ register!(NV_FUSE_OPT_FPF_GSP_UCODE1_VERSION @ 0x008241c0[NV_FUSE_OPT_FPF_SIZE] 
 
 // PFALCON
 
+register!(NV_PFALCON_FALCON_IRQMASK @ PFalconBase[0x00000014] {
+    4:4     halt as bool;
+    6:6     swgen0 as bool;
+});
+
+register!(NV_PFALCON_FALCON_IRQSTAT @ PFalconBase[0x00000008] {
+    4:4     halt as bool;
+    6:6     swgen0 as bool;
+});
+
 register!(NV_PFALCON_FALCON_IRQSCLR @ PFalconBase[0x00000004] {
     4:4     halt as bool;
     6:6     swgen0 as bool;
