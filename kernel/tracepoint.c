@@ -14,6 +14,7 @@
 #include <linux/sched/signal.h>
 #include <linux/sched/task.h>
 #include <linux/static_key.h>
+#include <linux/hazptr.h>
 
 enum tp_func_state {
 	TP_FUNC_0,
@@ -112,6 +113,7 @@ static inline void release_probes(struct tracepoint *tp, struct tracepoint_func 
 		struct tp_probes *tp_probes = container_of(old,
 			struct tp_probes, probes[0]);
 
+		hazptr_synchronize(tp);
 		if (tracepoint_is_faultable(tp))
 			call_rcu_tasks_trace(&tp_probes->rcu, rcu_free_old_probes);
 		else

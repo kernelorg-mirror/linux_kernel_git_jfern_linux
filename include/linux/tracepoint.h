@@ -20,6 +20,7 @@
 #include <linux/rcupdate_trace.h>
 #include <linux/tracepoint-defs.h>
 #include <linux/static_call.h>
+#include <linux/hazptr.h>
 
 struct module;
 struct tracepoint;
@@ -277,12 +278,17 @@ static inline struct tracepoint *tracepoint_ptr_deref(tracepoint_ptr_t *p)
 	}								\
 	static inline void trace_##name(proto)				\
 	{								\
+		struct hazptr_ctx _ctx;					\
+		void *mock_ptr = &__tracepoint_##name;			\
+		void *_addr = hazptr_acquire(&_ctx, &mock_ptr);		\
+									\
 		if (static_branch_unlikely(&__tracepoint_##name.key))	\
 			__do_trace_##name(args);			\
 		if (IS_ENABLED(CONFIG_LOCKDEP) && (cond)) {		\
 			WARN_ONCE(!rcu_is_watching(),			\
 				  "RCU not watching for tracepoint");	\
 		}							\
+		hazptr_release(&_ctx, _addr);				\
 	}
 
 #define __DECLARE_TRACE_SYSCALL(name, proto, args, data_proto)		\
