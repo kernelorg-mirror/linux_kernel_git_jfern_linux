@@ -210,6 +210,11 @@ void hazptr_exit(void)
 	if (WARN_ON(tctx->in_use_count != 0)) {
 		for (i = 0; i < NR_HAZPTR_SLOTS; i++)
 			tctx->slots[i].addr = NULL;
+		/* Also clear overflow slots so hazptr_synchronize won't wait. */
+		for (chunk = tctx->overflow; chunk; chunk = chunk->next) {
+			for (i = 0; i < NR_HAZPTR_OVERFLOW_SLOTS; i++)
+				chunk->slots[i].addr = NULL;
+		}
 		tctx->in_use_count = 0;
 	}
 
