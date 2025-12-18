@@ -700,17 +700,8 @@ static void scsi_dump_inquiry(struct se_device *dev)
 	pr_debug("  Type:   %s ", scsi_device_type(device_type));
 }
 
-static void target_non_ordered_release(struct percpu_ref *ref)
-{
-	struct se_device *dev = container_of(ref, struct se_device,
-					     non_ordered);
-	unsigned long flags;
-
-	spin_lock_irqsave(&dev->delayed_cmd_lock, flags);
-	if (!list_empty(&dev->delayed_cmd_list))
-		schedule_work(&dev->delayed_cmd_work);
-	spin_unlock_irqrestore(&dev->delayed_cmd_lock, flags);
-}
+/* Sentinel value for non_ordered_gate (defined in target_core_transport.c). */
+extern char target_non_ordered_sentinel;
 
 struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 {
@@ -742,9 +733,8 @@ struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 		INIT_WORK(&q->sq.work, target_queued_submit_work);
 	}
 
-	if (percpu_ref_init(&dev->non_ordered, target_non_ordered_release,
-			    PERCPU_REF_ALLOW_REINIT, GFP_KERNEL))
-		goto free_queues;
+	/* Initialize non_ordered gate as open (non-NULL sentinel). */
+	dev->non_ordered_gate = &target_non_ordered_sentinel;
 
 	dev->se_hba = hba;
 	dev->transport = hba->backend->ops;
@@ -831,8 +821,6 @@ struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 
 	return dev;
 
-free_queues:
-	kfree(dev->queues);
 free_stats:
 	free_percpu(dev->stats);
 free_device:
@@ -1027,7 +1015,6 @@ void target_free_device(struct se_device *dev)
 
 	WARN_ON(!list_empty(&dev->dev_sep_list));
 
-	percpu_ref_exit(&dev->non_ordered);
 	cancel_work_sync(&dev->delayed_cmd_work);
 
 	if (target_dev_configured(dev)) {

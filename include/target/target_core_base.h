@@ -4,8 +4,8 @@
 
 #include <linux/configfs.h>      /* struct config_group */
 #include <linux/dma-direction.h> /* enum dma_data_direction */
+#include <linux/hazptr.h>
 #include <linux/sbitmap.h>
-#include <linux/percpu-refcount.h>
 #include <linux/semaphore.h>     /* struct semaphore */
 #include <linux/completion.h>
 
@@ -564,6 +564,9 @@ struct se_cmd {
 	 * initialized on. Drivers can override.
 	 */
 	int			cpuid;
+
+	/* Hazard pointer context for non_ordered gate protection. */
+	struct hazptr_ctx	non_ordered_hctx;
 };
 
 struct se_ua {
@@ -833,8 +836,8 @@ struct se_device {
 	atomic_long_t		aborts_complete;
 	atomic_long_t		aborts_no_task;
 	struct se_dev_io_stats __percpu	*stats;
-	/* Active commands on this virtual SE device */
-	struct percpu_ref	non_ordered;
+	/* Active commands on this virtual SE device - hazptr protected gate */
+	void			*non_ordered_gate;
 	bool			ordered_sync_in_progress;
 	atomic_t		dev_qf_count;
 	u32			export_count;
