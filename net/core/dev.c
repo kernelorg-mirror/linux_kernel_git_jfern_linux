@@ -117,6 +117,7 @@
 #include <linux/module.h>
 #include <linux/netpoll.h>
 #include <linux/rcupdate.h>
+#include <linux/hazptr.h>
 #include <linux/delay.h>
 #include <net/iw_handler.h>
 #include <asm/current.h>
@@ -5797,14 +5798,18 @@ EXPORT_SYMBOL_GPL(netdev_rx_handler_register);
  */
 void netdev_rx_handler_unregister(struct net_device *dev)
 {
+	rx_handler_func_t *old_handler;
 
 	ASSERT_RTNL();
+	old_handler = rcu_dereference_protected(dev->rx_handler,
+						lockdep_rtnl_is_held());
 	RCU_INIT_POINTER(dev->rx_handler, NULL);
-	/* a reader seeing a non NULL rx_handler in a rcu_read_lock()
+	/* A reader seeing a non NULL rx_handler in a hazptr_acquire()
 	 * section has a guarantee to see a non NULL rx_handler_data
 	 * as well.
 	 */
-	synchronize_net();
+	if (old_handler)
+		hazptr_synchronize(old_handler);
 	RCU_INIT_POINTER(dev->rx_handler_data, NULL);
 }
 EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
@@ -5957,25 +5962,33 @@ skip_classify:
 			goto out;
 	}
 
-	rx_handler = rcu_dereference(skb->dev->rx_handler);
-	if (rx_handler) {
-		if (pt_prev) {
-			ret = deliver_skb(skb, pt_prev, orig_dev);
-			pt_prev = NULL;
-		}
-		switch (rx_handler(&skb)) {
-		case RX_HANDLER_CONSUMED:
-			ret = NET_RX_SUCCESS;
-			goto out;
-		case RX_HANDLER_ANOTHER:
-			goto another_round;
-		case RX_HANDLER_EXACT:
-			deliver_exact = true;
-			break;
-		case RX_HANDLER_PASS:
-			break;
-		default:
-			BUG();
+	{
+		struct hazptr_ctx hctx;
+
+		rx_handler = hazptr_acquire(&hctx, (void **)&skb->dev->rx_handler);
+		if (rx_handler) {
+			if (pt_prev) {
+				ret = deliver_skb(skb, pt_prev, orig_dev);
+				pt_prev = NULL;
+			}
+			switch (rx_handler(&skb)) {
+			case RX_HANDLER_CONSUMED:
+				hazptr_release(&hctx, rx_handler);
+				ret = NET_RX_SUCCESS;
+				goto out;
+			case RX_HANDLER_ANOTHER:
+				hazptr_release(&hctx, rx_handler);
+				goto another_round;
+			case RX_HANDLER_EXACT:
+				deliver_exact = true;
+				break;
+			case RX_HANDLER_PASS:
+				break;
+			default:
+				hazptr_release(&hctx, rx_handler);
+				BUG();
+			}
+			hazptr_release(&hctx, rx_handler);
 		}
 	}
 
