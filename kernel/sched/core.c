@@ -6813,7 +6813,6 @@ static void __sched notrace __schedule(int sched_mode)
 
 	local_irq_disable();
 	rcu_note_context_switch(preempt);
-	hazptr_note_context_switch();
 
 	/*
 	 * Make sure that signal_pending_state()->signal_pending() below

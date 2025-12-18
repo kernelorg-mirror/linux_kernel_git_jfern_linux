@@ -1,150 +1,234 @@
-// SPDX-FileCopyrightText: 2024 Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-//
-// SPDX-License-Identifier: LGPL-2.1-or-later
-
+// SPDX-License-Identifier: GPL-2.0
 /*
- * hazptr: Hazard Pointers
+ * hazptr: Per-Task Hazard Pointers
+ *
+ * Implementation of hazard pointers with per-task storage.
+ * Each task has 16 embedded slots + overflow via GFP_ATOMIC allocation.
+ * Uses 2-level scan optimization: check in_use_count before scanning slots.
  */
 
 #include <linux/hazptr.h>
-#include <linux/percpu.h>
-#include <linux/spinlock.h>
-#include <linux/list.h>
+#include <linux/sched.h>
+#include <linux/sched/task.h>
+#include <linux/sched/signal.h>
+#include <linux/slab.h>
 #include <linux/export.h>
-
-struct overflow_list {
-	raw_spinlock_t lock;		/* Lock protecting overflow list and list generation. */
-	struct list_head head;		/* Overflow list head. */
-	uint64_t gen;			/* Overflow list generation. */
-};
-
-static DEFINE_PER_CPU(struct overflow_list, percpu_overflow_list);
-
-DEFINE_PER_CPU(struct hazptr_percpu_slots, hazptr_percpu_slots);
-EXPORT_PER_CPU_SYMBOL_GPL(hazptr_percpu_slots);
+#include <linux/rcupdate.h>
 
 /*
- * Perform piecewise iteration on overflow list waiting until "addr" is
- * not present. Raw spinlock is released and taken between each list
- * item and busy loop iteration. The overflow list generation is checked
- * each time the lock is taken to validate that the list has not changed
- * before resuming iteration or busy wait. If the generation has
- * changed, retry the entire list traversal.
- */
-static
-void hazptr_synchronize_overflow_list(struct overflow_list *overflow_list, void *addr)
-{
-	struct hazptr_backup_slot *backup_slot;
-	uint64_t snapshot_gen;
-
-	raw_spin_lock(&overflow_list->lock);
-retry:
-	snapshot_gen = overflow_list->gen;
-	list_for_each_entry(backup_slot, &overflow_list->head, node) {
-		/* Busy-wait if node is found. */
-		while (smp_load_acquire(&backup_slot->slot.addr) == addr) { /* Load B */
-			raw_spin_unlock(&overflow_list->lock);
-			cpu_relax();
-			raw_spin_lock(&overflow_list->lock);
-			if (overflow_list->gen != snapshot_gen)
-				goto retry;
-		}
-		raw_spin_unlock(&overflow_list->lock);
-		/*
-		 * Release raw spinlock, validate generation after
-		 * re-acquiring the lock.
-		 */
-		raw_spin_lock(&overflow_list->lock);
-		if (overflow_list->gen != snapshot_gen)
-			goto retry;
-	}
-	raw_spin_unlock(&overflow_list->lock);
-}
-
-static
-void hazptr_synchronize_cpu_slots(int cpu, void *addr)
-{
-	struct hazptr_percpu_slots *percpu_slots = per_cpu_ptr(&hazptr_percpu_slots, cpu);
-	unsigned int idx;
-
-	for (idx = 0; idx < NR_HAZPTR_PERCPU_SLOTS; idx++) {
-		struct hazptr_slot *slot = &percpu_slots->slots[idx];
-
-		/* Busy-wait if node is found. */
-		smp_cond_load_acquire(&slot->addr, VAL != addr); /* Load B */
-	}
-}
-
-/*
- * hazptr_synchronize: Wait until @addr is released from all slots.
+ * hazptr_get_free_slot - Find or allocate a free hazard pointer slot.
+ * @tctx: Per-task hazard pointer context
  *
- * Wait to observe that each slot contains a value that differs from
- * @addr before returning.
- * Should be called from preemptible context.
+ * Searches fixed slots first, then overflow chunks.
+ * If all are in use, allocates a new overflow chunk.
+ *
+ * Returns: Pointer to free slot, or NULL on allocation failure.
+ */
+static struct hazptr_slot *hazptr_get_free_slot(struct hazptr_task_ctx *tctx)
+{
+	struct hazptr_overflow *chunk;
+	int i;
+
+	/* Try fixed slots first. */
+	for (i = 0; i < NR_HAZPTR_SLOTS; i++) {
+		if (!tctx->slots[i].addr)
+			return &tctx->slots[i];
+	}
+
+	/* Try existing overflow chunks. */
+	for (chunk = tctx->overflow; chunk; chunk = chunk->next) {
+		for (i = 0; i < NR_HAZPTR_OVERFLOW_SLOTS; i++) {
+			if (!chunk->slots[i].addr)
+				return &chunk->slots[i];
+		}
+	}
+
+	/* Allocate new overflow chunk. */
+	chunk = kzalloc(sizeof(*chunk), GFP_ATOMIC);
+	if (!chunk) {
+		WARN_ONCE(1, "hazptr: overflow alloc failed\n");
+		return NULL;
+	}
+
+	/* Link at head. */
+	chunk->next = tctx->overflow;
+	tctx->overflow = chunk;
+	return &chunk->slots[0];
+}
+
+/*
+ * hazptr_acquire - Load pointer and protect with hazard pointer.
+ */
+void *hazptr_acquire(struct hazptr_ctx *ctx, void * const *addr_p)
+{
+	struct hazptr_task_ctx *tctx = &current->hazptr_ctx;
+	struct hazptr_slot *slot;
+	void *addr, *addr2;
+
+	ctx->slot = NULL;
+
+	/* Load pointer to know what to protect. */
+	addr = READ_ONCE(*addr_p);
+	for (;;) {
+		if (!addr)
+			return NULL;
+
+		slot = hazptr_get_free_slot(tctx);
+		if (!slot)
+			return NULL;  /* OOM */
+
+		/* Increment count BEFORE storing addr. */
+		WRITE_ONCE(tctx->in_use_count, tctx->in_use_count + 1);
+		smp_wmb();
+		WRITE_ONCE(slot->addr, addr);
+
+		/* Memory ordering: Store before re-load. */
+		smp_mb();
+
+		/* Re-load to verify pointer didn't change. */
+		addr2 = READ_ONCE(*addr_p);
+		if (likely(addr2 == addr)) {
+			ctx->slot = slot;
+			return addr2;  /* Success */
+		}
+
+		/* Pointer changed - release and retry. */
+		smp_store_release(&slot->addr, NULL);
+		smp_wmb();
+		WRITE_ONCE(tctx->in_use_count, tctx->in_use_count - 1);
+
+		if (!addr2)
+			return NULL;  /* Became NULL */
+
+		addr = addr2;  /* Retry with new value */
+	}
+}
+EXPORT_SYMBOL_GPL(hazptr_acquire);
+
+/*
+ * hazptr_release - Release hazard pointer protection.
+ */
+void hazptr_release(struct hazptr_ctx *ctx, void *addr)
+{
+	struct hazptr_task_ctx *tctx = &current->hazptr_ctx;
+	struct hazptr_slot *slot = ctx->slot;
+
+	if (!addr || !slot)
+		return;
+
+	WARN_ON_ONCE(slot->addr != addr);
+
+	/* Clear addr BEFORE decrementing count. */
+	smp_store_release(&slot->addr, NULL);
+	smp_wmb();
+	WRITE_ONCE(tctx->in_use_count, tctx->in_use_count - 1);
+}
+EXPORT_SYMBOL_GPL(hazptr_release);
+
+/*
+ * hazptr_synchronize - Wait for all HP references to addr to clear.
+ *
+ * 2-level scan:
+ * - Level 1: Check in_use_count, skip tasks with count==0
+ * - Level 2: Scan fixed slots + overflow chunks
  */
 void hazptr_synchronize(void *addr)
 {
-	int cpu;
+	struct task_struct *g, *t;
+	struct hazptr_overflow *chunk;
+	int i;
 
-	/*
-	 * Busy-wait should only be done from preemptible context.
-	 */
-	lockdep_assert_preemption_enabled();
-
-	/*
-	 * Store A precedes hazptr_scan(): it unpublishes addr (sets it to
-	 * NULL or to a different value), and thus hides it from hazard
-	 * pointer readers.
-	 */
 	if (!addr)
 		return;
-	/* Memory ordering: Store A before Load B. */
+
+	/* Busy-wait should only be done from preemptible context. */
+	lockdep_assert_preemption_enabled();
+
+	/* Memory ordering: Ensure addr unpublish visible before scan. */
 	smp_mb();
-	/* Scan all CPUs slots. */
-	for_each_possible_cpu(cpu) {
-		/* Scan CPU slots. */
-		hazptr_synchronize_cpu_slots(cpu, addr);
-		/* Scan backup slots in percpu overflow list. */
-		hazptr_synchronize_overflow_list(per_cpu_ptr(&percpu_overflow_list, cpu), addr);
+
+	rcu_read_lock();
+	for_each_process_thread(g, t) {
+		struct hazptr_task_ctx *tctx = &t->hazptr_ctx;
+
+		/* Level 1: Skip task if no slots in use. */
+		if (READ_ONCE(tctx->in_use_count) == 0)
+			continue;
+
+		/*
+		 * Pair with smp_wmb() in hazptr_acquire between
+		 * incrementing in_use_count and storing to slot.
+		 * Ensures if we see count > 0, we see slot stores.
+		 */
+		smp_rmb();
+
+		/* Level 2a: Scan fixed slots. */
+		for (i = 0; i < NR_HAZPTR_SLOTS; i++) {
+			while (smp_load_acquire(&tctx->slots[i].addr) == addr)
+				cpu_relax();
+		}
+
+		/* Level 2b: Scan overflow chunks. */
+		for (chunk = READ_ONCE(tctx->overflow); chunk;
+		     chunk = READ_ONCE(chunk->next)) {
+			for (i = 0; i < NR_HAZPTR_OVERFLOW_SLOTS; i++) {
+				while (smp_load_acquire(&chunk->slots[i].addr) == addr)
+					cpu_relax();
+			}
+		}
 	}
+	rcu_read_unlock();
+
+	/* Memory ordering: Ensure all slot clears visible. */
+	smp_mb();
 }
 EXPORT_SYMBOL_GPL(hazptr_synchronize);
 
-struct hazptr_slot *hazptr_chain_backup_slot(struct hazptr_ctx *ctx)
+/*
+ * hazptr_fork_init - Initialize hazptr context for new task.
+ */
+void hazptr_fork_init(struct task_struct *p)
 {
-	struct overflow_list *overflow_list = this_cpu_ptr(&percpu_overflow_list);
-	struct hazptr_slot *slot = &ctx->backup_slot.slot;
+	int i;
 
-	slot->addr = NULL;
-
-	raw_spin_lock(&overflow_list->lock);
-	overflow_list->gen++;
-	list_add(&ctx->backup_slot.node, &overflow_list->head);
-	ctx->backup_slot.cpu = smp_processor_id();
-	raw_spin_unlock(&overflow_list->lock);
-	return slot;
+	p->hazptr_ctx.in_use_count = 0;
+	p->hazptr_ctx.overflow = NULL;
+	for (i = 0; i < NR_HAZPTR_SLOTS; i++)
+		p->hazptr_ctx.slots[i].addr = NULL;
 }
-EXPORT_SYMBOL_GPL(hazptr_chain_backup_slot);
 
-void hazptr_unchain_backup_slot(struct hazptr_ctx *ctx)
+/*
+ * hazptr_exit - Cleanup hazptr context on task exit.
+ */
+void hazptr_exit(void)
 {
-	struct overflow_list *overflow_list = per_cpu_ptr(&percpu_overflow_list, ctx->backup_slot.cpu);
+	struct hazptr_task_ctx *tctx = &current->hazptr_ctx;
+	struct hazptr_overflow *chunk, *next;
+	int i;
 
-	raw_spin_lock(&overflow_list->lock);
-	overflow_list->gen++;
-	list_del(&ctx->backup_slot.node);
-	raw_spin_unlock(&overflow_list->lock);
+	/* Warn if any slots still in use - indicates bug. */
+	if (WARN_ON(tctx->in_use_count != 0)) {
+		for (i = 0; i < NR_HAZPTR_SLOTS; i++)
+			tctx->slots[i].addr = NULL;
+		tctx->in_use_count = 0;
+	}
+
+	/* Free overflow chunks via RCU (synchronize may be reading them). */
+	chunk = tctx->overflow;
+	tctx->overflow = NULL;
+	while (chunk) {
+		next = chunk->next;
+		kfree_rcu(chunk, rcu);
+		chunk = next;
+	}
 }
-EXPORT_SYMBOL_GPL(hazptr_unchain_backup_slot);
 
+/*
+ * hazptr_init - Initialize hazard pointer subsystem.
+ *
+ * Nothing to do for per-task implementation (init_task handled separately).
+ */
 void __init hazptr_init(void)
 {
-	int cpu;
-
-	for_each_possible_cpu(cpu) {
-		struct overflow_list *overflow_list = per_cpu_ptr(&percpu_overflow_list, cpu);
-
-		raw_spin_lock_init(&overflow_list->lock);
-		INIT_LIST_HEAD(&overflow_list->head);
-	}
+	/* Per-task storage is initialized via hazptr_fork_init. */
 }
