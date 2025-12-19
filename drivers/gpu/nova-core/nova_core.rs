@@ -23,6 +23,7 @@ mod gfw;
 mod gpu;
 mod gsp;
 mod mctp;
+mod mm;
 mod num;
 mod regs;
 mod sbuffer;
