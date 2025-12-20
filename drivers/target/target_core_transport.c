@@ -23,7 +23,6 @@
 #include <linux/ratelimit.h>
 #include <linux/vmalloc.h>
 #include <linux/unaligned.h>
-#include <linux/hazptr.h>
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <scsi/scsi_proto.h>
@@ -51,10 +50,6 @@ struct kmem_cache *t10_alua_lu_gp_mem_cache;
 struct kmem_cache *t10_alua_tg_pt_gp_cache;
 struct kmem_cache *t10_alua_lba_map_cache;
 struct kmem_cache *t10_alua_lba_map_mem_cache;
-
-/* Sentinel value for non_ordered_gate when gate is open. */
-char target_non_ordered_sentinel;
-EXPORT_SYMBOL(target_non_ordered_sentinel);
 
 static void transport_complete_task_attr(struct se_cmd *cmd);
 static void translate_sense_reason(struct se_cmd *cmd, sense_reason_t reason);
@@ -2219,7 +2214,6 @@ static bool target_handle_task_attr(struct se_cmd *cmd)
 {
 	struct se_device *dev = cmd->se_dev;
 	unsigned long flags;
-	void *gate;
 
 	if (dev->transport_flags & TRANSPORT_FLAG_PASSTHROUGH)
 		return false;
@@ -2241,14 +2235,10 @@ static bool target_handle_task_attr(struct se_cmd *cmd)
 		break;
 	default:
 		/*
-		 * For SIMPLE and UNTAGGED Task Attribute commands.
-		 * Acquire hazptr to non_ordered_gate - if gate is open
-		 * (non-NULL), proceed with the command.
+		 * For SIMPLE and UNTAGGED Task Attribute commands
 		 */
 retry:
-		gate = hazptr_acquire(&cmd->non_ordered_hctx,
-				      &dev->non_ordered_gate);
-		if (gate)
+		if (percpu_ref_tryget_live(&dev->non_ordered))
 			return false;
 
 		break;
@@ -2256,13 +2246,12 @@ retry:
 
 	spin_lock_irqsave(&dev->delayed_cmd_lock, flags);
 	if (cmd->sam_task_attr == TCM_SIMPLE_TAG &&
-	    READ_ONCE(dev->non_ordered_gate) != NULL) {
+	    !percpu_ref_is_dying(&dev->non_ordered)) {
 		spin_unlock_irqrestore(&dev->delayed_cmd_lock, flags);
 		/* We raced with the last ordered completion so retry. */
 		goto retry;
-	} else if (READ_ONCE(dev->non_ordered_gate) != NULL) {
-		/* Close the gate for ORDERED command processing. */
-		WRITE_ONCE(dev->non_ordered_gate, NULL);
+	} else if (!percpu_ref_is_dying(&dev->non_ordered)) {
+		percpu_ref_kill(&dev->non_ordered);
 	}
 
 	spin_lock(&cmd->t_state_lock);
@@ -2311,26 +2300,24 @@ EXPORT_SYMBOL(target_execute_cmd);
 
 /*
  * Process all commands up to the last received ORDERED task attribute which
- * requires another blocking boundary.
+ * requires another blocking boundary
  */
 void target_do_delayed_work(struct work_struct *work)
 {
 	struct se_device *dev = container_of(work, struct se_device,
 					     delayed_cmd_work);
 
-	/*
-	 * Wait for any in-flight SIMPLE commands to release their hazptrs.
-	 * Once gate is NULL, new SIMPLE commands can't acquire hazptrs, so
-	 * this is a one-time wait for existing commands.
-	 */
-	if (!READ_ONCE(dev->non_ordered_gate))
-		hazptr_synchronize(&target_non_ordered_sentinel);
-
 	spin_lock(&dev->delayed_cmd_lock);
 	while (!dev->ordered_sync_in_progress) {
 		struct se_cmd *cmd;
 
-		if (list_empty(&dev->delayed_cmd_list))
+		/*
+		 * We can be woken up early/late due to races or the
+		 * extra wake up we do when adding commands to the list.
+		 * We check for both cases here.
+		 */
+		if (list_empty(&dev->delayed_cmd_list) ||
+		    !percpu_ref_is_zero(&dev->non_ordered))
 			break;
 
 		cmd = list_entry(dev->delayed_cmd_list.next,
@@ -2363,7 +2350,7 @@ static void transport_complete_ordered_sync(struct se_cmd *cmd)
 	dev->ordered_sync_in_progress = false;
 
 	if (list_empty(&dev->delayed_cmd_list))
-		WRITE_ONCE(dev->non_ordered_gate, &target_non_ordered_sentinel);
+		percpu_ref_resurrect(&dev->non_ordered);
 	else
 		schedule_work(&dev->delayed_cmd_work);
 
@@ -2393,11 +2380,10 @@ static void transport_complete_task_attr(struct se_cmd *cmd)
 
 	switch (cmd->sam_task_attr) {
 	case TCM_SIMPLE_TAG:
-		hazptr_release(&cmd->non_ordered_hctx,
-			       &target_non_ordered_sentinel);
+		percpu_ref_put(&dev->non_ordered);
 		break;
 	case TCM_ORDERED_TAG:
-		/* All ordered should have been executed as sync. */
+		/* All ordered should have been executed as sync */
 		WARN_ON(1);
 		break;
 	}
