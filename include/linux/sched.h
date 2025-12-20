@@ -48,7 +48,6 @@
 #include <linux/uidgid_types.h>
 #include <linux/tracepoint-defs.h>
 #include <linux/unwind_deferred_types.h>
-#include <linux/hazptr_types.h>
 #include <asm/kmap_size.h>
 #ifndef COMPILE_OFFSETS
 #include <generated/rq-offsets.h>
@@ -934,8 +933,9 @@ struct task_struct {
 	struct rcu_node			*rcu_blocked_node;
 #endif /* #ifdef CONFIG_PREEMPT_RCU */
 
-	/* Per-task hazard pointer context. */
-	struct hazptr_task_ctx		hazptr_ctx;
+#ifdef CONFIG_PREEMPT_HAZPTR
+	struct list_head		hazptr_ctx_list;
+#endif
 
 #ifdef CONFIG_TASKS_RCU
 	unsigned long			rcu_tasks_nvcsw;

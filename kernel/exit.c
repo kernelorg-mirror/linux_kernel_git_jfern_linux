@@ -13,7 +13,6 @@
 #include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/sched/cputime.h>
-#include <linux/hazptr.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/capability.h>
@@ -965,7 +964,6 @@ void __noreturn do_exit(long code)
 		disassociate_ctty(1);
 	exit_task_namespaces(tsk);
 	exit_task_work(tsk);
-	hazptr_exit();
 	exit_thread(tsk);
 
 	sched_autogroup_exit_task(tsk);
