@@ -228,6 +228,14 @@ void noinstr ct_nmi_exit(void)
 
 	/* This NMI interrupted an RCU-idle CPU, restore RCU-idleness. */
 	trace_rcu_watching(TPS("Endirq"), ct_nmi_nesting(), 0, ct_rcu_watching());
+
+	/*
+	 * Report quiescent state before transitioning to RCU-idle.
+	 * This allows grace periods to complete faster by not waiting
+	 * for the next FQS scan to detect the dyntick counter change.
+	 */
+	rcu_nmi_exit_qs();
+
 	WRITE_ONCE(ct->nmi_nesting, 0); /* Avoid store tearing. */
 
 	// instrumentation for the noinstr ct_kernel_exit_state()

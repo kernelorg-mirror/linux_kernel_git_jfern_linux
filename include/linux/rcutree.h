@@ -37,6 +37,7 @@ void synchronize_rcu_expedited(void);
 
 void rcu_barrier(void);
 void rcu_momentary_eqs(void);
+void rcu_nmi_exit_qs(void);
 
 struct rcu_gp_oldstate {
 	unsigned long rgos_norm;

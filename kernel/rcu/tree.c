@@ -368,6 +368,23 @@ notrace void rcu_momentary_eqs(void)
 EXPORT_SYMBOL_GPL(rcu_momentary_eqs);
 
 /**
+ * rcu_nmi_exit_qs - Report quiescent state at NMI/IRQ exit
+ *
+ * Called from ct_nmi_exit() to proactively report a quiescent state before
+ * the CPU transitions to RCU-idle. This allows grace periods to complete
+ * faster by not waiting for the next FQS scan to detect the dyntick counter
+ * change.
+ *
+ * This is a lightweight operation that checks internally if a quiescent
+ * state is needed before doing any work.
+ */
+void rcu_nmi_exit_qs(void)
+{
+	rcu_qs();
+}
+EXPORT_SYMBOL_GPL(rcu_nmi_exit_qs);
+
+/**
  * rcu_is_cpu_rrupt_from_idle - see if 'interrupted' from idle
  *
  * If the current CPU is idle and running at a first-level (not nested)
