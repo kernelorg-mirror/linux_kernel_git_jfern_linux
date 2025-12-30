@@ -1900,7 +1900,12 @@ static noinline_for_stack bool rcu_gp_init(void)
 		arch_spin_lock(&rcu_state.ofl_lock);
 		raw_spin_lock_rcu_node(rnp);
 #ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
-		/* Verify rdp lists match rnp list. */
+		/*
+		 * Verify rdp lists consistent with rnp list. Since the unlock
+		 * path removes from rdp before rnp, we can have tasks that are
+		 * on rnp but not on rdp (in the middle of being removed).
+		 * Therefore rnp_count >= rdp_total is the expected invariant.
+		 */
 		rnp_count = 0;
 		rdp_total = 0;
 		list_for_each_entry(t_verify, &rnp->blkd_tasks, rcu_node_entry)
@@ -1912,7 +1917,7 @@ static noinline_for_stack bool rcu_gp_init(void)
 				rdp_total++;
 			raw_spin_unlock(&rdp_cpu->blkd_lock);
 		}
-		WARN_ON_ONCE(rnp_count != rdp_total);
+		WARN_ON_ONCE(rnp_count < rdp_total);
 #endif
 		if (rnp->qsmaskinit == rnp->qsmaskinitnext &&
 		    !rnp->wait_blkd_tasks) {
