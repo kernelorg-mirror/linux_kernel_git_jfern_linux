@@ -554,6 +554,15 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 		 * to loop.  Retain a WARN_ON_ONCE() out of sheer paranoia.
 		 */
 		rnp = t->rcu_blocked_node;
+		if (!rnp) {
+			/*
+			 * Task was only on per-CPU list, not on rnp list.
+			 * This can happen in future when tasks are added
+			 * only to rdp initially and promoted to rnp later.
+			 */
+			local_irq_restore(flags);
+			return;
+		}
 		raw_spin_lock_rcu_node(rnp); /* irqs already disabled. */
 		WARN_ON_ONCE(rnp != t->rcu_blocked_node);
 		WARN_ON_ONCE(!rcu_is_leaf_node(rnp));
