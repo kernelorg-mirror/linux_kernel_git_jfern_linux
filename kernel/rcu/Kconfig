@@ -248,6 +248,17 @@ config RCU_EXP_KTHREAD
 
 	  Accept the default if unsure.
 
+config RCU_PER_CPU_BLOCKED_LISTS
+	bool "Use per-CPU blocked task lists in PREEMPT_RCU"
+	depends on PREEMPT_RCU
+	default n
+	help
+	  Enable per-CPU tracking of tasks blocked in RCU read-side
+	  critical sections. This duplicates information already in
+	  the rcu_node blkd_tasks list but at per-CPU granularity.
+
+	  Say N unless you are working on RCU internals.
+
 config RCU_NOCB_CPU
 	bool "Offload RCU callback processing from boot-selected CPUs"
 	depends on TREE_RCU

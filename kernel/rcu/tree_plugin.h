@@ -338,6 +338,12 @@ void rcu_note_context_switch(bool preempt)
 		raw_spin_lock_rcu_node(rnp);
 		t->rcu_read_unlock_special.b.blocked = true;
 		t->rcu_blocked_node = rnp;
+#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
+		t->rcu_blocked_cpu = rdp->cpu;
+		raw_spin_lock(&rdp->blkd_lock);
+		list_add(&t->rcu_rdp_entry, &rdp->blkd_list);
+		raw_spin_unlock(&rdp->blkd_lock);
+#endif
 
 		/*
 		 * Verify the CPU's sanity, trace the preemption, and
@@ -485,6 +491,10 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	struct rcu_data *rdp;
 	struct rcu_node *rnp;
 	union rcu_special special;
+#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
+	int blocked_cpu;
+	struct rcu_data *blocked_rdp;
+#endif
 
 	rdp = this_cpu_ptr(&rcu_data);
 	if (rdp->defer_qs_iw_pending == DEFER_QS_PENDING)
@@ -540,6 +550,14 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 		np = rcu_next_node_entry(t, rnp);
 		list_del_init(&t->rcu_node_entry);
 		t->rcu_blocked_node = NULL;
+#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
+		blocked_cpu = t->rcu_blocked_cpu;
+		blocked_rdp = per_cpu_ptr(&rcu_data, blocked_cpu);
+		raw_spin_lock(&blocked_rdp->blkd_lock);
+		list_del_init(&t->rcu_rdp_entry);
+		raw_spin_unlock(&blocked_rdp->blkd_lock);
+		t->rcu_blocked_cpu = -1;
+#endif
 		trace_rcu_unlock_preempted_task(TPS("rcu_preempt"),
 						rnp->gp_seq, t->pid);
 		if (&t->rcu_node_entry == rnp->gp_tasks)
