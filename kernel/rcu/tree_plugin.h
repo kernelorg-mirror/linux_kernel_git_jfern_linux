@@ -533,6 +533,20 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	/* Clean up if blocked during RCU read-side critical section. */
 	if (special.b.blocked) {
 
+#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
+		/*
+		 * Remove from per-CPU blocked list first. This is safe
+		 * without the rnp lock because only this task can remove
+		 * itself from these lists.
+		 */
+		blocked_cpu = t->rcu_blocked_cpu;
+		blocked_rdp = per_cpu_ptr(&rcu_data, blocked_cpu);
+		raw_spin_lock(&blocked_rdp->blkd_lock);
+		list_del_init(&t->rcu_rdp_entry);
+		raw_spin_unlock(&blocked_rdp->blkd_lock);
+		t->rcu_blocked_cpu = -1;
+#endif
+
 		/*
 		 * Remove this task from the list it blocked on.  The task
 		 * now remains queued on the rcu_node corresponding to the
@@ -550,14 +564,6 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 		np = rcu_next_node_entry(t, rnp);
 		list_del_init(&t->rcu_node_entry);
 		t->rcu_blocked_node = NULL;
-#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
-		blocked_cpu = t->rcu_blocked_cpu;
-		blocked_rdp = per_cpu_ptr(&rcu_data, blocked_cpu);
-		raw_spin_lock(&blocked_rdp->blkd_lock);
-		list_del_init(&t->rcu_rdp_entry);
-		raw_spin_unlock(&blocked_rdp->blkd_lock);
-		t->rcu_blocked_cpu = -1;
-#endif
 		trace_rcu_unlock_preempted_task(TPS("rcu_preempt"),
 						rnp->gp_seq, t->pid);
 		if (&t->rcu_node_entry == rnp->gp_tasks)
