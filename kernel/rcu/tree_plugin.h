@@ -340,7 +340,8 @@ void rcu_note_context_switch(bool preempt)
 		/*
 		 * Check if a GP is in progress.
 		 */
-		if (!rcu_gp_in_progress() && !rdp->cpu_no_qs.b.norm && !rdp->cpu_no_qs.b.exp) {
+		if (!rcu_gp_in_progress() && !rcu_exp_gp_in_progress() &&
+		    !rdp->cpu_no_qs.b.norm && !rdp->cpu_no_qs.b.exp) {
 			/*
 			 * No GP waiting on this CPU. Add to per-CPU list only,
 			 * skipping rnp->lock for better scalability.
