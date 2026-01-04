@@ -1859,6 +1859,7 @@ static noinline_for_stack bool rcu_gp_init(void)
 	 * Single-node systems for more details (in Data-Structures.rst).
 	 */
 	rcu_seq_start(&rcu_state.gp_seq);
+	trace_printk("GP-START: gp_seq=%lu (now odd, GP active)\n", rcu_state.gp_seq);
 	/* Ensure that rcu_seq_done_exact() guardband doesn't give false positives. */
 	WARN_ON_ONCE(IS_ENABLED(CONFIG_PROVE_RCU) &&
 		     rcu_seq_done_exact(&old_gp_seq, rcu_seq_snap(&rcu_state.gp_seq)));
@@ -1900,6 +1901,8 @@ static noinline_for_stack bool rcu_gp_init(void)
 		 */
 		arch_spin_lock(&rcu_state.ofl_lock);
 		raw_spin_lock_rcu_node(rnp);
+		trace_printk("GP-INIT-PROMOTE: gp_seq=%lu rnp=%px grplo=%d grphi=%d\n",
+			     rcu_state.gp_seq, rnp, rnp->grplo, rnp->grphi);
 		rcu_promote_blocked_tasks(rnp);
 		if (rnp->qsmaskinit == rnp->qsmaskinitnext &&
 		    !rnp->wait_blkd_tasks) {
@@ -1967,6 +1970,8 @@ static noinline_for_stack bool rcu_gp_init(void)
 		rcu_promote_blocked_tasks(rnp);
 		rcu_preempt_check_blocked_tasks(rnp);
 		rnp->qsmask = rnp->qsmaskinit;
+		trace_printk("GP-INIT-QSMASK: gp_seq=%lu rnp=%px qsmask=%lx grplo=%d grphi=%d\n",
+			     rcu_state.gp_seq, rnp, rnp->qsmask, rnp->grplo, rnp->grphi);
 		WRITE_ONCE(rnp->gp_seq, rcu_state.gp_seq);
 		if (rnp == rdp->mynode)
 			(void)__note_gp_changes(rnp, rdp);
@@ -2170,6 +2175,7 @@ static noinline void rcu_gp_cleanup(void)
 	struct rcu_node *rnp = rcu_get_root();
 	struct swait_queue_head *sq;
 
+	trace_printk("GP-CLEANUP: gp_seq=%lu (ending GP)\n", rcu_state.gp_seq);
 	WRITE_ONCE(rcu_state.gp_activity, jiffies);
 	raw_spin_lock_irq_rcu_node(rnp);
 	rcu_state.gp_end = jiffies;
@@ -2233,6 +2239,7 @@ static noinline void rcu_gp_cleanup(void)
 	rcu_seq_end(&rcu_state.gp_seq);
 	ASSERT_EXCLUSIVE_WRITER(rcu_state.gp_seq);
 	WRITE_ONCE(rcu_state.gp_state, RCU_GP_IDLE);
+	trace_printk("GP-END: gp_seq=%lu (now even, GP idle)\n", rcu_state.gp_seq);
 	/* Check for GP requests since above loop. */
 	rdp = this_cpu_ptr(&rcu_data);
 	if (!needgp && ULONG_CMP_LT(rnp->gp_seq, rnp->gp_seq_needed)) {
@@ -2257,6 +2264,7 @@ static noinline void rcu_gp_cleanup(void)
 		WRITE_ONCE(rcu_state.gp_flags, RCU_GP_FLAG_INIT);
 		WRITE_ONCE(rcu_state.gp_req_activity, jiffies);
 		trace_rcu_grace_period(rcu_state.name, rcu_state.gp_seq, TPS("newreq"));
+		trace_printk("GP-NEWREQ: gp_seq=%lu (immediately requesting new GP)\n", rcu_state.gp_seq);
 	} else {
 
 		// We get here either if there is no need for an
@@ -2266,6 +2274,8 @@ static noinline void rcu_gp_cleanup(void)
 		// ->gp_flags bits.
 
 		WRITE_ONCE(rcu_state.gp_flags, rcu_state.gp_flags & RCU_GP_FLAG_INIT);
+		if (!(rcu_state.gp_flags & RCU_GP_FLAG_INIT))
+			trace_printk("GP-IDLE: gp_seq=%lu (no new GP needed, truly idle)\n", rcu_state.gp_seq);
 	}
 	raw_spin_unlock_irq_rcu_node(rnp);
 
@@ -2477,8 +2487,12 @@ rcu_report_qs_rdp(struct rcu_data *rdp)
 	mask = rdp->grpmask;
 	rdp->core_needs_qs = false;
 	if ((rnp->qsmask & mask) == 0) {
+		trace_printk("QS-SKIP: cpu=%d gp_seq=%lu qsmask=%lx mask=%lx (already reported)\n",
+			     rdp->cpu, rcu_state.gp_seq, rnp->qsmask, mask);
 		raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
 	} else {
+		trace_printk("QS-REPORT: cpu=%d gp_seq=%lu qsmask=%lx mask=%lx (will promote+report)\n",
+			     rdp->cpu, rcu_state.gp_seq, rnp->qsmask, mask);
 		/*
 		 * This GP can't end until cpu checks in, so all of our
 		 * callbacks can be processed during the next GP.
@@ -2499,6 +2513,8 @@ rcu_report_qs_rdp(struct rcu_data *rdp)
 		 * This handles the case where a task blocks just as a GP is
 		 * starting, missing the initial promotion in rcu_gp_init().
 		 */
+		trace_printk("QS-PROMOTE-CHECK: cpu=%d gp_seq=%lu (checking for late blockers)\n",
+			     rdp->cpu, rnp->gp_seq);
 		rcu_promote_blocked_tasks_rdp(rdp, rnp);
 
 		rcu_disable_urgency_upon_qs(rdp);
@@ -2721,7 +2737,7 @@ void rcu_sched_clock_irq(int user)
 		WARN_ON_ONCE(time_before(j, __this_cpu_read(rcu_data.last_sched_clock)));
 		__this_cpu_write(rcu_data.last_sched_clock, j);
 	}
-	trace_rcu_utilization(TPS("Start scheduler-tick"));
+	// trace_rcu_utilization(TPS("Start scheduler-tick"));
 	lockdep_assert_irqs_disabled();
 	raw_cpu_inc(rcu_data.ticks_this_gp);
 	/* The load-acquire pairs with the store-release setting to true. */
@@ -2738,7 +2754,7 @@ void rcu_sched_clock_irq(int user)
 		rcu_note_voluntary_context_switch(current);
 	lockdep_assert_irqs_disabled();
 
-	trace_rcu_utilization(TPS("End scheduler-tick"));
+	// trace_rcu_utilization(TPS("End scheduler-tick"));
 }
 
 /*
@@ -2788,6 +2804,8 @@ static void force_qs_rnp(int (*f)(struct rcu_data *rdp))
 				 * Promote blocked tasks before reporting QS.
 				 * Otherwise tasks on per-CPU list aren't tracked.
 				 */
+				trace_printk("FQS-PROMOTE-CHECK: cpu=%d gp_seq=%lu (checking for late blockers)\n",
+					     rdp->cpu, rnp->gp_seq);
 				rcu_promote_blocked_tasks_rdp(rdp, rnp);
 				mask |= rdp->grpmask;
 				rcu_disable_urgency_upon_qs(rdp);
@@ -2863,7 +2881,7 @@ static __latent_entropy void rcu_core(void)
 
 	if (cpu_is_offline(smp_processor_id()))
 		return;
-	trace_rcu_utilization(TPS("Start RCU core"));
+	// trace_rcu_utilization(TPS("Start RCU core"));
 	WARN_ON_ONCE(!rdp->beenonline);
 
 	/* Report any deferred quiescent states if preemption enabled. */
@@ -2898,7 +2916,7 @@ static __latent_entropy void rcu_core(void)
 
 	/* Do any needed deferred wakeups of rcuo kthreads. */
 	do_nocb_deferred_wakeup(rdp);
-	trace_rcu_utilization(TPS("End RCU core"));
+	// trace_rcu_utilization(TPS("End RCU core"));
 
 	// If strict GPs, schedule an RCU reader in a clean environment.
 	if (IS_ENABLED(CONFIG_RCU_STRICT_GRACE_PERIOD))
@@ -2968,7 +2986,7 @@ static void rcu_cpu_kthread(unsigned int cpu)
 	unsigned long *j = this_cpu_ptr(&rcu_data.rcuc_activity);
 	int spincnt;
 
-	trace_rcu_utilization(TPS("Start CPU kthread@rcu_run"));
+	// trace_rcu_utilization(TPS("Start CPU kthread@rcu_run"));
 	for (spincnt = 0; spincnt < 10; spincnt++) {
 		WRITE_ONCE(*j, jiffies);
 		local_bh_disable();
@@ -2981,15 +2999,15 @@ static void rcu_cpu_kthread(unsigned int cpu)
 			rcu_core();
 		local_bh_enable();
 		if (!READ_ONCE(*workp)) {
-			trace_rcu_utilization(TPS("End CPU kthread@rcu_wait"));
+			// trace_rcu_utilization(TPS("End CPU kthread@rcu_wait"));
 			*statusp = RCU_KTHREAD_WAITING;
 			return;
 		}
 	}
 	*statusp = RCU_KTHREAD_YIELDING;
-	trace_rcu_utilization(TPS("Start CPU kthread@rcu_yield"));
+	// trace_rcu_utilization(TPS("Start CPU kthread@rcu_yield"));
 	schedule_timeout_idle(2);
-	trace_rcu_utilization(TPS("End CPU kthread@rcu_yield"));
+	// trace_rcu_utilization(TPS("End CPU kthread@rcu_yield"));
 	*statusp = RCU_KTHREAD_WAITING;
 	WRITE_ONCE(*j, jiffies);
 }
@@ -4458,6 +4476,8 @@ void rcutree_report_cpu_dead(void)
 		 * Promote blocked tasks from dying CPU's per-CPU list before
 		 * reporting QS. Otherwise those tasks won't block the GP.
 		 */
+		trace_printk("HOTPLUG-PROMOTE-CHECK: cpu=%d gp_seq=%lu (CPU going offline)\n",
+			     rdp->cpu, rnp->gp_seq);
 		rcu_promote_blocked_tasks_rdp(rdp, rnp);
 		/* Report quiescent state -before- changing ->qsmaskinitnext! */
 		rcu_disable_urgency_upon_qs(rdp);

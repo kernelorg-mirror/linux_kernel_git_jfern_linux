@@ -252,6 +252,8 @@ static void rcu_preempt_ctxt_queue(struct rcu_node *rnp, struct rcu_data *rdp)
 	 * blocked tasks.
 	 */
 	if (!rnp->gp_tasks && (blkd_state & RCU_GP_BLKD)) {
+		trace_printk("GP-TASKS-SET-DIRECT: pid=%d gp_seq=%lu rnp=%px qsmask=%lx (first blocker)\n",
+			     t->pid, rcu_state.gp_seq, rnp, rnp->qsmask);
 		WRITE_ONCE(rnp->gp_tasks, &t->rcu_node_entry);
 		WARN_ON_ONCE(rnp->completedqs == rnp->gp_seq);
 	}
@@ -327,7 +329,7 @@ void rcu_note_context_switch(bool preempt)
 	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
 	struct rcu_node *rnp;
 
-	trace_rcu_utilization(TPS("Start context switch"));
+	// trace_rcu_utilization(TPS("Start context switch"));
 	lockdep_assert_irqs_disabled();
 	WARN_ONCE(!preempt && rcu_preempt_depth() > 0, "Voluntary context switch within RCU read-side critical section!");
 	if (rcu_preempt_depth() > 0 &&
@@ -340,6 +342,9 @@ void rcu_note_context_switch(bool preempt)
 		/*
 		 * Check if a GP is in progress.
 		 */
+		trace_printk("BLOCK-CHECK: pid=%d cpu=%d gp_seq=%lu gp_in_progress=%d exp_gp_in_progress=%d norm=%d exp=%d\n",
+			     t->pid, rdp->cpu, rcu_state.gp_seq, rcu_gp_in_progress(),
+			     rcu_exp_gp_in_progress(), rdp->cpu_no_qs.b.norm, rdp->cpu_no_qs.b.exp);
 		if (!rcu_gp_in_progress() && !rcu_exp_gp_in_progress() &&
 		    !rdp->cpu_no_qs.b.norm && !rdp->cpu_no_qs.b.exp) {
 			/*
@@ -351,8 +356,14 @@ void rcu_note_context_switch(bool preempt)
 			raw_spin_lock(&rdp->blkd_lock);
 			list_add(&t->rcu_rdp_entry, &rdp->blkd_list);
 			raw_spin_unlock(&rdp->blkd_lock);
+			trace_printk("PCPU-ADD: pid=%d cpu=%d gp_seq=%lu qsmask=%lx\n",
+				     t->pid, rdp->cpu, rcu_state.gp_seq,
+				     rnp->qsmask);
 			trace_rcu_preempt_task(rcu_state.name, t->pid,
 					       rcu_seq_snap(&rnp->gp_seq));
+			trace_printk("RCU: Task %d->per-CPU list (cpu=%d, gp=%lu)\n",
+				     t->pid, rdp->cpu,
+				     rcu_seq_current(&rcu_state.gp_seq));
 		} else
 #endif
 		/* GP waiting (or per-CPU lists disabled) - add to rnp. */
@@ -367,11 +378,19 @@ void rcu_note_context_switch(bool preempt)
 			 */
 			WARN_ON_ONCE(!rcu_rdp_cpu_online(rdp));
 			WARN_ON_ONCE(!list_empty(&t->rcu_node_entry));
+			trace_printk("RNP-ADD: pid=%d cpu=%d gp_seq=%lu qsmask=%lx norm=%d exp=%d\n",
+				     t->pid, rdp->cpu, rcu_state.gp_seq,
+				     rnp->qsmask, rdp->cpu_no_qs.b.norm,
+				     rdp->cpu_no_qs.b.exp);
 			trace_rcu_preempt_task(rcu_state.name, t->pid,
 					       (rnp->qsmask & rdp->grpmask)
 					       ? rnp->gp_seq
 					       : rcu_seq_snap(&rnp->gp_seq));
 			rcu_preempt_ctxt_queue(rnp, rdp);
+			trace_printk("RCU: Task %d->rnp list (cpu=%d, norm=%d, exp=%d, gp=%lu)\n",
+				     t->pid, rdp->cpu, rdp->cpu_no_qs.b.norm,
+				     rdp->cpu_no_qs.b.exp,
+				     rcu_seq_current(&rcu_state.gp_seq));
 		}
 	} else {
 		rcu_preempt_deferred_qs(t);
@@ -390,7 +409,7 @@ void rcu_note_context_switch(bool preempt)
 	if (rdp->cpu_no_qs.b.exp)
 		rcu_report_exp_rdp(rdp);
 	rcu_tasks_qs(current, preempt);
-	trace_rcu_utilization(TPS("End context switch"));
+	// trace_rcu_utilization(TPS("End context switch"));
 }
 EXPORT_SYMBOL_GPL(rcu_note_context_switch);
 
@@ -601,11 +620,15 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 			 */
 			if (!rnp) {
 				/* Not promoted - no GP waiting for this task. */
+				trace_printk("PCPU-EXIT-NOPROMOTE: pid=%d cpu=%d gp_seq=%lu\n",
+					     t->pid, blocked_cpu, rcu_state.gp_seq);
 				local_irq_restore(flags);
 				return;
 			}
 		}
-		/* else: Task went directly to rnp->blkd_tasks. */
+		/* else: Task went directly to rnp->blkd_tasks, rnp already set above. */
+		trace_printk("PCPU-EXIT-PROMOTED: pid=%d cpu=%d gp_seq=%lu rnp=%px\n",
+			     t->pid, blocked_cpu, rcu_state.gp_seq, rnp);
 #endif
 		raw_spin_lock_rcu_node(rnp); /* irqs already disabled. */
 		WARN_ON_ONCE(rnp != t->rcu_blocked_node);
@@ -619,8 +642,12 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 		t->rcu_blocked_node = NULL;
 		trace_rcu_unlock_preempted_task(TPS("rcu_preempt"),
 						rnp->gp_seq, t->pid);
-		if (&t->rcu_node_entry == rnp->gp_tasks)
+		if (&t->rcu_node_entry == rnp->gp_tasks) {
+			trace_printk("GP-TASKS-ADVANCE: pid=%d gp_seq=%lu rnp=%px np=%px (was gp_tasks, now %s)\n",
+				     t->pid, rcu_state.gp_seq, rnp, np,
+				     np ? "advanced" : "NULL!");
 			WRITE_ONCE(rnp->gp_tasks, np);
+		}
 		if (&t->rcu_node_entry == rnp->exp_tasks)
 			WRITE_ONCE(rnp->exp_tasks, np);
 		if (IS_ENABLED(CONFIG_RCU_BOOST)) {
@@ -874,14 +901,15 @@ static void rcu_promote_blocked_tasks_rdp(struct rcu_data *rdp,
 		if (t->rcu_blocked_node != NULL)
 			continue;
 
-		/*
-		 * Add to rnp list and remove from per-CPU list. We must add to
-		 * TAIL so that the task blocks any ongoing GPs.
-		 */
+		/* Promote: add to rnp list and remove from per-CPU list. */
+		trace_printk("PROMOTE: pid=%d cpu=%d gp_seq=%lu\n",
+			     t->pid, rdp->cpu, rcu_state.gp_seq);
 		list_add_tail(&t->rcu_node_entry, &rnp->blkd_tasks);
 		t->rcu_blocked_node = rnp;
 		list_del_init(&t->rcu_rdp_entry);
 		t->rcu_blocked_cpu = -1;
+		trace_printk("RCU: Promoted task %d from cpu=%d to rnp (qsmask=%lx, expmask=%lx)\n",
+			     t->pid, rdp->cpu, rnp->qsmask, rnp->expmask);
 
 		/*
 		 * Set gp_tasks/exp_tasks if this is the first blocker and
@@ -889,8 +917,11 @@ static void rcu_promote_blocked_tasks_rdp(struct rcu_data *rdp,
 		 */
 		if (!rnp->gp_tasks && (rnp->qsmask & rdp->grpmask))
 			WRITE_ONCE(rnp->gp_tasks, &t->rcu_node_entry);
-		if (!rnp->exp_tasks && (rnp->expmask & rdp->grpmask))
+		if (!rnp->exp_tasks && (rnp->expmask & rdp->grpmask)) {
 			WRITE_ONCE(rnp->exp_tasks, &t->rcu_node_entry);
+			trace_printk("RCU EXP: Late exp_tasks set for task %d (cpu=%d, expmask=%lx)\n",
+				     t->pid, rdp->cpu, rnp->expmask);
+		}
 	}
 	raw_spin_unlock(&rdp->blkd_lock);
 }
@@ -917,6 +948,8 @@ static void rcu_promote_blocked_tasks(struct rcu_node *rnp)
 
 	for (cpu = rnp->grplo; cpu <= rnp->grphi; cpu++) {
 		rdp_cpu = per_cpu_ptr(&rcu_data, cpu);
+		trace_printk("GP-INIT-PROMOTE-CHECK: cpu=%d gp_seq=%lu (GP init promotion)\n",
+			     cpu, rnp->gp_seq);
 		rcu_promote_blocked_tasks_rdp(rdp_cpu, rnp);
 	}
 }
@@ -1156,7 +1189,7 @@ EXPORT_SYMBOL_GPL(rcu_all_qs);
  */
 void rcu_note_context_switch(bool preempt)
 {
-	trace_rcu_utilization(TPS("Start context switch"));
+	// trace_rcu_utilization(TPS("Start context switch"));
 	rcu_qs();
 	/* Load rcu_urgent_qs before other flags. */
 	if (!smp_load_acquire(this_cpu_ptr(&rcu_data.rcu_urgent_qs)))
@@ -1166,7 +1199,7 @@ void rcu_note_context_switch(bool preempt)
 		rcu_momentary_eqs();
 out:
 	rcu_tasks_qs(current, preempt);
-	trace_rcu_utilization(TPS("End context switch"));
+	// trace_rcu_utilization(TPS("End context switch"));
 }
 EXPORT_SYMBOL_GPL(rcu_note_context_switch);
 
@@ -1387,13 +1420,13 @@ static int rcu_boost_kthread(void *arg)
 	int spincnt = 0;
 	int more2boost;
 
-	trace_rcu_utilization(TPS("Start boost kthread@init"));
+	// trace_rcu_utilization(TPS("Start boost kthread@init"));
 	for (;;) {
 		WRITE_ONCE(rnp->boost_kthread_status, RCU_KTHREAD_WAITING);
-		trace_rcu_utilization(TPS("End boost kthread@rcu_wait"));
+		// trace_rcu_utilization(TPS("End boost kthread@rcu_wait"));
 		rcu_wait(READ_ONCE(rnp->boost_tasks) ||
 			 READ_ONCE(rnp->exp_tasks));
-		trace_rcu_utilization(TPS("Start boost kthread@rcu_wait"));
+		// trace_rcu_utilization(TPS("Start boost kthread@rcu_wait"));
 		WRITE_ONCE(rnp->boost_kthread_status, RCU_KTHREAD_RUNNING);
 		more2boost = rcu_boost(rnp);
 		if (more2boost)
@@ -1402,14 +1435,14 @@ static int rcu_boost_kthread(void *arg)
 			spincnt = 0;
 		if (spincnt > 10) {
 			WRITE_ONCE(rnp->boost_kthread_status, RCU_KTHREAD_YIELDING);
-			trace_rcu_utilization(TPS("End boost kthread@rcu_yield"));
+			// trace_rcu_utilization(TPS("End boost kthread@rcu_yield"));
 			schedule_timeout_idle(2);
-			trace_rcu_utilization(TPS("Start boost kthread@rcu_yield"));
+			// trace_rcu_utilization(TPS("Start boost kthread@rcu_yield"));
 			spincnt = 0;
 		}
 	}
 	/* NOTREACHED */
-	trace_rcu_utilization(TPS("End boost kthread@notreached"));
+	// trace_rcu_utilization(TPS("End boost kthread@notreached"));
 	return 0;
 }
 

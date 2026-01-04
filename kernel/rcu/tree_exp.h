@@ -151,8 +151,11 @@ static void __maybe_unused sync_exp_reset_tree(void)
 		 * additional blocking tasks will also block the expedited GP
 		 * until such time as the ->expmask bits are cleared.
 		 */
-		if (rcu_is_leaf_node(rnp) && rcu_preempt_has_tasks(rnp))
+		if (rcu_is_leaf_node(rnp) && rcu_preempt_has_tasks(rnp)) {
 			WRITE_ONCE(rnp->exp_tasks, rnp->blkd_tasks.next);
+			trace_printk("RCU EXP: Set exp_tasks for rnp (level=%d, grplo=%d, grphi=%d)\n",
+				     rnp->level, rnp->grplo, rnp->grphi);
+		}
 		raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
 	}
 }
@@ -794,6 +797,8 @@ static void rcu_exp_handler(void *unused)
 		if (rnp->expmask & rdp->grpmask) {
 			WRITE_ONCE(rdp->cpu_no_qs.b.exp, true);
 			t->rcu_read_unlock_special.b.exp_hint = true;
+			trace_printk("RCU EXP IPI: Task %d in crit section (cpu=%d, depth=%d)\n",
+				     t->pid, rdp->cpu, depth);
 		}
 		raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
 		return;
