@@ -11,6 +11,7 @@
 #define __LINUX_RCU_H
 
 #include <linux/slab.h>
+#include <linux/rcupdate.h>
 #include <trace/events/rcu.h>
 
 /*
@@ -302,8 +303,10 @@ do { \
 
 #define rcu_ftrace_dump_stall_unsuppress() \
 do { \
-	if (rcu_cpu_stall_suppress == 3) \
+	if (rcu_cpu_stall_suppress == 3) { \
 		rcu_cpu_stall_suppress = 0; \
+		rcu_cpu_stall_reset(); \
+	} \
 } while (0)
 
 #else /* #endif #ifdef CONFIG_RCU_STALL_COMMON */
