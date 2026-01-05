@@ -28,7 +28,12 @@ use crate::{
         commands::GetGspStaticInfoReply,
         Gsp, //
     },
-    mm::GpuMm,
+    mm::{
+        bar_user::BarUser,
+        pagetable::MmuVersion,
+        GpuMm,
+        VramAddress, //
+    },
     regs,
 };
 
@@ -153,6 +158,11 @@ impl Chipset {
             Architecture::Blackwell => Some(FspCotVersion::new(2)),
             _ => None,
         }
+    }
+
+    /// Returns the MMU version for this chipset.
+    pub(crate) fn mmu_version(self) -> MmuVersion {
+        MmuVersion::from(self.arch())
     }
 }
 
@@ -327,6 +337,8 @@ pub(crate) struct Gpu {
     gsp: Gsp,
     /// Static GPU information from GSP.
     gsp_static_info: GetGspStaticInfoReply,
+    /// BAR1 user interface for CPU access to GPU virtual memory.
+    bar_user: BarUser,
 }
 
 impl Gpu {
@@ -400,6 +412,13 @@ impl Gpu {
                         physical_memory_size: usable_vram.end - usable_vram.start,
                         chunk_size: Alignment::new::<SZ_4K>(),
                     }, pramin_vram_region)?
+                },
+
+                // Create BAR1 user interface for CPU access to GPU virtual memory.
+                bar_user: {
+                    let pdb_addr = VramAddress::new(gsp_static_info.bar1_pde_base);
+                    let bar1_size = pdev.resource_len(1)?;
+                    BarUser::new(pdb_addr, spec.chipset, bar1_size)?
                 },
 
                 bar: devres_bar,
