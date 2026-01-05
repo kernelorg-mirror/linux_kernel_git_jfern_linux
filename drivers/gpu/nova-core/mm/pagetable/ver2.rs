@@ -59,11 +59,11 @@ impl VirtualAddressV2 {
 impl VaLevelIndex for VirtualAddressV2 {
     fn level_index(&self, level: u64) -> u64 {
         match level {
-            0 => self.pde3_idx(),
-            1 => self.pde2_idx(),
-            2 => self.pde1_idx(),
-            3 => self.pde0_idx(),
-            4 => self.pt_idx(),
+            0 => self.pde3_idx().get(),
+            1 => self.pde2_idx().get(),
+            2 => self.pde1_idx().get(),
+            3 => self.pde0_idx().get(),
+            4 => self.pt_idx().get(),
             _ => 0,
         }
     }
