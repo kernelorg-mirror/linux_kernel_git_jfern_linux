@@ -3,7 +3,7 @@
 #
 # Usage: kvm-series.sh config-list commit-id-list [ kvm.sh parameters ]
 #
-# Tests the specified list of unadorned configs ("TREE01 SRCU-P" but not
+# Tests the specified list of unadorned configs ("NOCB01 SRCU-P" but not
 # "CFLIST" or "3*TRACE01") and an indication of a set of commits to test,
 # then runs each commit through the specified list of commits using kvm.sh.
 # The runs are grouped into a -series/config/commit directory tree.

@@ -293,7 +293,7 @@ the following summary at the end of the run on a 12-CPU system::
     TASKS03 ------- 19416 GPs (3.59556/s) [tasks: g0 f0x0 ]
     TINY01 ------- 836134 GPs (154.84/s) [rcu: g0 f0x0 ] n_max_cbs: 34198
     TINY02 ------- 850371 GPs (157.476/s) [rcu: g0 f0x0 ] n_max_cbs: 2631
-    TREE01 ------- 162625 GPs (30.1157/s) [rcu: g1124169 f0x0 ]
+    NOCB01 ------- 162625 GPs (30.1157/s) [rcu: g1124169 f0x0 ]
     TREE02 ------- 333003 GPs (61.6672/s) [rcu: g2647753 f0x0 ] n_max_cbs: 35844
     TREE03 ------- 306623 GPs (56.782/s) [rcu: g2975325 f0x0 ] n_max_cbs: 1496497
     CPU count limited from 16 to 12
