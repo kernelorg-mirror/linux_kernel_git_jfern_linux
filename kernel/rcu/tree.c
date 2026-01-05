@@ -221,6 +221,7 @@ static int rcu_gp_in_progress(void)
 	return rcu_seq_state(rcu_seq_current(&rcu_state.gp_seq));
 }
 
+#ifdef CONFIG_RCU_PER_CPU_BLOCKED_LISTS
 /*
  * Return true if an expedited RCU grace period is in progress.
  * Similar to rcu_gp_in_progress() but checks the expedited sequence.
@@ -229,6 +230,7 @@ static int rcu_exp_gp_in_progress(void)
 {
 	return rcu_seq_state(rcu_seq_current(&rcu_state.expedited_sequence));
 }
+#endif
 
 /*
  * Return the number of callbacks queued on the specified CPU.
