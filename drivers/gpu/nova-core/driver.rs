@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use kernel::{
-    auxiliary,
+    auxiliary, bindings,
+    device::Bound,
     device::Core,
     devres::Devres,
     dma::Device,
@@ -47,8 +48,27 @@ const BAR0_SIZE: usize = SZ_16M;
 const GPU_DMA_BITS: u32 = 47;
 
 pub(crate) type Bar0 = pci::Bar<BAR0_SIZE>;
-#[expect(dead_code)]
 pub(crate) type Bar1 = pci::Bar;
+
+/// Returns the Linux PCI resource index that holds BAR1 for an NVIDIA GPU.
+///
+/// On Maxwell through Ada, BAR0 is a 32-bit memory BAR occupying a single
+/// Linux PCI resource slot, so BAR1 lives at index 1. Starting with Blackwell
+/// (and on some Ampere GA100 / Hopper SKUs) BAR0 is a 64-bit memory BAR that
+/// consumes two consecutive resource slots: index 0 holds the low 32 bits and
+/// index 1 holds the high 32 bits (with no `flags` / or size of its own),
+/// shifting BAR1 to index 2.
+///
+pub(crate) fn bar1_resource_index(pdev: &pci::Device<Bound>) -> Result<u32> {
+    // Probe the `IORESOURCE_MEM_64` flag of BAR0 as a robust way of exposing
+    // if BAR0 and hence BAR1 is 64-bit.
+    let flags0 = pdev.resource_flags(0)?;
+    if flags0 & bindings::IORESOURCE_MEM_64 as c_ulong != 0 {
+        Ok(2)
+    } else {
+        Ok(1)
+    }
+}
 
 kernel::pci_device_table!(
     PCI_TABLE,

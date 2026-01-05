@@ -16,7 +16,10 @@ use kernel::{
 
 use crate::{
     bounded_enum,
-    driver::Bar0,
+    driver::{
+        Bar0,
+        Bar1, //
+    },
     falcon::{
         gsp::Gsp as GspFalcon,
         sec2::Sec2 as Sec2Falcon,
@@ -28,7 +31,12 @@ use crate::{
         commands::GetGspStaticInfoReply,
         Gsp, //
     },
-    mm::GpuMm,
+    mm::{
+        bar_user::BarUser,
+        pagetable::MmuVersion,
+        GpuMm,
+        VramAddress, //
+    },
     regs,
 };
 
@@ -121,6 +129,11 @@ impl Chipset {
     /// This includes all chipsets < GA102.
     pub(crate) const fn needs_fwsec_bootloader(self) -> bool {
         matches!(self.arch(), Architecture::Turing) || matches!(self, Self::GA100)
+    }
+
+    /// Returns the MMU version for this chipset.
+    pub(crate) fn mmu_version(self) -> MmuVersion {
+        MmuVersion::from(self.arch())
     }
 }
 
@@ -235,6 +248,8 @@ pub(crate) struct Gpu {
     spec: Spec,
     /// MMIO mapping of PCI BAR 0
     bar: Arc<Devres<Bar0>>,
+    /// MMIO mapping of PCI BAR 1.
+    bar1: Arc<Devres<Bar1>>,
     /// System memory page required for flushing all pending GPU-side memory writes done through
     /// PCIE into system memory, via sysmembar (A GPU-initiated HW memory-barrier operation).
     sysmem_flush: SysmemFlush,
@@ -248,6 +263,8 @@ pub(crate) struct Gpu {
     #[pin]
     gsp: Gsp,
     gsp_static_info: GetGspStaticInfoReply,
+    /// BAR1 user interface for CPU access to GPU virtual memory.
+    bar_user: Arc<BarUser>,
 }
 
 impl Gpu {
@@ -308,6 +325,28 @@ impl Gpu {
                     size: usable_vram.end - usable_vram.start,
                     chunk_size: Alignment::new::<SZ_4K>(),
                 }, pramin_vram_region)?, GFP_KERNEL)?
+            },
+
+            bar1: {
+                let bar1_idx = crate::driver::bar1_resource_index(pdev)?;
+                Arc::pin_init(pdev.iomap_region(bar1_idx, c"nova-core/bar1"), GFP_KERNEL)?
+            },
+
+            // Create BAR1 user interface for CPU access to GPU virtual memory.
+            bar_user: {
+                let pdb_addr = VramAddress::new(gsp_static_info.bar1_pde_base);
+                let bar1_idx = crate::driver::bar1_resource_index(pdev)?;
+                let bar1_size = pdev.resource_len(bar1_idx)?;
+                Arc::pin_init(
+                    BarUser::new(
+                        pdb_addr,
+                        spec.chipset,
+                        bar1_size,
+                        mm.clone(),
+                        bar1.clone(),
+                    )?,
+                    GFP_KERNEL,
+                )?
             },
 
             bar: devres_bar,
