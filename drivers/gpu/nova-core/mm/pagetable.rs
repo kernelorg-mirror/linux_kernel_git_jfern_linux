@@ -8,6 +8,8 @@
 
 #![expect(dead_code)]
 
+pub(crate) mod ver2;
+
 use crate::gpu::Architecture;
 
 /// Extracts the page table index at a given level from a virtual address.
