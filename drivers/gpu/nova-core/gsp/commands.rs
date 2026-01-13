@@ -161,10 +161,8 @@ impl CommandToGsp for GetGspStaticInfo {
 pub(crate) struct GetGspStaticInfoReply {
     gpu_name: [u8; 64],
     /// Usable FB (VRAM) region for driver memory allocation.
-    #[expect(dead_code)]
     pub(crate) usable_fb_region: Range<u64>,
     /// End of VRAM.
-    #[expect(dead_code)]
     pub(crate) total_fb_end: u64,
 }
 
