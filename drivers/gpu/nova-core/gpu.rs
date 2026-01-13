@@ -4,11 +4,13 @@ use kernel::{
     device,
     devres::Devres,
     fmt,
+    gpu::buddy::GpuBuddyParams,
     io::Io,
     num::Bounded,
     pci,
     prelude::*,
-    sizes::SizeConstants,
+    ptr::Alignment,
+    sizes::{SizeConstants, SZ_4K},
     sync::Arc, //
 };
 
@@ -26,6 +28,7 @@ use crate::{
         commands::GetGspStaticInfoReply,
         Gsp, //
     },
+    mm::GpuMm,
     regs,
 };
 
@@ -239,6 +242,8 @@ pub(crate) struct Gpu {
     gsp_falcon: Falcon<GspFalcon>,
     /// SEC2 falcon instance, used for GSP boot up and cleanup.
     sec2_falcon: Falcon<Sec2Falcon>,
+    /// GPU memory manager owning memory management resources.
+    mm: Arc<GpuMm>,
     /// GSP runtime data. Temporarily an empty placeholder.
     #[pin]
     gsp: Gsp,
@@ -279,10 +284,31 @@ impl Gpu {
                 .inspect(|info| {
                     dev_info!(
                         pdev.as_ref(),
+                        "Using FB region: {:#x}..{:#x}\n",
+                        info.usable_fb_region.start,
+                        info.usable_fb_region.end
+                    );
+
+                    dev_info!(
+                        pdev.as_ref(),
                         "Total physical VRAM: {} MiB\n",
                         info.total_fb_end / u64::SZ_1M
                     );
                 })?,
+
+            // Create GPU memory manager owning memory management resources.
+            mm: {
+                let usable_vram = &gsp_static_info.usable_fb_region;
+
+                // PRAMIN covers all physical VRAM (including GSP-reserved areas
+                // above the usable region, e.g. the BAR1 page directory).
+                let pramin_vram_region = 0..gsp_static_info.total_fb_end;
+                Arc::pin_init(GpuMm::new(devres_bar.clone(), pdev.as_ref(), GpuBuddyParams {
+                    base_offset: usable_vram.start,
+                    size: usable_vram.end - usable_vram.start,
+                    chunk_size: Alignment::new::<SZ_4K>(),
+                }, pramin_vram_region)?, GFP_KERNEL)?
+            },
 
             bar: devres_bar,
         })
