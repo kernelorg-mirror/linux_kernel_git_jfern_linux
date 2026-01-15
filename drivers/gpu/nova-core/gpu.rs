@@ -437,4 +437,40 @@ impl Gpu {
             .inspect(|bar| self.sysmem_flush.unregister(bar))
             .is_err());
     }
+
+    /// Run selftests on the constructed [`Gpu`].
+    pub(crate) fn run_selftests(
+        mut self: Pin<&mut Self>,
+        pdev: &pci::Device<device::Bound>,
+    ) -> Result {
+        self.as_mut().run_mm_selftests(pdev)?;
+        Ok(())
+    }
+
+    #[cfg(CONFIG_NOVA_MM_SELFTESTS)]
+    fn run_mm_selftests(self: Pin<&mut Self>, pdev: &pci::Device<device::Bound>) -> Result {
+        use crate::driver::BAR1_SIZE;
+
+        // BAR1 self-tests.
+        let bar1 = Arc::pin_init(
+            pdev.iomap_region_sized::<BAR1_SIZE>(1, c"nova-core/bar1"),
+            GFP_KERNEL,
+        )?;
+        let bar1_access = bar1.access(pdev.as_ref())?;
+
+        crate::mm::bar_user::run_self_test(
+            pdev.as_ref(),
+            &self.mm,
+            bar1_access,
+            self.gsp_static_info.bar1_pde_base,
+            self.spec.chipset,
+        )?;
+
+        Ok(())
+    }
+
+    #[cfg(not(CONFIG_NOVA_MM_SELFTESTS))]
+    fn run_mm_selftests(self: Pin<&mut Self>, _pdev: &pci::Device<device::Bound>) -> Result {
+        Ok(())
+    }
 }
