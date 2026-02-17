@@ -10,6 +10,7 @@
 
 pub(crate) mod ver2;
 pub(crate) mod ver3;
+pub(crate) mod walk;
 
 use crate::gpu::Architecture;
 use crate::mm::{
