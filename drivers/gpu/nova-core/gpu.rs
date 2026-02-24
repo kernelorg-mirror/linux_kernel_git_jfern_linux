@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
+use core::cell::Cell;
+
 use kernel::{
     device,
     devres::Devres,
@@ -7,10 +9,7 @@ use kernel::{
     gpu::buddy::GpuBuddyParams,
     pci,
     prelude::*,
-    sizes::{
-        SZ_1M,
-        SZ_4K, //
-    },
+    sizes::SZ_4K,
     sync::Arc, //
 };
 
@@ -28,8 +27,16 @@ use crate::{
         Gsp, //
     },
     mm::GpuMm,
+    num::IntoSafeCast,
     regs,
 };
+
+/// Parameters extracted from GSP boot for initializing memory subsystems.
+#[derive(Clone, Copy)]
+struct BootParams {
+    usable_vram_start: u64,
+    usable_vram_size: u64,
+}
 
 macro_rules! define_chipset {
     ({ $($variant:ident = $value:expr),* $(,)* }) =>
@@ -274,6 +281,13 @@ impl Gpu {
         devres_bar: Arc<Devres<Bar0>>,
         bar: &'a Bar0,
     ) -> impl PinInit<Self, Error> + 'a {
+        // Cell to share boot parameters between GSP boot and subsequent initializations.
+        // Contains usable VRAM region from FbLayout for use by the buddy allocator.
+        let boot_params: Cell<BootParams> = Cell::new(BootParams {
+            usable_vram_start: 0,
+            usable_vram_size: 0,
+        });
+
         try_pin_init!(Self {
             spec: Spec::new(pdev.as_ref(), bar).inspect(|spec| {
                 dev_info!(pdev.as_ref(),"NVIDIA ({})\n", spec);
@@ -295,18 +309,42 @@ impl Gpu {
 
             sec2_falcon: Falcon::new(pdev.as_ref(), spec.chipset)?,
 
-            // Create GPU memory manager owning memory management resources.
-            // This will be initialized with the usable VRAM region from GSP in a later
-            // patch. For now, we use a placeholder of 1MB.
-            mm <- GpuMm::new(devres_bar.clone(), GpuBuddyParams {
-                base_offset_bytes: 0,
-                physical_memory_size_bytes: SZ_1M as u64,
-                chunk_size_bytes: SZ_4K as u64,
-            })?,
-
             gsp <- Gsp::new(pdev),
 
-            gsp_static_info: { gsp.boot(pdev, bar, spec.chipset, gsp_falcon, sec2_falcon)?.0 },
+            // Boot GSP and extract usable VRAM region for buddy allocator.
+            gsp_static_info: {
+                let (info, fb_layout) = gsp.boot(pdev, bar, spec.chipset, gsp_falcon, sec2_falcon)?;
+
+                let usable_vram = fb_layout.usable_vram.as_ref().ok_or_else(|| {
+                    dev_err!(pdev.as_ref(), "No usable FB regions found from GSP\n");
+                    ENODEV
+                })?;
+
+                dev_info!(
+                    pdev.as_ref(),
+                    "Using FB region: {:#x}..{:#x}\n",
+                    usable_vram.start,
+                    usable_vram.end
+                );
+
+                boot_params.set(BootParams {
+                    usable_vram_start: usable_vram.start,
+                    usable_vram_size: usable_vram.end - usable_vram.start,
+                });
+
+                info
+            },
+
+            // Create GPU memory manager owning memory management resources.
+            // Uses the usable VRAM region from GSP for buddy allocator.
+            mm <- {
+                let params = boot_params.get();
+                GpuMm::new(devres_bar.clone(), GpuBuddyParams {
+                    base_offset_bytes: params.usable_vram_start,
+                    physical_memory_size_bytes: params.usable_vram_size,
+                    chunk_size_bytes: SZ_4K.into_safe_cast(),
+                })?
+            },
 
             bar: devres_bar,
         })
