@@ -23191,6 +23191,14 @@ S:	Maintained
 T:	git https://github.com/Rust-for-Linux/linux.git ffi-next
 F:	rust/kernel/ffi/
 
+RUST [GPU BUDDY]
+M:	Joel Fernandes <joelagnelf@nvidia.com>
+L:	dri-devel@lists.freedesktop.org
+L:	rust-for-linux@vger.kernel.org
+S:	Maintained
+F:	rust/helpers/gpu.c
+F:	rust/kernel/gpu/
+
 RUST [NUM]
 M:	Alexandre Courbot <acourbot@nvidia.com>
 R:	Yury Norov <yury.norov@gmail.com>
