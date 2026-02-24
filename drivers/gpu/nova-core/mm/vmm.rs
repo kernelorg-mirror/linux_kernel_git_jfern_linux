@@ -9,19 +9,34 @@
 #![allow(dead_code)]
 
 use kernel::{
-    gpu::buddy::AllocatedBlocks,
-    prelude::*, //
+    gpu::buddy::{
+        AllocatedBlocks,
+        BuddyFlags,
+        GpuBuddy,
+        GpuBuddyAllocParams,
+        GpuBuddyParams, //
+    },
+    prelude::*,
+    sizes::SZ_4K, //
 };
 
-use crate::mm::{
-    pagetable::{
-        walk::{PtWalk, WalkResult},
-        MmuVersion, //
+use core::ops::Range;
+
+use crate::{
+    mm::{
+        pagetable::{
+            walk::{PtWalk, WalkResult},
+            MmuVersion, //
+        },
+        GpuMm,
+        Pfn,
+        Vfn,
+        VramAddress,
+        PAGE_SIZE, //
     },
-    GpuMm,
-    Pfn,
-    Vfn,
-    VramAddress, //
+    num::{
+        IntoSafeCast, //
+    },
 };
 
 /// Virtual Memory Manager for a GPU address space.
@@ -34,21 +49,82 @@ pub(crate) struct Vmm {
     pub(crate) mmu_version: MmuVersion,
     /// Page table allocations required for mappings.
     page_table_allocs: KVec<Pin<KBox<AllocatedBlocks>>>,
+    /// Buddy allocator for virtual address range tracking.
+    virt_buddy: GpuBuddy,
 }
 
 impl Vmm {
     /// Create a new [`Vmm`] for the given Page Directory Base address.
-    pub(crate) fn new(pdb_addr: VramAddress, mmu_version: MmuVersion) -> Result<Self> {
+    ///
+    /// The [`Vmm`] will manage a virtual address space of `va_size` bytes.
+    pub(crate) fn new(
+        pdb_addr: VramAddress,
+        mmu_version: MmuVersion,
+        va_size: u64,
+    ) -> Result<Self> {
         // Only MMU v2 is supported for now.
         if mmu_version != MmuVersion::V2 {
             return Err(ENOTSUPP);
         }
 
+        let virt_buddy = GpuBuddy::new(GpuBuddyParams {
+            base_offset_bytes: 0,
+            physical_memory_size_bytes: va_size,
+            chunk_size_bytes: SZ_4K.into_safe_cast(),
+        })?;
+
         Ok(Self {
             pdb_addr,
             mmu_version,
             page_table_allocs: KVec::new(),
+            virt_buddy,
         })
+    }
+
+    /// Allocate a contiguous virtual frame number range.
+    ///
+    /// # Arguments
+    ///
+    /// - `num_pages`: Number of pages to allocate.
+    /// - `va_range`: `None` = allocate anywhere, `Some(range)` = constrain allocation to the given
+    ///   range.
+    pub(crate) fn alloc_vfn_range(
+        &self,
+        num_pages: usize,
+        va_range: Option<Range<u64>>,
+    ) -> Result<(Vfn, Pin<KBox<AllocatedBlocks>>)> {
+        let np: u64 = num_pages.into_safe_cast();
+        let size_bytes: u64 = np
+            .checked_mul(PAGE_SIZE.into_safe_cast())
+            .ok_or(EOVERFLOW)?;
+
+        let (start, end) = match va_range {
+            Some(r) => {
+                let range_size = r.end.checked_sub(r.start).ok_or(EOVERFLOW)?;
+                if range_size != size_bytes {
+                    return Err(EINVAL);
+                }
+                (r.start, r.end)
+            }
+            None => (0, 0),
+        };
+
+        let params = GpuBuddyAllocParams {
+            start_range_address: start,
+            end_range_address: end,
+            size_bytes,
+            min_block_size_bytes: SZ_4K.into_safe_cast(),
+            buddy_flags: BuddyFlags::try_new(BuddyFlags::CONTIGUOUS_ALLOCATION)?,
+        };
+
+        let alloc = KBox::pin_init(self.virt_buddy.alloc_blocks(&params), GFP_KERNEL)?;
+
+        // Get the starting offset of the first block (only block as range is contiguous).
+        let offset = alloc.iter().next().ok_or(ENOMEM)?.offset();
+        let page_size: u64 = PAGE_SIZE.into_safe_cast();
+        let vfn = Vfn::new(offset / page_size);
+
+        Ok((vfn, alloc))
     }
 
     /// Read the [`Pfn`] for a mapped [`Vfn`] if one is mapped.
