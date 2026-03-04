@@ -8,6 +8,7 @@ use kernel::{
     num::Bounded,
     pci,
     prelude::*,
+    sizes::SizeConstants,
     sync::Arc, //
 };
 
@@ -273,7 +274,15 @@ impl Gpu {
 
             gsp <- Gsp::new(pdev),
 
-            gsp_static_info: { gsp.boot(pdev, bar, spec.chipset, gsp_falcon, sec2_falcon)? },
+            gsp_static_info: gsp
+                .boot(pdev, bar, spec.chipset, gsp_falcon, sec2_falcon)
+                .inspect(|info| {
+                    dev_info!(
+                        pdev.as_ref(),
+                        "Total physical VRAM: {} MiB\n",
+                        info.total_fb_end / u64::SZ_1M
+                    );
+                })?,
 
             bar: devres_bar,
         })
