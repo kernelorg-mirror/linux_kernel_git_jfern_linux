@@ -125,5 +125,12 @@ fn map_into_lvl(sg_table: &SGTable<Owned<VVec<u8>>>, mut dst: VVec<u8>) -> Resul
         }
     }
 
+    // Zero-pad to the next GSP_PAGE_SIZE boundary. GSP-RM reads entire 4KB pages from
+    // each radix3 level and relies on zero entries as end-of-level terminators. Without
+    // this padding, stale data beyond our valid entries gets misinterpreted as additional
+    // page table entries.
+    let padded = dst.len().next_multiple_of(GSP_PAGE_SIZE);
+    dst.resize(padded, 0, GFP_KERNEL)?;
+
     Ok(dst)
 }
