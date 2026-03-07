@@ -1,119 +1,104 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! MCTP/NVDM protocol types for NVIDIA GPU firmware communication.
+//! MCTP/NVDM protocol support for inter-processor communication.
 //!
-//! MCTP (Management Component Transport Protocol) carries NVDM (NVIDIA
-//! Device Management) messages between the kernel driver and GPU firmware
-//! processors such as FSP and GSP.
+//! MCTP (Management Component Transport Protocol, DMTF DSP0236) provides a
+//! transport-agnostic message exchange format. NVDM (NVIDIA Data Model) is a
+//! vendor-defined message layer on top of MCTP.
+//!
+//! Multiple GPU subsystems (FSP, GSP, SEC2) use MCTP/NVDM framing. This module
+//! provides the shared header types and helpers for all of them.
+//!
+//! Open RM reference:
+//!   `arch/nvalloc/common/inc/mctp_format.h`
+//!   `arch/nvalloc/common/inc/nvdm_format.h`
 
-/// NVDM message type identifiers carried over MCTP.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub(crate) enum NvdmType {
-    /// Chain of Trust boot message.
-    Cot = 0x14,
-    /// FSP command response.
-    FspResponse = 0x15,
-}
-
-impl TryFrom<u8> for NvdmType {
-    type Error = u8;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            x if x == Self::Cot as u8 => Ok(Self::Cot),
-            x if x == Self::FspResponse as u8 => Ok(Self::FspResponse),
-            _ => Err(value),
-        }
-    }
-}
-
-impl From<NvdmType> for u8 {
-    fn from(value: NvdmType) -> Self {
-        value as u8
-    }
-}
-
+// MCTP transport header bit layout (DMTF DSP0236):
+//
+//  31  30  29:28  27  26:24  23:16  15:8  7:4   3:0
+// [SOM|EOM| SEQ  | TO| TAG | SEID | DEID| RSVD| VER]
+//
+// TAG, TO, and RSVD are always zero in current usage.
 bitfield! {
-    pub(crate) struct MctpHeader(u32), "MCTP transport header for NVIDIA firmware messages." {
-        31:31 som as bool, "Start-of-message bit.";
-        30:30 eom as bool, "End-of-message bit.";
-        29:28 seq as u8, "Packet sequence number.";
-        23:16 seid as u8, "Source endpoint ID.";
+    pub(crate) struct TransportHeader(u32), "MCTP transport header (first DWORD)." {
+        31:31 som as bool, "Start of Message flag";
+        30:30 eom as bool, "End of Message flag";
+        29:28 seq as u8, "Packet sequence number (0-3, wraps modulo 4)";
+        23:16 seid as u8, "Source Endpoint ID";
+        15:8  deid as u8, "Destination Endpoint ID";
+        3:0   version as u8, "Header version (1 for MCTP 1.0)";
     }
 }
 
-impl MctpHeader {
-    /// Build a single-packet MCTP header (SOM=1, EOM=1, SEQ=0, SEID=0).
-    pub(crate) fn single_packet() -> Self {
-        Self::default().set_som(true).set_eom(true)
-    }
+impl TransportHeader {
+    /// MCTP specification version 1.0.
+    const VERSION: u8 = 1;
 
-    /// Return the raw packed u32.
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-
-    /// Check if this is a complete single-packet message (SOM=1 and EOM=1).
-    pub(crate) fn is_single_packet(self) -> bool {
-        self.som() && self.eom()
-    }
-}
-
-impl From<u32> for MctpHeader {
-    fn from(raw: u32) -> Self {
+    /// Create a transport header from a raw u32 value (for parsing received messages).
+    pub(crate) fn from_raw(raw: u32) -> Self {
         Self(raw)
     }
-}
 
-/// MCTP message type for PCI vendor-defined messages.
-const MSG_TYPE_VENDOR_PCI: u8 = 0x7e;
-
-/// NVIDIA PCI vendor ID.
-const VENDOR_ID_NV: u16 = 0x10de;
-
-bitfield! {
-    pub(crate) struct NvdmHeader(u32), "NVIDIA Vendor-Defined Message header over MCTP." {
-        31:24 raw_nvdm_type as u8, "Raw NVDM message type.";
-        23:8 vendor_id as u16, "PCI vendor ID.";
-        6:0 msg_type as u8, "MCTP vendor-defined message type.";
+    /// Create a new MCTP transport header.
+    ///
+    /// TAG and TO fields are always zero (not needed when messages are
+    /// single-packet and do not use request/response tag correlation).
+    pub(crate) fn new(som: bool, eom: bool, seid: u8, deid: u8, seq: u8) -> Self {
+        Self::default()
+            .set_version(Self::VERSION)
+            .set_som(som)
+            .set_eom(eom)
+            .set_seid(seid)
+            .set_deid(deid)
+            .set_seq(seq)
     }
 }
 
+// NVDM over MCTP message header bit layout:
+//
+//  31:24      23:8        7     6:0
+// [NVDM_TYPE | VENDOR_ID | IC | MSG_TYPE]
+//
+// IC (Instance ID) is always zero in current usage.
+bitfield! {
+    pub(crate) struct NvdmHeader(u32), "NVDM over MCTP message header (second DWORD)." {
+        31:24 nvdm_type as u8, "NVDM message type (subsystem-specific)";
+        23:8  vendor_id as u16, "PCI Vendor ID";
+        6:0   msg_type as u8, "MCTP message type";
+    }
+}
+
+/// MCTP message type for vendor-defined PCI messages (DMTF DSP0236).
+pub(crate) const MSG_TYPE_VENDOR_PCI: u8 = 0x7e;
+
+/// NVIDIA PCI Vendor ID.
+pub(crate) const VENDOR_ID_NV: u16 = 0x10de;
+
 impl NvdmHeader {
-    /// Build an NVDM header for the given message type.
-    pub(crate) fn new(nvdm_type: NvdmType) -> Self {
+    /// Create an NVDM header from a raw u32 value (for parsing received messages).
+    pub(crate) fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// Create a new NVDM header for NVIDIA vendor-defined PCI messages.
+    ///
+    /// Sets MCTP message type to Vendor Defined PCI (0x7E) and vendor ID to
+    /// NVIDIA (0x10DE). The IC (Instance ID) field is always zero.
+    pub(crate) fn new(nvdm_type: u8) -> Self {
         Self::default()
             .set_msg_type(MSG_TYPE_VENDOR_PCI)
             .set_vendor_id(VENDOR_ID_NV)
             .set_nvdm_type(nvdm_type)
     }
-
-    /// Return the raw packed u32.
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-
-    /// Extract the NVDM type field as a typed value.
-    pub(crate) fn nvdm_type(self) -> core::result::Result<NvdmType, u8> {
-        NvdmType::try_from(self.raw_nvdm_type())
-    }
-
-    /// Set the NVDM type field from a typed value.
-    pub(crate) fn set_nvdm_type(self, nvdm_type: NvdmType) -> Self {
-        self.set_raw_nvdm_type(u8::from(nvdm_type))
-    }
-
-    /// Validate this header against the expected NVIDIA NVDM format and type.
-    pub(crate) fn validate(self, expected_type: NvdmType) -> bool {
-        self.msg_type() == MSG_TYPE_VENDOR_PCI
-            && self.vendor_id() == VENDOR_ID_NV
-            && matches!(self.nvdm_type(), Ok(nvdm_type) if nvdm_type == expected_type)
-    }
 }
 
-impl From<u32> for NvdmHeader {
-    fn from(raw: u32) -> Self {
-        Self(raw)
-    }
+/// NVDM message type constants.
+///
+/// These values come from a shared namespace across all GPU subsystems.
+/// Open RM reference: `arch/nvalloc/common/inc/nvdm_format.h`
+pub(crate) mod nvdm_type {
+    /// Chain of Trust (FSP boot).
+    pub(crate) const COT: u8 = 0x14;
+    /// FSP/SEC2 command response.
+    pub(crate) const FSP_RESPONSE: u8 = 0x15;
 }

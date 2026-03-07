@@ -23,13 +23,8 @@ use kernel::{
     },
 };
 
+use crate::mctp;
 use crate::regs;
-
-use crate::mctp::{
-    MctpHeader,
-    NvdmHeader,
-    NvdmType, //
-};
 
 /// FSP Chain of Trust protocol version.
 ///
@@ -208,11 +203,11 @@ unsafe impl FromBytes for FspResponse {}
 /// a given message, following the same pattern as GSP's `CommandToGsp`.
 pub(crate) trait MessageToFsp: AsBytes {
     /// NVDM type identifying this message to FSP.
-    const NVDM_TYPE: u32;
+    const NVDM_TYPE: u8;
 }
 
 impl MessageToFsp for FspMessage {
-    const NVDM_TYPE: u32 = NvdmType::Cot as u32;
+    const NVDM_TYPE: u8 = mctp::nvdm_type::COT;
 }
 
 /// Bundled arguments for FMC boot via FSP Chain of Trust.
@@ -416,8 +411,8 @@ impl Fsp {
 
         let msg = KBox::new(
             FspMessage {
-                mctp_header: MctpHeader::single_packet().raw(),
-                nvdm_header: NvdmHeader::new(NvdmType::Cot).raw(),
+                mctp_header: mctp::TransportHeader::new(true, true, 0, 0, 0).into(),
+                nvdm_header: mctp::NvdmHeader::new(mctp::nvdm_type::COT).into(),
 
                 cot: NvdmPayloadCot {
                     version: args.chipset.fsp_cot_version().ok_or(ENOTSUPP)?.raw(),
@@ -479,30 +474,35 @@ impl Fsp {
 
         let response = FspResponse::from_bytes(&response_buf[..]).ok_or(EIO)?;
 
-        let mctp_header: MctpHeader = response.mctp_header.into();
-        let nvdm_header: NvdmHeader = response.nvdm_header.into();
+        let mctp_header = response.mctp_header;
+        let nvdm_header = response.nvdm_header;
         let command_nvdm_type = response.response.command_nvdm_type;
         let error_code = response.response.error_code;
 
-        if !mctp_header.is_single_packet() {
+        let transport = mctp::TransportHeader::from_raw(mctp_header);
+        if !transport.som() || !transport.eom() {
             dev_err!(
                 dev,
                 "Unexpected MCTP header in FSP reply: {:#x}\n",
-                mctp_header.raw()
+                mctp_header
             );
             return Err(EIO);
         }
 
-        if !nvdm_header.validate(NvdmType::FspResponse) {
+        let nvdm = mctp::NvdmHeader::from_raw(nvdm_header);
+        if nvdm.msg_type() != mctp::MSG_TYPE_VENDOR_PCI
+            || nvdm.vendor_id() != mctp::VENDOR_ID_NV
+            || nvdm.nvdm_type() != mctp::nvdm_type::FSP_RESPONSE
+        {
             dev_err!(
                 dev,
                 "Unexpected NVDM header in FSP reply: {:#x}\n",
-                nvdm_header.raw()
+                nvdm_header
             );
             return Err(EIO);
         }
 
-        if command_nvdm_type != M::NVDM_TYPE {
+        if command_nvdm_type != u32::from(M::NVDM_TYPE) {
             dev_err!(
                 dev,
                 "Expected NVDM type {:#x} in reply, got {:#x}\n",
