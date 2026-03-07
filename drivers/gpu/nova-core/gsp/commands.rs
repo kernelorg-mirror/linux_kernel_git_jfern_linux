@@ -12,10 +12,7 @@ use kernel::{
     pci,
     prelude::*,
     time::Delta,
-    transmute::{
-        AsBytes,
-        FromBytes, //
-    }, //
+    transmute::AsBytes, //
 };
 
 use crate::{
@@ -144,33 +141,16 @@ impl CommandToGsp for SetRegistry {
     }
 }
 
-/// Message type for GSP initialization done notification.
-struct GspInitDone;
-
-// SAFETY: `GspInitDone` is a zero-sized type with no bytes, therefore it
-// trivially has no uninitialized bytes.
-unsafe impl FromBytes for GspInitDone {}
-
-impl MessageFromGsp for GspInitDone {
-    const FUNCTION: MsgFunction = MsgFunction::GspInitDone;
-    type InitError = Infallible;
-    type Message = ();
-
-    fn read(
-        _msg: &Self::Message,
-        _sbuffer: &mut SBufferIter<array::IntoIter<&[u8], 2>>,
-    ) -> Result<Self, Self::InitError> {
-        Ok(GspInitDone)
-    }
-}
-
-/// Waits for GSP initialization to complete.
+/// Wait for GSP initialization to complete, consuming any other events along the way.
 pub(crate) fn wait_gsp_init_done(cmdq: &mut Cmdq) -> Result {
     loop {
-        match cmdq.receive_msg::<GspInitDone>(Delta::from_secs(10)) {
-            Ok(_) => break Ok(()),
-            Err(ERANGE) => continue,
-            Err(e) => break Err(e),
+        let done = cmdq
+            .receive_and_dispatch(Delta::from_secs(10), |function, _payload_0, _payload_1| {
+                function == MsgFunction::GspInitDone
+            })?;
+
+        if done {
+            return Ok(());
         }
     }
 }
