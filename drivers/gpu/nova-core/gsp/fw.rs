@@ -262,7 +262,7 @@ impl GspFwWprMeta {
             magic: bindings::GSP_FW_WPR_META_MAGIC as u64,
             revision: u64::from(bindings::GSP_FW_WPR_META_REVISION),
             sysmemAddrOfRadix3Elf: gsp_firmware.radix3_dma_handle(),
-            sizeOfRadix3Elf: u64::from_safe_cast(gsp_firmware.size),
+            sizeOfRadix3Elf: u64::from_safe_cast(gsp_firmware.size()),
             sysmemAddrOfBootloader: gsp_firmware.bootloader.ucode.dma_handle(),
             sizeOfBootloader: u64::from_safe_cast(gsp_firmware.bootloader.ucode.size()),
             bootloaderCodeOffset: u64::from(gsp_firmware.bootloader.code_offset),

@@ -27,7 +27,7 @@ impl FspFirmware {
         chipset: Chipset,
         ver: &str,
     ) -> Result<Self> {
-        let fw = super::request_firmware(dev, chipset, "fmc", ver)?;
+        let (_, fw) = super::request_firmware(dev, chipset, "fmc", ver)?;
 
         // FSP expects only the "image" section, not the entire ELF file.
         let fmc_image_data = elf::elf_section(fw.data(), "image").ok_or_else(|| {

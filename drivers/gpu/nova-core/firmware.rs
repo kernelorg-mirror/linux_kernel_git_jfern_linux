@@ -31,21 +31,25 @@ pub(crate) mod booter;
 pub(crate) mod fsp;
 pub(crate) mod fwsec;
 pub(crate) mod gsp;
+pub(crate) mod radix3;
 pub(crate) mod riscv;
 
 pub(crate) const FIRMWARE_VERSION: &str = "570.144";
 
 /// Requests the GPU firmware `name` suitable for `chipset`, with version `ver`.
+///
+/// Returns the firmware path and the loaded firmware.
 fn request_firmware(
     dev: &device::Device,
     chipset: gpu::Chipset,
     name: &str,
     ver: &str,
-) -> Result<firmware::Firmware> {
+) -> Result<(CString, firmware::Firmware)> {
     let chip_name = chipset.name();
 
-    CString::try_from_fmt(fmt!("nvidia/{chip_name}/gsp/{name}-{ver}.bin"))
-        .and_then(|path| firmware::Firmware::request(&path, dev))
+    let path = CString::try_from_fmt(fmt!("nvidia/{chip_name}/gsp/{name}-{ver}.bin"))?;
+    let fw = firmware::Firmware::request(&path, dev)?;
+    Ok((path, fw))
 }
 
 /// Structure used to describe some firmwares, notably FWSEC-FRTS.

@@ -147,7 +147,7 @@ impl FwsecFirmwareWithBl {
         dev: &Device<device::Bound>,
         chipset: Chipset,
     ) -> Result<Self> {
-        let fw = request_firmware(dev, chipset, "gen_bootloader", FIRMWARE_VERSION)?;
+        let (_, fw) = request_firmware(dev, chipset, "gen_bootloader", FIRMWARE_VERSION)?;
         let hdr = fw
             .data()
             .get(0..size_of::<BinHdr>())

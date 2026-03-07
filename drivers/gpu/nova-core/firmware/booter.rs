@@ -303,7 +303,7 @@ impl BooterFirmware {
             BooterKind::Loader => "booter_load",
             BooterKind::Unloader => "booter_unload",
         };
-        let fw = super::request_firmware(dev, chipset, fw_name, ver)?;
+        let (_, fw) = super::request_firmware(dev, chipset, fw_name, ver)?;
         let bin_fw = BinFirmware::new(&fw)?;
 
         // The binary firmware embeds a Heavy-Secured firmware.
