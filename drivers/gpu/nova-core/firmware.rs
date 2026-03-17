@@ -39,7 +39,7 @@ pub(crate) const FIRMWARE_VERSION: &str = "570.144";
 /// Requests the GPU firmware `name` suitable for `chipset`, with version `ver`.
 ///
 /// Returns the firmware path and the loaded firmware.
-fn request_firmware(
+pub(crate) fn request_firmware(
     dev: &device::Device,
     chipset: gpu::Chipset,
     name: &str,
@@ -50,6 +50,35 @@ fn request_firmware(
     let path = CString::try_from_fmt(fmt!("nvidia/{chip_name}/gsp/{name}-{ver}.bin"))?;
     let fw = firmware::Firmware::request(&path, dev)?;
     Ok((path, fw))
+}
+
+/// Requests the ucodes (bindata) firmware for GSP.
+///
+/// Tries the chipset-specific name first (`ucodes-{ver}.bin`), then for Ampere (non-GA100) and
+/// Ada the shared ga10x name (`ucodes_ga10x-{ver}.bin`) so installer-provided firmware is found.
+#[expect(dead_code)]
+pub(crate) fn request_ucodes_firmware(
+    dev: &device::Device,
+    chipset: gpu::Chipset,
+    ver: &str,
+) -> Result<firmware::Firmware> {
+    let err = match request_firmware(dev, chipset, "ucodes", ver) {
+        Ok((_path, fw)) => return Ok(fw),
+        Err(e) => e,
+    };
+
+    let try_ga10x = matches!(
+        chipset.arch(),
+        gpu::Architecture::Ampere | gpu::Architecture::Ada
+    ) && chipset != gpu::Chipset::GA100;
+
+    if try_ga10x {
+        if let Ok((_path, fw)) = request_firmware(dev, chipset, "ucodes_ga10x", ver) {
+            return Ok(fw);
+        }
+    }
+
+    Err(err)
 }
 
 /// Structure used to describe some firmwares, notably FWSEC-FRTS.
@@ -440,7 +469,8 @@ impl<const N: usize> ModInfoBuilder<N> {
             .make_entry_file(name, "booter_load")
             .make_entry_file(name, "booter_unload")
             .make_entry_file(name, "bootloader")
-            .make_entry_file(name, "gsp");
+            .make_entry_file(name, "gsp")
+            .make_entry_file(name, "ucodes");
 
         if chipset.needs_fwsec_bootloader() {
             this.make_entry_file(name, "gen_bootloader")
