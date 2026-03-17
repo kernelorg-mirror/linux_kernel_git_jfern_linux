@@ -247,7 +247,6 @@ pub(crate) enum FalconMem {
     /// Secure Instruction Memory.
     ImemSecure,
     /// Non-Secure Instruction Memory.
-    #[expect(dead_code)]
     ImemNonSecure,
     /// Data Memory.
     Dmem,
@@ -740,7 +739,6 @@ impl<E: FalconEngine + 'static> Falcon<E> {
     /// address directly (in GPU physical address space, routed through the FBIF
     /// aperture). The caller must configure the FBIF TRANSCFG register
     /// corresponding to `ctx_dma` before calling this method.
-    #[expect(dead_code)]
     pub(crate) fn raw_dma_transfer(
         &self,
         bar: &Bar0,
@@ -863,7 +861,6 @@ impl<E: FalconEngine + 'static> Falcon<E> {
     /// For RISC-V GSP (libos3), the processor signals suspension by setting
     /// bit 31 (`0x80000000`) in `MAILBOX0`. This is different from classic Falcon
     /// which uses `CPUCTL.halted`.
-    #[expect(dead_code)]
     pub(crate) fn wait_for_processor_suspend(&self, bar: &Bar0) -> Result<()> {
         const INTERRUPT_PROCESSOR_SUSPENDED: u32 = 0x80000000;
 
