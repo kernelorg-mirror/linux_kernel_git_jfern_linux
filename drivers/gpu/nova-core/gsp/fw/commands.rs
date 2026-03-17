@@ -18,12 +18,12 @@ use crate::{
     gsp::GSP_PAGE_SIZE, //
 };
 
-use super::bindings;
+use super::r570;
 
 /// Payload of the `GspSetSystemInfo` command.
 #[repr(transparent)]
 pub(crate) struct GspSetSystemInfo {
-    inner: bindings::GspSystemInfo,
+    inner: r570::GspSystemInfo,
 }
 static_assert!(size_of::<GspSetSystemInfo>() < GSP_PAGE_SIZE);
 
@@ -34,7 +34,7 @@ impl GspSetSystemInfo {
         dev: &'a pci::Device<device::Bound>,
         chipset: Chipset,
     ) -> impl Init<Self, Error> + 'a {
-        type InnerGspSystemInfo = bindings::GspSystemInfo;
+        type InnerGspSystemInfo = r570::GspSystemInfo;
         let init_inner = try_init!(InnerGspSystemInfo {
             gpuPhysAddr: dev.resource_start(0)?,
             gpuPhysFbAddr: dev.resource_start(1)?,
@@ -76,17 +76,17 @@ unsafe impl AsBytes for GspSetSystemInfo {}
 unsafe impl FromBytes for GspSetSystemInfo {}
 
 #[repr(transparent)]
-pub(crate) struct PackedRegistryEntry(bindings::PACKED_REGISTRY_ENTRY);
+pub(crate) struct PackedRegistryEntry(r570::PACKED_REGISTRY_ENTRY);
 
 impl PackedRegistryEntry {
     pub(crate) fn new(offset: u32, value: u32) -> Self {
         Self({
-            bindings::PACKED_REGISTRY_ENTRY {
+            r570::PACKED_REGISTRY_ENTRY {
                 nameOffset: offset,
 
                 // We only support DWORD types for now. Support for other types
                 // will come later if required.
-                type_: bindings::REGISTRY_TABLE_ENTRY_TYPE_DWORD as u8,
+                type_: r570::REGISTRY_TABLE_ENTRY_TYPE_DWORD as u8,
                 __bindgen_padding_0: Default::default(),
                 data: value,
                 length: 0,
@@ -101,13 +101,13 @@ unsafe impl AsBytes for PackedRegistryEntry {}
 /// Payload of the `SetRegistry` command.
 #[repr(transparent)]
 pub(crate) struct PackedRegistryTable {
-    inner: bindings::PACKED_REGISTRY_TABLE,
+    inner: r570::PACKED_REGISTRY_TABLE,
 }
 
 impl PackedRegistryTable {
     #[allow(non_snake_case)]
     pub(crate) fn init(num_entries: u32, size: u32) -> impl Init<Self> {
-        type InnerPackedRegistryTable = bindings::PACKED_REGISTRY_TABLE;
+        type InnerPackedRegistryTable = r570::PACKED_REGISTRY_TABLE;
         let init_inner = init!(InnerPackedRegistryTable {
             numEntries: num_entries,
             size,
@@ -128,7 +128,7 @@ unsafe impl FromBytes for PackedRegistryTable {}
 /// Payload of the `GetGspStaticInfo` command and message.
 #[repr(transparent)]
 #[derive(Zeroable)]
-pub(crate) struct GspStaticConfigInfo(bindings::GspStaticConfigInfo_t);
+pub(crate) struct GspStaticConfigInfo(r570::GspStaticConfigInfo_t);
 
 impl GspStaticConfigInfo {
     /// Returns a bytes array containing the (hopefully) zero-terminated name of this GPU.
