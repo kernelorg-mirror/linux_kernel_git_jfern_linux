@@ -73,10 +73,8 @@ impl<const NUM_PAGES: usize> PteArray<NUM_PAGES> {
 struct LogBuffer(CoherentAllocation<u8>);
 
 impl LogBuffer {
-    /// Creates a new `LogBuffer` mapped on `dev`.
-    fn new(dev: &device::Device<device::Bound>) -> Result<Self> {
-        const NUM_PAGES: usize = RM_LOG_BUFFER_NUM_PAGES;
-
+    /// Creates a new `LogBuffer` of `NUM_PAGES` GSP pages, mapped on `dev`.
+    fn with_pages<const NUM_PAGES: usize>(dev: &device::Device<device::Bound>) -> Result<Self> {
         let mut obj = Self(CoherentAllocation::<u8>::alloc_coherent(
             dev,
             NUM_PAGES * GSP_PAGE_SIZE,
@@ -100,6 +98,36 @@ impl LogBuffer {
 
         Ok(obj)
     }
+
+    /// Creates a standard 64KB log buffer (16 GSP pages).
+    fn new(dev: &device::Device<device::Bound>) -> Result<Self> {
+        Self::with_pages::<RM_LOG_BUFFER_NUM_PAGES>(dev)
+    }
+
+    /// Creates a small 4KB log buffer (1 GSP page).
+    fn new_small(dev: &device::Device<device::Bound>) -> Result<Self> {
+        Self::with_pages::<1>(dev)
+    }
+}
+
+/// Log buffers used by GSP-RM for debug logging.
+///
+/// r000+ firmware expects log buffers for all LIBOS3 tasks. Each buffer is
+/// registered as a libos memory region entry, identified by its id8 name.
+#[expect(dead_code)]
+struct LogBuffers {
+    /// Init task log buffer (LOGINIT, 64KB).
+    loginit: LogBuffer,
+    /// Interrupt task log buffer (LOGINTR, 64KB).
+    logintr: LogBuffer,
+    /// RM task log buffer (LOGRM, 64KB).
+    logrm: LogBuffer,
+    /// MNOC task log buffer (LOGMNOC, 64KB).
+    logmnoc: LogBuffer,
+    /// Root task log buffer (LOGROOT, 4KB).
+    logroot: LogBuffer,
+    /// RM state monitor task log buffer (LOGRMON, 4KB).
+    logrmon: LogBuffer,
 }
 
 /// GSP runtime data.
@@ -107,16 +135,14 @@ impl LogBuffer {
 pub(crate) struct Gsp {
     /// Libos arguments.
     pub(crate) libos: CoherentAllocation<LibosMemoryRegionInitArgument>,
-    /// Init log buffer.
-    loginit: LogBuffer,
-    /// Interrupts log buffer.
-    logintr: LogBuffer,
-    /// RM log buffer.
-    logrm: LogBuffer,
+    /// Log buffers for all LIBOS3 tasks.
+    logs: LogBuffers,
     /// Command queue.
     pub(crate) cmdq: Cmdq,
     /// RM arguments.
     rmargs: CoherentAllocation<GspArgumentsPadded>,
+    /// RM state monitor buffer (4KB, required by r000+ GSP-RM for diagnostics).
+    rm_state_monitor: CoherentAllocation<u8>,
 }
 
 impl Gsp {
@@ -125,25 +151,34 @@ impl Gsp {
         pin_init::pin_init_scope(move || {
             let dev = pdev.as_ref();
 
+            let loginit = LogBuffer::new(dev)?;
+            let logintr = LogBuffer::new(dev)?;
+            let logrm = LogBuffer::new(dev)?;
+            let logmnoc = LogBuffer::new(dev)?;
+            let logroot = LogBuffer::new_small(dev)?;
+            let logrmon = LogBuffer::new_small(dev)?;
+
             Ok(try_pin_init!(Self {
                 libos: CoherentAllocation::<LibosMemoryRegionInitArgument>::alloc_coherent(
                     dev,
                     GSP_PAGE_SIZE / size_of::<LibosMemoryRegionInitArgument>(),
                     GFP_KERNEL | __GFP_ZERO,
                 )?,
-                loginit: LogBuffer::new(dev)?,
-                logintr: LogBuffer::new(dev)?,
-                logrm: LogBuffer::new(dev)?,
                 cmdq: Cmdq::new(dev)?,
                 rmargs: CoherentAllocation::<GspArgumentsPadded>::alloc_coherent(
                     dev,
                     1,
                     GFP_KERNEL | __GFP_ZERO,
                 )?,
+                rm_state_monitor: CoherentAllocation::<u8>::alloc_coherent(
+                    dev,
+                    GSP_PAGE_SIZE,
+                    GFP_KERNEL | __GFP_ZERO,
+                )?,
                 _: {
-                    // Initialise the logging structures. The OpenRM equivalents are in:
-                    // _kgspInitLibosLoggingStructures (allocates memory for buffers)
-                    // kgspSetupLibosInitArgs_IMPL (creates pLibosInitArgs[] array)
+                    // Set up libos memory region entries for each log buffer, followed
+                    // by RMARGS. The order matches Open RM's
+                    // _kgspInitLibosLoggingStructures + kgspSetupLibosInitArgs_IMPL.
                     dma_write!(
                         libos, [0]?, LibosMemoryRegionInitArgument::new("LOGINIT", &loginit.0)
                     );
@@ -153,6 +188,14 @@ impl Gsp {
                     dma_write!(libos, [2]?, LibosMemoryRegionInitArgument::new("LOGRM", &logrm.0));
                     dma_write!(rmargs, [0]?.inner, fw::GspArgumentsCached::new(cmdq));
                     dma_write!(libos, [3]?, LibosMemoryRegionInitArgument::new("RMARGS", rmargs));
+                },
+                logs: LogBuffers {
+                    loginit,
+                    logintr,
+                    logrm,
+                    logmnoc,
+                    logroot,
+                    logrmon,
                 },
             }))
         })
