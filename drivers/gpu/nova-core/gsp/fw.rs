@@ -383,6 +383,26 @@ impl TryFrom<u32> for MsgFunction {
     }
 }
 
+impl MsgFunction {
+    /// Returns true if this is a GSP-initiated async event (NV_VGPU_MSG_EVENT_*), as opposed to
+    /// a command response (NV_VGPU_MSG_FUNCTION_*).
+    #[expect(dead_code)]
+    pub(crate) fn is_event(&self) -> bool {
+        matches!(
+            self,
+            Self::GspInitDone
+                | Self::GspRunCpuSequencer
+                | Self::PostEvent
+                | Self::RcTriggered
+                | Self::MmuFaultQueued
+                | Self::OsErrorLog
+                | Self::GspPostNoCat
+                | Self::GspLockdownNotice
+                | Self::UcodeLibOsPrint //
+        )
+    }
+}
+
 impl From<MsgFunction> for u32 {
     fn from(value: MsgFunction) -> Self {
         // CAST: `MsgFunction` is `repr(u32)` and can thus be cast losslessly.
@@ -781,7 +801,7 @@ impl MsgHeaderVersion {
 }
 
 impl bindings::rpc_message_header_v {
-    fn init(cmd_size: usize, function: MsgFunction) -> impl Init<Self, Error> {
+    fn init(cmd_size: usize, function: MsgFunction, sequence: u32) -> impl Init<Self, Error> {
         type RpcMessageHeader = bindings::rpc_message_header_v;
 
         try_init!(RpcMessageHeader {
@@ -794,6 +814,7 @@ impl bindings::rpc_message_header_v {
                 .and_then(|v| v.try_into().map_err(|_| EINVAL))?,
             rpc_result: 0xffffffff,
             rpc_result_private: 0xffffffff,
+            sequence,
             ..Zeroable::init_zeroed()
         })
     }
@@ -812,26 +833,31 @@ impl GspMsgElement {
     ///
     /// # Arguments
     ///
-    /// * `sequence` - Sequence number of the message.
+    /// * `transport_seq` - Transport-level sequence number for the outer message header
+    ///   (`GSP_MSG_QUEUE_ELEMENT.seqNum`). Must be unique per message.
+    /// * `rpc_seq` - RPC-level sequence number for the inner RPC header
+    ///   (`rpc_message_header_v.sequence`). Set to 0 for async (fire-and-forget) commands,
+    ///   or to the sync counter for command/response pairs.
     /// * `cmd_size` - Size of the command (not including the message element), in bytes.
     /// * `function` - Function of the message.
     #[allow(non_snake_case)]
     pub(crate) fn init(
-        sequence: u32,
+        transport_seq: u32,
+        rpc_seq: u32,
         cmd_size: usize,
         function: MsgFunction,
     ) -> impl Init<Self, Error> {
         type RpcMessageHeader = bindings::rpc_message_header_v;
         type InnerGspMsgElement = bindings::GSP_MSG_QUEUE_ELEMENT;
         let init_inner = try_init!(InnerGspMsgElement {
-            seqNum: sequence,
+            seqNum: transport_seq,
             elemCount: size_of::<Self>()
                 .checked_add(cmd_size)
                 .ok_or(EOVERFLOW)?
                 .div_ceil(GSP_PAGE_SIZE)
                 .try_into()
                 .map_err(|_| EOVERFLOW)?,
-            rpc <- RpcMessageHeader::init(cmd_size, function),
+            rpc <- RpcMessageHeader::init(cmd_size, function, rpc_seq),
             ..Zeroable::init_zeroed()
         });
 

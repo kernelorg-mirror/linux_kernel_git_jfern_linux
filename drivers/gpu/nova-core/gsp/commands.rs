@@ -47,6 +47,7 @@ impl<'a> SetSystemInfo<'a> {
 
 impl<'a> CommandToGsp for SetSystemInfo<'a> {
     const FUNCTION: MsgFunction = MsgFunction::GspSetSystemInfo;
+    const IS_ASYNC: bool = true;
     type Command = GspSetSystemInfo;
     type InitError = Error;
 
@@ -98,6 +99,7 @@ impl SetRegistry {
 
 impl CommandToGsp for SetRegistry {
     const FUNCTION: MsgFunction = MsgFunction::SetRegistry;
+    const IS_ASYNC: bool = true;
     type Command = PackedRegistryTable;
     type InitError = Infallible;
 
