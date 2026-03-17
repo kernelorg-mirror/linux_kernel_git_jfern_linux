@@ -161,22 +161,6 @@ where
 
         Ok(())
     }
-
-    /// Read all the remaining data into a [`KVec`].
-    ///
-    /// `self` will be empty after this operation.
-    pub(crate) fn flush_into_kvec(&mut self, flags: kernel::alloc::Flags) -> Result<KVec<u8>> {
-        let mut buf = KVec::<u8>::new();
-
-        if let Some(slice) = core::mem::take(&mut self.cur_slice) {
-            buf.extend_from_slice(slice, flags)?;
-        }
-        for slice in &mut self.slices {
-            buf.extend_from_slice(slice, flags)?;
-        }
-
-        Ok(buf)
-    }
 }
 
 /// Provides a way to get mutable slices of data to write into.
