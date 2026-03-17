@@ -17,6 +17,7 @@ use kernel::{
 pub(crate) mod cmdq;
 pub(crate) mod commands;
 mod fw;
+#[expect(dead_code)]
 mod sequencer;
 
 pub(crate) use fw::{
@@ -176,9 +177,11 @@ impl Gsp {
                     GFP_KERNEL | __GFP_ZERO,
                 )?,
                 _: {
-                    // Set up libos memory region entries for each log buffer, followed
-                    // by RMARGS. The order matches Open RM's
+                    // Set up libos memory region entries for each LIBOS3 task log buffer,
+                    // followed by RMARGS. The order matches Open RM's
                     // _kgspInitLibosLoggingStructures + kgspSetupLibosInitArgs_IMPL.
+                    // LOGINIT must be first for early init logging.
+                    // RMARGS must be last.
                     dma_write!(
                         libos, [0]?, LibosMemoryRegionInitArgument::new("LOGINIT", &loginit.0)
                     );
@@ -186,8 +189,19 @@ impl Gsp {
                         libos, [1]?, LibosMemoryRegionInitArgument::new("LOGINTR", &logintr.0)
                     );
                     dma_write!(libos, [2]?, LibosMemoryRegionInitArgument::new("LOGRM", &logrm.0));
-                    dma_write!(rmargs, [0]?.inner, fw::GspArgumentsCached::new(cmdq));
-                    dma_write!(libos, [3]?, LibosMemoryRegionInitArgument::new("RMARGS", rmargs));
+                    dma_write!(
+                        libos, [3]?, LibosMemoryRegionInitArgument::new("LOGMNOC", &logmnoc.0)
+                    );
+                    dma_write!(
+                        libos, [4]?, LibosMemoryRegionInitArgument::new("LOGROOT", &logroot.0)
+                    );
+                    dma_write!(
+                        libos, [5]?, LibosMemoryRegionInitArgument::new("LOGRMON", &logrmon.0)
+                    );
+                    dma_write!(rmargs, [0]?.inner, fw::GspArgumentsCached::new(
+                        cmdq, None, &rm_state_monitor
+                    ));
+                    dma_write!(libos, [6]?, LibosMemoryRegionInitArgument::new("RMARGS", rmargs));
                 },
                 logs: LogBuffers {
                     loginit,

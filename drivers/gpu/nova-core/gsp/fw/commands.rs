@@ -18,7 +18,10 @@ use crate::{
     gsp::GSP_PAGE_SIZE, //
 };
 
-use super::r570;
+use super::{
+    r000,
+    r570, //
+};
 
 /// Payload of the `GspSetSystemInfo` command.
 #[repr(transparent)]
@@ -128,7 +131,7 @@ unsafe impl FromBytes for PackedRegistryTable {}
 /// Payload of the `GetGspStaticInfo` command and message.
 #[repr(transparent)]
 #[derive(Zeroable)]
-pub(crate) struct GspStaticConfigInfo(r570::GspStaticConfigInfo_t);
+pub(crate) struct GspStaticConfigInfo(r000::GspStaticConfigInfo_t);
 
 impl GspStaticConfigInfo {
     /// Returns a bytes array containing the (hopefully) zero-terminated name of this GPU.

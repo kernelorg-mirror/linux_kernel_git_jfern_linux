@@ -34,7 +34,7 @@ pub(crate) mod gsp;
 pub(crate) mod radix3;
 pub(crate) mod riscv;
 
-pub(crate) const FIRMWARE_VERSION: &str = "570.144";
+pub(crate) const FIRMWARE_VERSION: &str = "000";
 
 /// Requests the GPU firmware `name` suitable for `chipset`, with version `ver`.
 ///
@@ -56,7 +56,6 @@ pub(crate) fn request_firmware(
 ///
 /// Tries the chipset-specific name first (`ucodes-{ver}.bin`), then for Ampere (non-GA100) and
 /// Ada the shared ga10x name (`ucodes_ga10x-{ver}.bin`) so installer-provided firmware is found.
-#[expect(dead_code)]
 pub(crate) fn request_ucodes_firmware(
     dev: &device::Device,
     chipset: gpu::Chipset,

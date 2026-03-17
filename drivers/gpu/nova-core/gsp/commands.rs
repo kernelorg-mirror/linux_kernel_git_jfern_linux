@@ -144,6 +144,7 @@ impl CommandToGsp for SetRegistry {
 }
 
 /// Wait for GSP initialization to complete, consuming any other events along the way.
+#[expect(dead_code)]
 pub(crate) fn wait_gsp_init_done(cmdq: &mut Cmdq) -> Result {
     loop {
         let done = cmdq

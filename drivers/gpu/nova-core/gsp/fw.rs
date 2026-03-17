@@ -34,8 +34,9 @@ use crate::{
     firmware::gsp::GspFirmware,
     gpu::Chipset,
     gsp::{
-        cmdq::Cmdq, //
-        GSP_PAGE_SIZE,
+        cmdq::Cmdq,
+        GSP_PAGE_SHIFT,
+        GSP_PAGE_SIZE, //
     },
     num::{
         self,
@@ -787,9 +788,9 @@ impl MsgHeaderVersion {
     }
 }
 
-impl r570::rpc_message_header_v {
+impl r000::rpc_message_header_v {
     fn init(cmd_size: usize, function: MsgFunction, sequence: u32) -> impl Init<Self, Error> {
-        type RpcMessageHeader = r570::rpc_message_header_v;
+        type RpcMessageHeader = r000::rpc_message_header_v;
 
         try_init!(RpcMessageHeader {
             header_version: MsgHeaderVersion::new().into(),
@@ -807,12 +808,17 @@ impl r570::rpc_message_header_v {
     }
 }
 
-/// GSP Message Element.
+/// GSP Message Element (r000 MCTP/NVDM format).
 ///
-/// This is essentially a message header expected to be followed by the message data.
-#[repr(transparent)]
+/// This is the transport-layer header for messages exchanged with GSP-RM.
+/// r000 firmware uses MCTP/NVDM framing instead of the r570 `GSP_MSG_QUEUE_ELEMENT`.
+#[repr(C)]
 pub(crate) struct GspMsgElement {
-    inner: r570::GSP_MSG_QUEUE_ELEMENT,
+    mctp_header: u32,
+    nvdm_header: u32,
+    check_sum: u32,
+    seq_num: u32,
+    rpc: r000::rpc_message_header_v,
 }
 
 impl GspMsgElement {
@@ -820,36 +826,28 @@ impl GspMsgElement {
     ///
     /// # Arguments
     ///
-    /// * `transport_seq` - Transport-level sequence number for the outer message header
-    ///   (`GSP_MSG_QUEUE_ELEMENT.seqNum`). Must be unique per message.
+    /// * `transport_seq` - Transport-level sequence number for the outer message header.
+    ///   Must be unique per message.
     /// * `rpc_seq` - RPC-level sequence number for the inner RPC header
     ///   (`rpc_message_header_v.sequence`). Set to 0 for async (fire-and-forget) commands,
     ///   or to the sync counter for command/response pairs.
     /// * `cmd_size` - Size of the command (not including the message element), in bytes.
     /// * `function` - Function of the message.
-    #[allow(non_snake_case)]
     pub(crate) fn init(
         transport_seq: u32,
         rpc_seq: u32,
         cmd_size: usize,
         function: MsgFunction,
     ) -> impl Init<Self, Error> {
-        type RpcMessageHeader = r570::rpc_message_header_v;
-        type InnerGspMsgElement = r570::GSP_MSG_QUEUE_ELEMENT;
-        let init_inner = try_init!(InnerGspMsgElement {
-            seqNum: transport_seq,
-            elemCount: size_of::<Self>()
-                .checked_add(cmd_size)
-                .ok_or(EOVERFLOW)?
-                .div_ceil(GSP_PAGE_SIZE)
-                .try_into()
-                .map_err(|_| EOVERFLOW)?,
-            rpc <- RpcMessageHeader::init(cmd_size, function, rpc_seq),
-            ..Zeroable::init_zeroed()
-        });
+        use crate::mctp;
+        type RpcMessageHeader = r000::rpc_message_header_v;
 
         try_init!(GspMsgElement {
-            inner <- init_inner,
+            mctp_header: mctp::TransportHeader::new(true, true, 0, 0, 0).into(),
+            nvdm_header: mctp::NvdmHeader::new(mctp::nvdm_type::RM_RPC).into(),
+            check_sum: 0u32,
+            seq_num: transport_seq,
+            rpc <- RpcMessageHeader::init(cmd_size, function, rpc_seq),
         })
     }
 
@@ -858,61 +856,83 @@ impl GspMsgElement {
     /// Since the header is also part of the checksum, this is usually called after the whole
     /// message has been written to the shared memory area.
     pub(crate) fn set_checksum(&mut self, checksum: u32) {
-        self.inner.checkSum = checksum;
+        self.check_sum = checksum;
     }
 
-    /// Returns the length of the message's payload.
+    /// Returns the length of the message's payload (command data after the RPC header).
     pub(crate) fn payload_length(&self) -> usize {
         // `rpc.length` includes the length of the RPC message header.
-        num::u32_as_usize(self.inner.rpc.length)
-            .saturating_sub(size_of::<r570::rpc_message_header_v>())
+        num::u32_as_usize(self.rpc.length).saturating_sub(size_of::<r000::rpc_message_header_v>())
     }
 
-    /// Returns the total length of the message, message and RPC headers included.
+    /// Returns the total length of the message, transport and RPC headers included.
     pub(crate) fn length(&self) -> usize {
         size_of::<Self>() + self.payload_length()
     }
 
     // Returns the sequence number of the message.
     pub(crate) fn sequence(&self) -> u32 {
-        self.inner.rpc.sequence
+        self.rpc.sequence
     }
 
     // Returns the function of the message, if it is valid, or the invalid function number as an
     // error.
     pub(crate) fn function(&self) -> Result<MsgFunction, u32> {
-        self.inner
-            .rpc
-            .function
-            .try_into()
-            .map_err(|_| self.inner.rpc.function)
+        self.rpc.function.try_into().map_err(|_| self.rpc.function)
     }
 
     // Returns the number of elements (i.e. memory pages) used by this message.
     pub(crate) fn element_count(&self) -> u32 {
-        self.inner.elemCount
+        self.length().div_ceil(GSP_PAGE_SIZE) as u32
     }
 }
 
-// SAFETY: Padding is explicit and does not contain uninitialized data.
+// SAFETY: All fields are integer types or contain only integer types, with no
+// uninitialized padding bytes.
 unsafe impl AsBytes for GspMsgElement {}
 
-// SAFETY: This struct only contains integer types for which all bit patterns
-// are valid.
+// SAFETY: All fields are integer types for which all bit patterns are valid.
 unsafe impl FromBytes for GspMsgElement {}
+
+/// Optional bindata (ucodes) firmware info for GSP startup arguments.
+pub(crate) struct BindataArgs {
+    /// DMA address of the radix3 level 0 page table for the bindata firmware.
+    pub(crate) radix3: u64,
+    /// Size in bytes of the bindata firmware.
+    pub(crate) size: u64,
+}
 
 /// Arguments for GSP startup.
 #[repr(transparent)]
-pub(crate) struct GspArgumentsCached(r570::GSP_ARGUMENTS_CACHED);
+pub(crate) struct GspArgumentsCached(r000::GSP_ARGUMENTS_CACHED);
 
 impl GspArgumentsCached {
     /// Creates the arguments for starting the GSP up using `cmdq` as its command queue.
-    pub(crate) fn new(cmdq: &Cmdq) -> Self {
-        Self(r570::GSP_ARGUMENTS_CACHED {
+    ///
+    /// If `bindata` is provided, the GSP will be told where to find the ucodes firmware.
+    ///
+    /// `state_monitor` is the RM state monitor buffer (4KB). GSP-RM maps this buffer
+    /// during init for diagnostics.
+    pub(crate) fn new(
+        cmdq: &Cmdq,
+        bindata: Option<&BindataArgs>,
+        state_monitor: &CoherentAllocation<u8>,
+    ) -> Self {
+        let mut args = r000::GSP_ARGUMENTS_CACHED {
             messageQueueInitArguments: MessageQueueInitArguments::new(cmdq).0,
             bDmemStack: 1,
             ..Default::default()
-        })
+        };
+
+        if let Some(bindata) = bindata {
+            args.bindataArgs.radix3 = bindata.radix3;
+            args.bindataArgs.size = bindata.size;
+        }
+
+        args.rmStateMonitorBufferArgs.pa = state_monitor.dma_handle();
+        args.rmStateMonitorBufferArgs.size = state_monitor.size() as u64;
+
+        Self(args)
     }
 }
 
@@ -925,7 +945,7 @@ unsafe impl AsBytes for GspArgumentsCached {}
 #[repr(C)]
 pub(crate) struct GspArgumentsPadded {
     pub(crate) inner: GspArgumentsCached,
-    _padding: [u8; GSP_PAGE_SIZE - core::mem::size_of::<r570::GSP_ARGUMENTS_CACHED>()],
+    _padding: [u8; GSP_PAGE_SIZE - core::mem::size_of::<r000::GSP_ARGUMENTS_CACHED>()],
 }
 
 // SAFETY: Padding is explicit and will not contain uninitialized data.
@@ -937,16 +957,24 @@ unsafe impl FromBytes for GspArgumentsPadded {}
 
 /// Init arguments for the message queue.
 #[repr(transparent)]
-struct MessageQueueInitArguments(r570::MESSAGE_QUEUE_INIT_ARGUMENTS);
+struct MessageQueueInitArguments(r000::MESSAGE_QUEUE_INIT_ARGUMENTS);
 
 impl MessageQueueInitArguments {
     /// Creates a new init arguments structure for `cmdq`.
+    #[allow(non_snake_case)]
     fn new(cmdq: &Cmdq) -> Self {
-        Self(r570::MESSAGE_QUEUE_INIT_ARGUMENTS {
+        Self(r000::MESSAGE_QUEUE_INIT_ARGUMENTS {
             sharedMemPhysAddr: cmdq.dma_handle(),
             pageTableEntryCount: num::usize_into_u32::<{ Cmdq::NUM_PTES }>(),
             cmdQueueOffset: num::usize_as_u64(Cmdq::CMDQ_OFFSET),
             statQueueOffset: num::usize_as_u64(Cmdq::STATQ_OFFSET),
+
+            queueElementHdrSize: core::mem::offset_of!(r000::GSP_MSG_QUEUE_ELEMENT, payload) as u64,
+            queueElementSizeMin: GSP_PAGE_SIZE as u64,
+            queueElementSizeMax: (GSP_PAGE_SIZE * 16) as u64,
+            queueHeaderAlign: 4,
+            queueElementAlign: GSP_PAGE_SHIFT as u32,
+
             ..Default::default()
         })
     }

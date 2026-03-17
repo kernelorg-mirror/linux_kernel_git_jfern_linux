@@ -37,6 +37,7 @@ use crate::{
             FwsecFirmware, //
         },
         gsp::GspFirmware,
+        radix3::Radix3,
         FIRMWARE_VERSION, //
     },
     fsp::{
@@ -50,13 +51,10 @@ use crate::{
     gsp::{
         cmdq::Cmdq,
         commands,
+        fw,
         fw::{
             LibosMemoryRegionInitArgument,
             MsgFunction, //
-        },
-        sequencer::{
-            GspSequencer,
-            GspSequencerParams, //
         },
         GspFwWprMeta, //
     },
@@ -393,6 +391,27 @@ impl super::Gsp {
 
         let gsp_fw = KBox::pin_init(GspFirmware::new(dev, chipset, FIRMWARE_VERSION), GFP_KERNEL)?;
 
+        dev_info!(
+            dev,
+            "GSP firmware: {} (internal version: {})\n",
+            gsp_fw.fw_path.to_str().unwrap_or("unknown"),
+            gsp_fw.fw_version.to_str().unwrap_or("unknown")
+        );
+
+        // Load the optional ucodes (bindata) firmware and build a radix3 page table.
+        // GSP-RM uses this to load additional microcode at runtime.
+        let ucodes_radix3 =
+            match crate::firmware::request_ucodes_firmware(dev, chipset, FIRMWARE_VERSION) {
+                Ok(ucodes_fw) => Some(KBox::pin_init(
+                    Radix3::new(dev, ucodes_fw.data()),
+                    GFP_KERNEL,
+                )?),
+                Err(e) if e == ENOENT => {
+                    dev_dbg!(dev, "ucodes firmware not found; bindataArgs will be zero\n");
+                    None
+                }
+                Err(e) => return Err(e),
+            };
         let fb_layout = FbLayout::new(chipset, bar, &gsp_fw)?;
         dev_dbg!(dev, "{:#x?}\n", fb_layout);
 
@@ -400,13 +419,21 @@ impl super::Gsp {
             CoherentAllocation::<GspFwWprMeta>::alloc_coherent(dev, 1, GFP_KERNEL | __GFP_ZERO)?;
         dma_write!(wpr_meta, [0]?, GspFwWprMeta::new(&gsp_fw, &fb_layout));
 
+        let this = self.as_mut().project();
+
+        // Rewrite the RM arguments with bindata info now that we have it.
+        let bindata_opt = ucodes_radix3.as_ref().map(|r| fw::BindataArgs {
+            radix3: r.dma_handle(),
+            size: r.size as u64,
+        });
+        dma_write!(
+            this.rmargs,
+            [0]?.inner,
+            fw::GspArgumentsCached::new(this.cmdq, bindata_opt.as_ref(), this.rm_state_monitor)
+        );
+
         // Architecture-specific boot path
         if uses_sec2 {
-            // SEC2 path: send commands before GSP reset/boot (original order).
-            self.cmdq
-                .send_command(bar, commands::SetSystemInfo::new(pdev, chipset))?;
-            self.cmdq.send_command(bar, commands::SetRegistry::new())?;
-
             Self::boot_via_sec2(
                 dev,
                 bar,
@@ -414,17 +441,17 @@ impl super::Gsp {
                 gsp_falcon,
                 sec2_falcon,
                 &fb_layout,
-                &self.libos,
+                &this.libos,
                 &wpr_meta,
             )?;
         } else {
-            Self::boot_via_fsp(dev, bar, chipset, gsp_falcon, &wpr_meta, &self.libos)?;
+            Self::boot_via_fsp(dev, bar, chipset, gsp_falcon, &wpr_meta, &this.libos)?;
         }
 
         // Common post-boot initialization
         gsp_falcon.write_os_version(bar, gsp_fw.bootloader.app_version);
 
-        // Poll for RISC-V to become active before running sequencer
+        // Poll for RISC-V to become active
         read_poll_timeout(
             || Ok(gsp_falcon.is_riscv_active(bar)),
             |val: &bool| *val,
@@ -434,35 +461,24 @@ impl super::Gsp {
 
         dev_dbg!(dev, "RISC-V active? {}\n", gsp_falcon.is_riscv_active(bar));
 
-        // For FSP path, send commands after GSP becomes active.
-        if matches!(
-            chipset.arch(),
-            Architecture::Hopper | Architecture::Blackwell
-        ) {
-            self.cmdq
-                .send_command(bar, commands::SetSystemInfo::new(pdev, chipset))?;
-            self.cmdq.send_command(bar, commands::SetRegistry::new())?;
-        }
+        // Send system info and registry RPCs now that GSP is active.
+        this.cmdq
+            .send_command(bar, commands::SetSystemInfo::new(pdev, chipset))?;
+        this.cmdq.send_command(bar, commands::SetRegistry::new())?;
 
-        // SEC2-based architectures need to run the GSP sequencer
-        if uses_sec2 {
-            let libos_handle = self.libos.dma_handle();
-            let seq_params = GspSequencerParams {
-                bootloader_app_version: gsp_fw.bootloader.app_version,
-                libos_dma_handle: libos_handle,
-                gsp_falcon,
-                sec2_falcon,
-                dev: dev.into(),
-                bar,
-            };
-            GspSequencer::run(&mut self.cmdq, seq_params)?;
-        }
-
-        // Wait until GSP is fully initialized.
-        commands::wait_gsp_init_done(&mut self.cmdq)?;
+        // Wait for GSP-RM to complete initialization, handling boot events inline.
+        Self::wait_gsp_boot_events(
+            this.cmdq,
+            gsp_falcon,
+            sec2_falcon,
+            bar,
+            dev,
+            gsp_fw.bootloader.app_version,
+            this.libos.dma_handle(),
+        )?;
 
         // Obtain and display basic GPU information.
-        let info = commands::get_gsp_info(&mut self.cmdq, bar)?;
+        let info = commands::get_gsp_info(this.cmdq, bar)?;
         match info.gpu_name() {
             Ok(name) => dev_info!(dev, "GPU name: {}\n", name),
             Err(e) => dev_warn!(dev, "GPU name unavailable: {:?}\n", e),
@@ -478,7 +494,6 @@ impl super::Gsp {
     /// event, the driver loads the requested firmware onto the GSP falcon, executes
     /// it, and performs a core resume (reset GSP into RISCV, start SEC2-RTOS to
     /// resume GSP-RM). The loop runs until `INIT_DONE` arrives.
-    #[expect(dead_code)]
     #[allow(clippy::too_many_arguments)]
     fn wait_gsp_boot_events(
         cmdq: &mut Cmdq,
