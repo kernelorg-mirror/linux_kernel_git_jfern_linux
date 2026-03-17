@@ -451,6 +451,11 @@ pub(crate) struct Cmdq {
     /// Transport-level sequence number, incremented for every send. Used for the outer
     /// GSP_MSG_QUEUE_ELEMENT.seqNum. Also used as the inner rpc.sequence for sync commands.
     seq: u32,
+    /// Async (fire-and-forget) send sequence number, for debug logging.
+    tx_async_seq: u32,
+    /// Async event receive sequence number, for debug logging. GSP does not populate
+    /// rpc.sequence for async events today, so the driver counts them itself.
+    rx_event_seq: u32,
     /// Memory area shared with the GSP for communicating commands and messages.
     gsp_mem: DmaGspMem,
 }
@@ -482,6 +487,8 @@ impl Cmdq {
         Ok(Cmdq {
             dev: dev.into(),
             seq: 0,
+            tx_async_seq: 0,
+            rx_event_seq: 0,
             gsp_mem,
         })
     }
@@ -562,13 +569,24 @@ impl Cmdq {
                 dst.contents.1,
             ])));
 
-        dev_dbg!(
-            &self.dev,
-            "GSP RPC: send: seq# {}, function={:?}, length=0x{:x}\n",
-            self.seq,
-            M::FUNCTION,
-            dst.header.length(),
-        );
+        if M::IS_ASYNC {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: async send: seq# {}, function={:?}, length=0x{:x}\n",
+                self.tx_async_seq,
+                M::FUNCTION,
+                dst.header.length(),
+            );
+            self.tx_async_seq += 1;
+        } else {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: send: seq# {}, function={:?}, length=0x{:x}\n",
+                self.seq,
+                M::FUNCTION,
+                dst.header.length(),
+            );
+        }
 
         // All set - update the write pointer and inform the GSP of the new command.
         let elem_count = dst.header.element_count();
@@ -644,14 +662,6 @@ impl Cmdq {
         // Extract the `GspMsgElement`.
         let (header, slice_1) = GspMsgElement::from_bytes_prefix(slice_1).ok_or(EIO)?;
 
-        dev_dbg!(
-            self.dev,
-            "GSP RPC: receive: seq# {}, function={:?}, length=0x{:x}\n",
-            header.sequence(),
-            header.function(),
-            header.length(),
-        );
-
         let payload_length = header.payload_length();
 
         // Check that the driver read area is large enough for the message.
@@ -718,6 +728,25 @@ impl Cmdq {
     {
         let message = self.wait_for_msg(timeout)?;
         let function = message.header.function().map_err(|_| EINVAL)?;
+        let is_event = function.is_event();
+
+        if is_event {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: async received: seq# {}, function={:?}, length=0x{:x}\n",
+                self.rx_event_seq,
+                function,
+                message.header.length(),
+            );
+        } else {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: response received: seq# {}, function={:?}, length=0x{:x}\n",
+                message.header.sequence(),
+                function,
+                message.header.length(),
+            );
+        }
 
         // Extract the message. Store the result as we want to advance the read pointer even in
         // case of failure.
@@ -745,6 +774,12 @@ impl Cmdq {
             message.header.length().div_ceil(GSP_PAGE_SIZE),
         )?);
 
+        // Deferred past message consumption to satisfy the borrow checker: message
+        // holds a reference into self.gsp_mem, so we can't mutate self until it's dropped.
+        if is_event {
+            self.rx_event_seq += 1;
+        }
+
         result
     }
 
@@ -764,6 +799,25 @@ impl Cmdq {
     ) -> Result<R> {
         let message = self.wait_for_msg(timeout)?;
         let function = message.header.function().map_err(|_| EINVAL)?;
+        let is_event = function.is_event();
+
+        if is_event {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: async received: seq# {}, function={:?}, length=0x{:x}\n",
+                self.rx_event_seq,
+                function,
+                message.header.length(),
+            );
+        } else {
+            dev_dbg!(
+                &self.dev,
+                "GSP RPC: response received: seq# {}, function={:?}, length=0x{:x}\n",
+                message.header.sequence(),
+                function,
+                message.header.length(),
+            );
+        }
 
         let result = handler(function, message.contents.0, message.contents.1);
 

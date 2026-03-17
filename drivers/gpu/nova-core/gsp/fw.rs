@@ -386,7 +386,6 @@ impl TryFrom<u32> for MsgFunction {
 impl MsgFunction {
     /// Returns true if this is a GSP-initiated async event (NV_VGPU_MSG_EVENT_*), as opposed to
     /// a command response (NV_VGPU_MSG_FUNCTION_*).
-    #[expect(dead_code)]
     pub(crate) fn is_event(&self) -> bool {
         matches!(
             self,
