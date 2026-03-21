@@ -18,6 +18,7 @@ use crate::{
         Falcon, //
     },
     fb::SysmemFlush,
+    firmware,
     fsp::FspCotVersion,
     gfw,
     gsp::Gsp,
@@ -323,36 +324,50 @@ impl Gpu {
         bar: &'a Bar0,
         spec: Spec,
     ) -> impl PinInit<Self, Error> + 'a {
-        let chipset = spec.chipset();
-        let hal = hal::gpu_hal(chipset);
+        pin_init::pin_init_scope(move || {
+            let chipset = spec.chipset();
+            let hal = hal::gpu_hal(chipset);
 
-        try_pin_init!(Self {
-            _: {
-                // GFW_BOOT is the "GPU firmware boot complete" signal for the
-                // legacy devinit/FWSEC path. Pre-Hopper GPUs must wait for it
-                // before most GPU initialization. Hopper and later boot via FSP.
-                if hal.needs_gfw_boot() {
-                    gfw::wait_gfw_boot_completion(bar)
-                        .inspect_err(|_| dev_err!(pdev, "GFW boot did not complete\n"))?;
-                }
-            },
-
-            sysmem_flush: SysmemFlush::register(pdev.as_ref(), bar, chipset)?,
-
-            gsp_falcon: Falcon::new(
+            let (gsp_fw_path, gsp_fw_blob) = firmware::request_firmware(
                 pdev.as_ref(),
                 chipset,
-            )
-            .inspect(|falcon| falcon.clear_swgen0_intr(bar))?,
+                "gsp",
+                firmware::FIRMWARE_VERSION,
+            )?;
+            let build_id = firmware::elf_build_id(gsp_fw_blob.data());
+            if build_id.is_none() {
+                dev_warn!(
+                    pdev,
+                    "GSP firmware build ID not found, log buffer headers omitted\n"
+                );
+            }
 
-            sec2_falcon: Falcon::new(pdev.as_ref(), chipset)?,
+            Ok(try_pin_init!(Self {
+                _: {
+                    if hal.needs_gfw_boot() {
+                        gfw::wait_gfw_boot_completion(bar)
+                            .inspect_err(|_| dev_err!(pdev, "GFW boot did not complete\n"))?;
+                    }
+                },
 
-            gsp <- Gsp::new(pdev),
+                sysmem_flush: SysmemFlush::register(pdev.as_ref(), bar, chipset)?,
 
-            _: { gsp.boot(pdev, bar, chipset, gsp_falcon, sec2_falcon)? },
+                gsp_falcon: Falcon::new(
+                    pdev.as_ref(),
+                    chipset,
+                )
+                .inspect(|falcon| falcon.clear_swgen0_intr(bar))?,
 
-            bar: devres_bar,
-            spec,
+                sec2_falcon: Falcon::new(pdev.as_ref(), chipset)?,
+
+                gsp <- Gsp::new(pdev, chipset, build_id.as_ref()),
+
+                _: { gsp.boot(pdev, bar, chipset, gsp_falcon, sec2_falcon,
+                              &gsp_fw_blob, gsp_fw_path)? },
+
+                bar: devres_bar,
+                spec,
+            }))
         })
     }
 

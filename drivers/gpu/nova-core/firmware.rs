@@ -26,7 +26,11 @@ use crate::{
     },
 };
 
-pub(crate) use elf::elf_section;
+pub(crate) use elf::{
+    elf_build_id,
+    elf_section,
+    BuildId, //
+};
 pub(crate) mod booter;
 pub(crate) mod fsp;
 pub(crate) mod fwsec;
@@ -692,5 +696,60 @@ mod elf {
             2 => elf64_section(elf, name),
             _ => None,
         }
+    }
+
+    /// Maximum length of a build ID, matching Open RM's `BUILD_ID_MAX_LENGTH`.
+    const BUILD_ID_MAX_LENGTH: usize = 32;
+
+    /// ELF note type for GNU build IDs (`NT_GNU_BUILD_ID`).
+    const NT_GNU_BUILD_ID: u32 = 3;
+
+    /// Build ID extracted from a `.note.gnu.build-id` ELF section.
+    pub(crate) struct BuildId {
+        bytes: [u8; BUILD_ID_MAX_LENGTH],
+        len: u8,
+    }
+
+    impl BuildId {
+        /// Returns the build ID bytes.
+        pub(crate) fn as_bytes(&self) -> &[u8] {
+            &self.bytes[..usize::from(self.len)]
+        }
+    }
+
+    /// Extract the build ID from the `.note.gnu.build-id` section of an ELF image.
+    ///
+    /// Parses the standard ELF note format (namesz, descsz, type, name, descriptor)
+    /// and returns the descriptor bytes as a [`BuildId`]. Returns `None` if the
+    /// section is missing, malformed, or the build ID exceeds
+    /// [`BUILD_ID_MAX_LENGTH`] bytes.
+    pub(crate) fn elf_build_id(elf: &[u8]) -> Option<BuildId> {
+        let note = elf_section(elf, ".note.gnu.build-id")?;
+
+        if note.len() < 12 {
+            return None;
+        }
+
+        let namesz = u32::from_le_bytes(note[0..4].try_into().ok()?) as usize;
+        let descsz = u32::from_le_bytes(note[4..8].try_into().ok()?) as usize;
+        let note_type = u32::from_le_bytes(note[8..12].try_into().ok()?);
+
+        if note_type != NT_GNU_BUILD_ID || descsz == 0 || descsz > BUILD_ID_MAX_LENGTH {
+            return None;
+        }
+
+        // Name field is padded to 4-byte alignment.
+        let name_padded = (namesz + 3) & !3;
+        let desc_offset = 12 + name_padded;
+        let desc_end = desc_offset.checked_add(descsz)?;
+        let desc = note.get(desc_offset..desc_end)?;
+
+        let mut bytes = [0u8; BUILD_ID_MAX_LENGTH];
+        bytes[..descsz].copy_from_slice(desc);
+
+        Some(BuildId {
+            bytes,
+            len: descsz as u8,
+        })
     }
 }

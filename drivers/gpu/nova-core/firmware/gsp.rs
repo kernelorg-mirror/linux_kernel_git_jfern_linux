@@ -31,10 +31,12 @@ pub(crate) struct GspFirmware {
     /// The GSP firmware image mapped via a 3-level radix page table.
     #[pin]
     radix3: Radix3,
-    /// Firmware file path as requested from userspace (e.g. `nvidia/gb202/gsp/gsp-570.144.bin`).
+    /// Firmware file path as requested from userspace (e.g. `nvidia/gb202/gsp/gsp-000.bin`).
     pub(crate) fw_path: CString,
     /// Firmware version string extracted from the `.fwversion` ELF section.
     pub(crate) fw_version: CString,
+    /// Build ID extracted from the `.note.gnu.build-id` ELF section.
+    pub(crate) build_id: Option<elf::BuildId>,
     /// Device-mapped GSP signatures matching the GPU's [`Chipset`].
     pub(crate) signatures: DmaObject,
     /// GSP bootloader, verifies the GSP firmware before loading and running it.
@@ -60,17 +62,17 @@ impl GspFirmware {
         }
     }
 
-    /// Loads the GSP firmware binaries, map them into `dev`'s address-space, and creates the page
-    /// tables expected by the GSP bootloader to load it.
+    /// Maps the pre-loaded GSP firmware into `dev`'s address-space and creates the page tables
+    /// expected by the GSP bootloader to load it.
     pub(crate) fn new<'a>(
         dev: &'a device::Device<device::Bound>,
         chipset: Chipset,
         ver: &'a str,
+        gsp_firmware: &'a kernel::firmware::Firmware,
+        fw_path: CString,
     ) -> impl PinInit<Self, Error> + 'a {
         pin_init::pin_init_scope(move || {
-            let (fw_path, firmware) = super::request_firmware(dev, chipset, "gsp", ver)?;
-
-            let fw_section = elf::elf_section(firmware.data(), ".fwimage").ok_or(EINVAL)?;
+            let fw_section = elf::elf_section(gsp_firmware.data(), ".fwimage").ok_or(EINVAL)?;
             let fw_data = VVec::with_capacity(fw_section.len(), GFP_KERNEL)
                 .and_then(|mut v| {
                     v.extend_from_slice(fw_section, GFP_KERNEL)?;
@@ -79,17 +81,19 @@ impl GspFirmware {
                 .map_err(|_| ENOMEM)?;
 
             let sigs_section = Self::find_gsp_sigs_section(chipset).ok_or(ENOTSUPP)?;
-            let signatures = elf::elf_section(firmware.data(), sigs_section)
+            let signatures = elf::elf_section(gsp_firmware.data(), sigs_section)
                 .ok_or(EINVAL)
                 .and_then(|data| DmaObject::from_data(dev, data))?;
 
             let fw_version = {
-                let version_str = elf::elf_section(firmware.data(), ".fwversion")
+                let version_str = elf::elf_section(gsp_firmware.data(), ".fwversion")
                     .and_then(|data| CStr::from_bytes_until_nul(data).ok())
                     .and_then(|cstr| cstr.to_str().ok())
                     .unwrap_or("unknown");
                 CString::try_from_fmt(fmt!("{version_str}"))?
             };
+
+            let build_id = elf::elf_build_id(gsp_firmware.data());
 
             let (_, bl) = super::request_firmware(dev, chipset, "bootloader", ver)?;
             let bootloader = RiscvFirmware::new(dev, &bl)?;
@@ -98,6 +102,7 @@ impl GspFirmware {
                 radix3 <- Radix3::new(dev, &fw_data),
                 fw_path,
                 fw_version,
+                build_id,
                 signatures,
                 bootloader,
             }))
