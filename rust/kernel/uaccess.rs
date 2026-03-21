@@ -471,9 +471,8 @@ impl UserSliceWriter {
         // - `ptr` is valid for reading `len` bytes as required by this function's safety contract.
         // - `copy_to_user` validates the userspace address at runtime and returns non-zero on
         //   failure (e.g., bad address or unmapped memory).
-        let res = unsafe {
-            bindings::copy_to_user(self.ptr.as_mut_ptr(), ptr.cast::<c_void>(), len)
-        };
+        let res =
+            unsafe { bindings::copy_to_user(self.ptr.as_mut_ptr(), ptr.cast::<c_void>(), len) };
         if res != 0 {
             return Err(EFAULT);
         }
