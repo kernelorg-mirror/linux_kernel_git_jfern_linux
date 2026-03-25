@@ -356,7 +356,7 @@ impl super::Gsp {
             || Ok(GspMbox::read(gsp_falcon, bar)),
             |mbox| mbox.lockdown_released(bar, fmc_boot_params_addr),
             Delta::from_millis(10),
-            Delta::from_millis(4000),
+            Delta::from_millis(30000),
         )
         .inspect_err(|_| {
             dev_err!(dev, "GSP lockdown release timeout\n");

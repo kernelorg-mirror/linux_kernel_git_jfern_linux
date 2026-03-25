@@ -262,9 +262,6 @@ struct LogBuffers {
 pub(crate) struct Gsp {
     /// Libos arguments.
     pub(crate) libos: CoherentAllocation<LibosMemoryRegionInitArgument>,
-    /// Log buffers for all LIBOS3 tasks, exposed via debugfs.
-    #[pin]
-    logs: debugfs::Scope<LogBuffers>,
     /// Command queue.
     pub(crate) cmdq: Cmdq,
     /// RM arguments.
@@ -336,7 +333,9 @@ impl Gsp {
                     ));
                     dma_write!(libos, [6]?, LibosMemoryRegionInitArgument::new("RMARGS", rmargs));
                 },
-                logs <- {
+                // HACK: Leak the debugfs scope so GSP-RM log buffers survive probe failure.
+                // The DMA buffers + debugfs entries will persist for post-mortem debugging.
+                _: {
                     let log_buffers = LogBuffers {
                         loginit,
                         logintr,
@@ -347,19 +346,21 @@ impl Gsp {
                     };
 
                     #[allow(static_mut_refs)]
-                    // SAFETY: `DEBUGFS_ROOT` is created before driver registration and cleared
-                    // after driver unregistration, so no probe() can race with its modification.
                     let log_parent: &debugfs::Dir = unsafe { crate::DEBUGFS_ROOT.as_ref() }
                         .expect("DEBUGFS_ROOT not initialized");
 
-                    log_parent.scope(log_buffers, dev.name(), |logs, dir| {
-                        dir.read_binary_file(c_str!("loginit"), &logs.loginit);
-                        dir.read_binary_file(c_str!("logintr"), &logs.logintr);
-                        dir.read_binary_file(c_str!("logrm"), &logs.logrm);
-                        dir.read_binary_file(c_str!("logmnoc"), &logs.logmnoc);
-                        dir.read_binary_file(c_str!("logroot"), &logs.logroot);
-                        dir.read_binary_file(c_str!("logrmon"), &logs.logrmon);
-                    })
+                    let scope = KBox::pin_init(
+                        log_parent.scope(log_buffers, dev.name(), |logs, dir| {
+                            dir.read_binary_file(c_str!("loginit"), &logs.loginit);
+                            dir.read_binary_file(c_str!("logintr"), &logs.logintr);
+                            dir.read_binary_file(c_str!("logrm"), &logs.logrm);
+                            dir.read_binary_file(c_str!("logmnoc"), &logs.logmnoc);
+                            dir.read_binary_file(c_str!("logroot"), &logs.logroot);
+                            dir.read_binary_file(c_str!("logrmon"), &logs.logrmon);
+                        }),
+                        GFP_KERNEL,
+                    )?;
+                    core::mem::forget(scope);
                 },
             }))
         })
