@@ -552,6 +552,60 @@ pub(crate) mod ga100 {
     }
 }
 
+pub(crate) mod gh100 {
+    use kernel::io::register;
+
+    register! {
+        /// Hopper register for PRAMIN window.
+        pub(crate) NV_XAL_EP_BAR0_WINDOW(u32) @ 0x0010_fd40 {
+            21:0    window_base;
+        }
+    }
+}
+
+pub(crate) mod gb100 {
+    use kernel::io::register;
+
+    register! {
+        /// Blackwell+ register for PRAMIN window.
+        pub(crate) NV_XAL_EP_BAR0_WINDOW(u32) @ 0x0010_fd40 {
+            22:0    window_base;
+        }
+    }
+}
+
+/// Read the current BAR0 PRAMIN window base address.
+pub(crate) fn pramin_window_read_base(arch: Architecture, bar: &Bar0) -> u64 {
+    let window_base: u32 = match arch {
+        Architecture::Turing | Architecture::Ampere | Architecture::Ada => {
+            bar.read(NV_PBUS_BAR0_WINDOW).window_base().into()
+        }
+        Architecture::Hopper => bar.read(gh100::NV_XAL_EP_BAR0_WINDOW).window_base().into(),
+        Architecture::Blackwell => bar.read(gb100::NV_XAL_EP_BAR0_WINDOW).window_base().into(),
+    };
+    u64::from(window_base) << 16
+}
+
+/// Write a new BAR0 PRAMIN window base address.
+pub(crate) fn pramin_window_write_base(arch: Architecture, bar: &Bar0, base: u64) -> Result {
+    // Reject VRAM addresses that do not fit the 40-bit hardware range. 
+    let window_base = u32::try_from(base >> 16).map_err(|_| EINVAL)?;
+    match arch {
+        Architecture::Turing | Architecture::Ampere | Architecture::Ada => bar.write_reg(
+            NV_PBUS_BAR0_WINDOW::zeroed()
+                .with_target(Bar0WindowTarget::Vram)
+                .try_with_window_base(window_base)?,
+        ),
+        Architecture::Hopper => {
+            bar.write_reg(gh100::NV_XAL_EP_BAR0_WINDOW::zeroed().try_with_window_base(window_base)?)
+        }
+        Architecture::Blackwell => {
+            bar.write_reg(gb100::NV_XAL_EP_BAR0_WINDOW::zeroed().try_with_window_base(window_base)?)
+        }
+    }
+    Ok(())
+}
+
 // MMU TLB
 
 register! {

@@ -329,7 +329,7 @@ impl Gpu {
                 // PRAMIN covers all physical VRAM (including GSP-reserved areas
                 // above the usable region, e.g. the BAR1 page directory).
                 let pramin_vram_region = 0..gsp_static_info.total_fb_end;
-                Arc::pin_init(GpuMm::new(devres_bar.clone(), pdev.as_ref(), GpuBuddyParams {
+                Arc::pin_init(GpuMm::new(devres_bar.clone(), pdev.as_ref(), spec.chipset, GpuBuddyParams {
                     base_offset: usable_vram.start,
                     size: usable_vram.end - usable_vram.start,
                     chunk_size: Alignment::new::<SZ_4K>(),

@@ -89,6 +89,7 @@ use core::ops::Range;
 use crate::{
     bounded_enum,
     driver::Bar0,
+    gpu::Chipset,
     num::IntoSafeCast,
     regs, //
 };
@@ -98,7 +99,6 @@ use kernel::{
     devres::Devres,
     io::Io,
     new_mutex,
-    num::Bounded,
     prelude::*,
     sizes::{
         SZ_1M,
@@ -137,7 +137,7 @@ macro_rules! define_pramin_read {
                 self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
-                Self::write_window_base(self.bar, base)?;
+                regs::pramin_window_write_base(self.chipset.arch(), self.bar, base)?;
                 *self.state = base;
             }
             self.bar.$name(bar_offset)
@@ -154,7 +154,7 @@ macro_rules! define_pramin_write {
                 self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
-                Self::write_window_base(self.bar, base)?;
+                regs::pramin_window_write_base(self.chipset.arch(), self.bar, base)?;
                 *self.state = base;
             }
             self.bar.$name(value, bar_offset)
@@ -168,6 +168,7 @@ macro_rules! define_pramin_write {
 #[pin_data]
 pub(crate) struct Pramin {
     bar: Arc<Devres<Bar0>>,
+    chipset: Chipset,
     /// Valid VRAM region. Accesses outside this range are rejected.
     vram_region: Range<u64>,
     /// PRAMIN aperture state, protected by a mutex.
@@ -189,13 +190,15 @@ impl Pramin {
     pub(crate) fn new(
         bar: Arc<Devres<Bar0>>,
         dev: &device::Device<device::Bound>,
+        chipset: Chipset,
         vram_region: Range<u64>,
     ) -> Result<impl PinInit<Self>> {
         let bar_access = bar.access(dev)?;
-        let current_base = Self::read_window_base(bar_access);
+        let current_base = regs::pramin_window_read_base(chipset.arch(), bar_access);
 
         Ok(pin_init!(Self {
             bar,
+            chipset,
             vram_region,
             state <- new_mutex!(current_base, "pramin_state"),
         }))
@@ -218,17 +221,10 @@ impl Pramin {
         let state = self.state.lock();
         Ok(PraminWindow {
             bar,
+            chipset: self.chipset,
             vram_region: self.vram_region.clone(),
             state,
         })
-    }
-
-    /// Read the current window base from the BAR0_WINDOW register.
-    fn read_window_base(bar: &Bar0) -> u64 {
-        let reg = bar.read(regs::NV_PBUS_BAR0_WINDOW);
-
-        // TODO: Convert to Bounded<u64, 40> when available.
-        u64::from(reg.window_base()) << 16
     }
 }
 
@@ -241,23 +237,12 @@ impl Pramin {
 /// internal `MutexGuard`).
 pub(crate) struct PraminWindow<'a> {
     bar: &'a Bar0,
+    chipset: Chipset,
     vram_region: Range<u64>,
     state: MutexGuard<'a, u64>,
 }
 
 impl PraminWindow<'_> {
-    /// Write a new window base to the BAR0_WINDOW register.
-    fn write_window_base(bar: &Bar0, base: u64) -> Result {
-        // CAST: After >> 16, a VRAM address fits in u32.
-        let window_base = (base >> 16) as u32;
-        bar.write_reg(
-            regs::NV_PBUS_BAR0_WINDOW::zeroed()
-                .with_target(Bar0WindowTarget::Vram)
-                .try_with_window_base(window_base)?,
-        );
-        Ok(())
-    }
-
     /// Compute window parameters for a VRAM access.
     ///
     /// Returns (`bar_offset`, `new_base`) where:
