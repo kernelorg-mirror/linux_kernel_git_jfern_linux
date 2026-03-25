@@ -144,11 +144,6 @@ impl Vmm {
         mmu_version: MmuVersion,
         va_size: u64,
     ) -> Result<Self> {
-        // Only MMU v2 is supported for now.
-        if mmu_version != MmuVersion::V2 {
-            return Err(ENOTSUPP);
-        }
-
         let virt_buddy = GpuBuddy::new(GpuBuddyParams {
             base_offset: 0,
             physical_memory_size: va_size,
