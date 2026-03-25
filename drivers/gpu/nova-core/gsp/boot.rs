@@ -863,7 +863,7 @@ impl super::Gsp {
             return Err(EIO);
         }
 
-        Ok(info)
+        Ok(())
     }
 }
 

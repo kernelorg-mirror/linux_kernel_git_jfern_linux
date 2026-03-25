@@ -151,7 +151,7 @@ impl GspStaticConfigInfo {
     /// Returns an iterator over valid FB regions from GSP firmware data.
     fn fb_regions(
         &self,
-    ) -> impl Iterator<Item = &bindings::NV2080_CTRL_CMD_FB_GET_FB_REGION_FB_REGION_INFO> {
+    ) -> impl Iterator<Item = &r000::NV2080_CTRL_CMD_FB_GET_FB_REGION_FB_REGION_INFO> {
         let fb_info = &self.0.fbRegionInfoParams;
         fb_info
             .fbRegion
