@@ -23,6 +23,7 @@ use kernel::{
 
 use crate::{
     driver::Bar0,
+    gpu::Chipset,
     num::u64_as_usize, //
 };
 
@@ -50,12 +51,13 @@ impl GpuMm {
     /// areas). PRAMIN window accesses are validated against this range.
     pub(crate) fn new(
         bar: Arc<Devres<Bar0>>,
+        chipset: Chipset,
         buddy_params: GpuBuddyParams,
         pramin_vram_region: core::ops::Range<u64>,
     ) -> Result<impl PinInit<Self>> {
         let buddy = GpuBuddy::new(buddy_params)?;
         let tlb_init = Tlb::new(bar.clone());
-        let pramin_init = pramin::Pramin::new(bar, pramin_vram_region)?;
+        let pramin_init = pramin::Pramin::new(bar, chipset, pramin_vram_region)?;
 
         Ok(pin_init!(Self {
             buddy,

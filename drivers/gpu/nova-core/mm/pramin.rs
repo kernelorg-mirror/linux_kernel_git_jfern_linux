@@ -68,6 +68,7 @@ use core::ops::Range;
 
 use crate::{
     driver::Bar0,
+    gpu::Chipset,
     num::IntoSafeCast,
     regs, //
 };
@@ -132,7 +133,7 @@ macro_rules! define_pramin_read {
                 self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
-                Self::write_window_base(&self.bar, base);
+                regs::pramin_window_write_base(self.chipset.arch(), &self.bar, base);
                 *self.state = base;
             }
             self.bar.$name(bar_offset)
@@ -149,7 +150,7 @@ macro_rules! define_pramin_write {
                 self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
-                Self::write_window_base(&self.bar, base);
+                regs::pramin_window_write_base(self.chipset.arch(), &self.bar, base);
                 *self.state = base;
             }
             self.bar.$name(value, bar_offset)
@@ -163,6 +164,7 @@ macro_rules! define_pramin_write {
 #[pin_data]
 pub(crate) struct Pramin {
     bar: Arc<Devres<Bar0>>,
+    chipset: Chipset,
     /// Valid VRAM region. Accesses outside this range are rejected.
     vram_region: Range<u64>,
     /// PRAMIN aperture state, protected by a mutex.
@@ -183,13 +185,15 @@ impl Pramin {
     /// `vram_region` specifies the valid VRAM address range.
     pub(crate) fn new(
         bar: Arc<Devres<Bar0>>,
+        chipset: Chipset,
         vram_region: Range<u64>,
     ) -> Result<impl PinInit<Self>> {
         let bar_access = bar.try_access().ok_or(ENODEV)?;
-        let current_base = Self::read_window_base(&bar_access);
+        let current_base = regs::pramin_window_read_base(chipset.arch(), &bar_access);
 
         Ok(pin_init!(Self {
             bar,
+            chipset,
             vram_region,
             state <- new_mutex!(current_base, "pramin_state"),
         }))
@@ -209,17 +213,10 @@ impl Pramin {
         let state = self.state.lock();
         Ok(PraminWindow {
             bar,
+            chipset: self.chipset,
             vram_region: self.vram_region.clone(),
             state,
         })
-    }
-
-    /// Read the current window base from the BAR0_WINDOW register.
-    fn read_window_base(bar: &Bar0) -> u64 {
-        let reg = regs::NV_PBUS_BAR0_WINDOW::read(bar);
-
-        // TODO: Convert to Bounded<u64, 40> when available.
-        u64::from(reg.window_base()) << 16
     }
 }
 
@@ -232,22 +229,12 @@ impl Pramin {
 /// internal `MutexGuard`).
 pub(crate) struct PraminWindow<'a> {
     bar: RevocableGuard<'a, Bar0>,
+    chipset: Chipset,
     vram_region: Range<u64>,
     state: MutexGuard<'a, u64>,
 }
 
 impl PraminWindow<'_> {
-    /// Write a new window base to the BAR0_WINDOW register.
-    fn write_window_base(bar: &Bar0, base: u64) {
-        // CAST: The caller (compute_window) validates that base is within the
-        // VRAM region which is always <= 40 bits. After >> 16, a 40-bit base
-        // becomes 24 bits, which fits in u32.
-        regs::NV_PBUS_BAR0_WINDOW::default()
-            .set_target(Bar0WindowTarget::Vram)
-            .set_window_base((base >> 16) as u32)
-            .write(bar);
-    }
-
     /// Compute window parameters for a VRAM access.
     ///
     /// Returns (`bar_offset`, `new_base`) where:
@@ -462,28 +449,7 @@ fn test_misaligned_access(
 
 /// Run PRAMIN self-tests during boot if self-tests are enabled.
 #[cfg(CONFIG_NOVA_MM_SELFTESTS)]
-pub(crate) fn run_self_test(
-    dev: &kernel::device::Device,
-    pramin: &Pramin,
-    chipset: crate::gpu::Chipset,
-) -> Result {
-    use crate::gpu::Architecture;
-
-    // PRAMIN uses NV_PBUS_BAR0_WINDOW which is only available on pre-Hopper GPUs.
-    // Hopper+ uses NV_XAL_EP_BAR0_WINDOW instead, requiring a separate HAL that
-    // has not been implemented yet.
-    if !matches!(
-        chipset.arch(),
-        Architecture::Turing | Architecture::Ampere | Architecture::Ada
-    ) {
-        dev_info!(
-            dev,
-            "PRAMIN: Skipping self-tests for {:?} (only pre-Hopper supported)\n",
-            chipset
-        );
-        return Ok(());
-    }
-
+pub(crate) fn run_self_test(dev: &kernel::device::Device, pramin: &Pramin) -> Result {
     dev_info!(dev, "PRAMIN: Starting self-test...\n");
 
     let vram_region = pramin.vram_region();

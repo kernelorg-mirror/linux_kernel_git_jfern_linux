@@ -583,6 +583,52 @@ pub(crate) mod ga100 {
     });
 }
 
+pub(crate) mod gh100 {
+    // Hopper register for PRAMIN window.
+    register!(NV_XAL_EP_BAR0_WINDOW @ 0x0010_fd40 {
+        21:0    window_base as u32;
+    });
+}
+
+pub(crate) mod gb100 {
+    // Blackwell+ register for PRAMIN window.
+    register!(NV_XAL_EP_BAR0_WINDOW @ 0x0010_fd40 {
+        22:0    window_base as u32;
+    });
+}
+
+/// Read the current BAR0 PRAMIN window base address.
+pub(crate) fn pramin_window_read_base(arch: Architecture, bar: &Bar0) -> u64 {
+    let window_base = match arch {
+        Architecture::Turing | Architecture::Ampere | Architecture::Ada => {
+            NV_PBUS_BAR0_WINDOW::read(bar).window_base()
+        }
+        Architecture::Hopper => gh100::NV_XAL_EP_BAR0_WINDOW::read(bar).window_base(),
+        Architecture::Blackwell => gb100::NV_XAL_EP_BAR0_WINDOW::read(bar).window_base(),
+    };
+    u64::from(window_base) << 16
+}
+
+/// Write a new BAR0 PRAMIN window base address.
+pub(crate) fn pramin_window_write_base(arch: Architecture, bar: &Bar0, base: u64) {
+    // CAST: After >> 16, a VRAM address fits in u32.
+    let window_base = (base >> 16) as u32;
+    match arch {
+        Architecture::Turing | Architecture::Ampere | Architecture::Ada => {
+            NV_PBUS_BAR0_WINDOW::default()
+                .set_target(Bar0WindowTarget::Vram)
+                .set_window_base(window_base)
+                .write(bar)
+        }
+        Architecture::Hopper => gh100::NV_XAL_EP_BAR0_WINDOW::default()
+            .set_window_base(window_base)
+            .write(bar),
+        Architecture::Blackwell => gb100::NV_XAL_EP_BAR0_WINDOW::default()
+            .set_window_base(window_base)
+            .write(bar),
+    }
+}
+
 // MMU TLB
 
 register!(NV_TLB_FLUSH_PDB_LO @ 0x00b830a0, "TLB flush register: PDB address bits [39:8]" {

@@ -407,7 +407,7 @@ impl Gpu {
                     // PRAMIN covers all physical VRAM (including GSP-reserved areas
                     // above the usable region, e.g. the BAR1 page directory).
                     let pramin_vram_region = 0..gsp_static_info.total_fb_end;
-                    GpuMm::new(devres_bar.clone(), GpuBuddyParams {
+                    GpuMm::new(devres_bar.clone(), chipset, GpuBuddyParams {
                         base_offset: usable_vram.start,
                         physical_memory_size: usable_vram.end - usable_vram.start,
                         chunk_size: Alignment::new::<SZ_4K>(),
@@ -450,7 +450,7 @@ impl Gpu {
     #[cfg(CONFIG_NOVA_MM_SELFTESTS)]
     fn run_mm_selftests(self: Pin<&mut Self>, pdev: &pci::Device<device::Bound>) -> Result {
         // PRAMIN aperture self-tests.
-        crate::mm::pramin::run_self_test(pdev.as_ref(), self.mm.pramin(), self.spec.chipset)?;
+        crate::mm::pramin::run_self_test(pdev.as_ref(), self.mm.pramin())?;
 
         // BAR1 self-tests.
         let bar1 = Arc::pin_init(pdev.iomap_region(1, c"nova-core/bar1"), GFP_KERNEL)?;
