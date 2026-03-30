@@ -46,8 +46,7 @@ impl From<Architecture> for MmuVersion {
     fn from(arch: Architecture) -> Self {
         match arch {
             Architecture::Turing | Architecture::Ampere | Architecture::Ada => Self::V2,
-            // In the future, uncomment the following to support V3.
-            // _ => Self::V3,
+            Architecture::Hopper | Architecture::Blackwell => Self::V3,
         }
     }
 }

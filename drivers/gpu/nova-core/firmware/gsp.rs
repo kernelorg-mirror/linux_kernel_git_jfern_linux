@@ -142,6 +142,8 @@ impl GspFirmware {
                         Architecture::Ampere if chipset == Chipset::GA100 => ".fwsignature_tu10x",
                         Architecture::Ampere => ".fwsignature_ga10x",
                         Architecture::Ada => ".fwsignature_ad10x",
+                        Architecture::Hopper => ".fwsignature_gh10x",
+                        Architecture::Blackwell => ".fwsignature_gb10x",
                     };
 
                     elf::elf64_section(firmware.data(), sigs_section)
