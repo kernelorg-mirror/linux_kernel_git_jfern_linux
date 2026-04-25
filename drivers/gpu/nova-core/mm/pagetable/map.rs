@@ -190,6 +190,7 @@ impl<M: MmuConfig> PtMapInner<M> {
     /// Install prepared PDEs and write PTEs, then flush TLB.
     ///
     /// Drains `pt_pages` and moves allocations into `page_table_allocs`.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn install_mappings(
         &self,
         dev: &device::Device<device::Bound>,
@@ -326,6 +327,7 @@ impl PtMap {
     }
 
     /// Install prepared PDEs and write PTEs, then flush TLB.
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::mm) fn install_mappings(
         &self,
         dev: &device::Device<device::Bound>,
