@@ -437,6 +437,18 @@ impl Device {
         Ok(unsafe { bindings::pci_resource_len(self.as_raw(), bar.try_into()?) })
     }
 
+    /// Returns the resource flags (`IORESOURCE_*`) of the given PCI BAR.
+    pub fn resource_flags(&self, bar: u32) -> Result<crate::ffi::c_ulong> {
+        if !Bar::index_is_valid(bar) {
+            return Err(EINVAL);
+        }
+
+        // SAFETY:
+        // - `bar` is a valid bar number, as guaranteed by above call to `Bar::index_is_valid`,
+        // - by its type invariant `self.as_raw` is always a valid pointer to a `struct pci_dev`.
+        Ok(unsafe { bindings::pci_resource_flags(self.as_raw(), bar.try_into()?) })
+    }
+
     /// Returns the PCI class as a `Class` struct.
     #[inline]
     pub fn pci_class(&self) -> Class {
