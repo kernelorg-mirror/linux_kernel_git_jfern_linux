@@ -147,19 +147,16 @@ impl GspStaticConfigInfo {
             .filter(|reg| reg.limit >= reg.base)
     }
 
-    /// Extracts the first usable FB region from GSP firmware data.
+    /// Iterates over usable FB regions from GSP firmware data.
     ///
-    /// Returns the first region suitable for driver memory allocation as a [`Range<u64>`].
+    /// Each yielded region is a [`Range<u64>`] suitable for driver memory allocation.
     /// Usable regions are those that satisfy all the following properties:
     /// - Are not reserved for firmware internal use.
     /// - Are not protected (hardware-enforced access restrictions).
     /// - Support compression (can use GPU memory compression for bandwidth).
     /// - Support ISO (isochronous memory for display requiring guaranteed bandwidth).
-    ///
-    /// TODO: Multiple discontinuous usable regions of RAM are possible in
-    /// special cases. We need to support it.
-    pub(crate) fn first_usable_fb_region(&self) -> Option<Range<u64>> {
-        self.fb_regions().find_map(|reg| {
+    pub(crate) fn usable_fb_regions_iter(&self) -> impl Iterator<Item = Range<u64>> + '_ {
+        self.fb_regions().filter_map(|reg| {
             // Filter: not reserved, not protected, supports compression and ISO.
             if reg.reserved == 0
                 && reg.bProtected == 0

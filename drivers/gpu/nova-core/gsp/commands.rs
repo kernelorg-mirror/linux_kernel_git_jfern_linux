@@ -215,7 +215,7 @@ impl MessageFromGsp for GetGspStaticInfoReply {
         Ok(GetGspStaticInfoReply {
             gpu_name: msg.gpu_name_str(),
             bar1_pde_base: msg.bar1_pde_base(),
-            usable_fb_region: msg.first_usable_fb_region().ok_or(ENODEV)?,
+            usable_fb_region: msg.usable_fb_regions_iter().next().ok_or(ENODEV)?,
             total_fb_end,
         })
     }
