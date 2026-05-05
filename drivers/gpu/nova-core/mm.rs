@@ -55,7 +55,6 @@ use kernel::{
 use crate::{
     driver::Bar0,
     gpu::Chipset,
-    num::u64_as_usize, //
 };
 
 pub(crate) use tlb::Tlb;
@@ -133,13 +132,8 @@ impl VramAddress {
         Self::from_raw(addr)
     }
 
-    /// Get the raw address value as `usize` (useful for MMIO offsets).
-    pub(crate) const fn raw(&self) -> usize {
-        u64_as_usize(self.into_raw())
-    }
-
     /// Get the raw address value as `u64`.
-    pub(crate) const fn raw_u64(&self) -> u64 {
+    pub(crate) const fn raw(&self) -> u64 {
         self.into_raw()
     }
 }
@@ -159,6 +153,14 @@ impl Ord for VramAddress {
 impl From<Pfn> for VramAddress {
     fn from(pfn: Pfn) -> Self {
         Self::zeroed().with_frame_number(pfn)
+    }
+}
+
+impl core::ops::Add<u64> for VramAddress {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self {
+        Self::new(self.raw() + rhs)
     }
 }
 

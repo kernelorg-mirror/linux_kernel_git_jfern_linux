@@ -121,13 +121,13 @@ pub(super) trait PteOps: Copy + core::fmt::Debug {
 
     /// Read a `PTE` from VRAM.
     fn read(window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result<Self> {
-        let val = window.try_read64(addr.raw())?;
+        let val = window.try_read64(addr)?;
         Ok(Self::new(val))
     }
 
     /// Write this `PTE` to VRAM.
     fn write(&self, window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result {
-        window.try_write64(addr.raw(), self.raw_u64())
+        window.try_write64(addr, self.raw_u64())
     }
 }
 
@@ -156,13 +156,13 @@ pub(super) trait PdeOps: Copy + core::fmt::Debug {
 
     /// Read a `PDE` from VRAM.
     fn read(window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result<Self> {
-        let val = window.try_read64(addr.raw())?;
+        let val = window.try_read64(addr)?;
         Ok(Self::new(val))
     }
 
     /// Write this `PDE` to VRAM.
     fn write(&self, window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result {
-        window.try_write64(addr.raw(), self.raw_u64())
+        window.try_write64(addr, self.raw_u64())
     }
 
     /// Check if this `PDE` is valid and points to video memory.
@@ -193,15 +193,15 @@ pub(super) trait DualPdeOps: Copy + core::fmt::Debug {
 
     /// Read a dual PDE (128-bit) from VRAM.
     fn read(window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result<Self> {
-        let lo = window.try_read64(addr.raw())?;
-        let hi = window.try_read64(addr.raw() + 8)?;
+        let lo = window.try_read64(addr)?;
+        let hi = window.try_read64(addr + 8)?;
         Ok(Self::new(lo, hi))
     }
 
     /// Write this dual PDE (128-bit) to VRAM.
     fn write(&self, window: &mut pramin::PraminWindow<'_>, addr: VramAddress) -> Result {
-        window.try_write64(addr.raw(), self.big_raw_u64())?;
-        window.try_write64(addr.raw() + 8, self.small_raw_u64())
+        window.try_write64(addr, self.big_raw_u64())?;
+        window.try_write64(addr + 8, self.small_raw_u64())
     }
 }
 
@@ -394,7 +394,7 @@ fn check_pdb_inner<M: MmuConfig>(
     pdb_addr: VramAddress,
 ) -> Result {
     let mut window = pramin.get_window(dev)?;
-    let raw = window.try_read64(pdb_addr.raw())?;
+    let raw = window.try_read64(pdb_addr)?;
 
     if !M::Pde::new(raw).is_valid_vram() {
         return Err(ENOENT);

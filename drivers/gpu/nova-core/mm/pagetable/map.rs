@@ -93,9 +93,9 @@ impl<M: MmuConfig> PtMapInner<M> {
 
         // Zero via PRAMIN.
         let mut window = mm.pramin().get_window(dev)?;
-        let base = page_vram.raw();
         for off in (0..PAGE_SIZE).step_by(8) {
-            window.try_write64(base + off, 0)?;
+            let off_u64: u64 = off.into_safe_cast();
+            window.try_write64(page_vram + off_u64, 0)?;
         }
 
         Ok(PreparedPtPage {

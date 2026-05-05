@@ -334,11 +334,11 @@ impl DualPdeBig {
     /// Create a valid big PDE pointing to a page table in video memory.
     fn new_vram(table_addr: VramAddress) -> Result<Self> {
         // Big page table addresses must be 256-byte aligned (shift 8).
-        if table_addr.raw_u64() & 0xFF != 0 {
+        if table_addr.raw() & 0xFF != 0 {
             return Err(EINVAL);
         }
 
-        let table_frame = Bounded::from_expr(table_addr.raw_u64() >> 8);
+        let table_frame = Bounded::from_expr(table_addr.raw() >> 8);
         Ok(Self::zeroed()
             .with_is_pte(false)
             .with_aperture(AperturePde::VideoMemory)

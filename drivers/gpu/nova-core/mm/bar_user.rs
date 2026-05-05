@@ -259,7 +259,7 @@ pub(crate) fn run_self_test(
     let vfn_offset: usize = test_vfn.raw().into_safe_cast();
     let bar1_base_offset = vfn_offset.checked_mul(PAGE_SIZE).ok_or(EOVERFLOW)?;
     let bar1_read_offset: usize = bar1_base_offset + 0x100;
-    let vram_read_addr: usize = test_vram.raw() + 0x100;
+    let vram_read_addr = test_vram + 0x100;
 
     // Test 1: Write via PRAMIN, read via BAR1.
     {
@@ -371,7 +371,7 @@ pub(crate) fn run_self_test(
 
             let pramin_val = {
                 let mut window = mm.pramin().get_window(pdev)?;
-                window.try_read32(page_phys.into_safe_cast())?
+                window.try_read32(VramAddress::new(page_phys))?
             };
 
             if pramin_val != PATTERN_BAR1 {
@@ -420,7 +420,7 @@ pub(crate) fn run_self_test(
     // Write pattern via PRAMIN, read via BarUserAccess.
     {
         let mut window = mm.pramin().get_window(pdev)?;
-        window.try_write32(test_vram.raw(), PATTERN_BAR1)?;
+        window.try_write32(test_vram, PATTERN_BAR1)?;
     }
 
     let readback = access.try_read32(pdev, 0)?;

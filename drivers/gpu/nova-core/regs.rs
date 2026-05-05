@@ -6,6 +6,10 @@ use kernel::{
         register::WithBase,
         Io, //
     },
+    num::{
+        Bounded,
+        TryIntoBounded, //
+    },
     prelude::*,
     sizes::SizeConstants,
     time, //
@@ -124,7 +128,19 @@ register! {
     pub(crate) NV_PBUS_BAR0_WINDOW(u32) @ 0x00001700 {
         25:24   target ?=> Bar0WindowTarget;
         /// Window base address (bits 39:16 of FB addr).
-        23:0    window_base;
+        23:0    addr_39_16;
+    }
+}
+
+impl NV_PBUS_BAR0_WINDOW {
+    /// Returns the BAR0 PRAMIN window base byte address (40-bit FB addr).
+    pub(crate) fn window_base(self) -> u64 {
+        self.addr_39_16().cast::<u64>() << 16
+    }
+
+    /// Sets the BAR0 PRAMIN window base byte address (40-bit FB addr).
+    pub(crate) fn set_window_base(self, base: Bounded<u64, 40>) -> Self {
+        self.with_addr_39_16(base.shr::<16, 24>().cast::<u32>())
     }
 }
 
@@ -552,54 +568,86 @@ pub(crate) mod ga100 {
 }
 
 pub(crate) mod gh100 {
-    use kernel::io::register;
+    use kernel::{
+        io::register,
+        num::Bounded, //
+    };
 
     register! {
         /// Hopper register for PRAMIN window.
         pub(crate) NV_XAL_EP_BAR0_WINDOW(u32) @ 0x0010_fd40 {
-            21:0    window_base;
+            21:0    addr_37_16;
+        }
+    }
+
+    impl NV_XAL_EP_BAR0_WINDOW {
+        /// Returns the BAR0 PRAMIN window base byte address (38-bit FB addr).
+        pub(crate) fn window_base(self) -> u64 {
+            self.addr_37_16().cast::<u64>() << 16
+        }
+
+        /// Sets the BAR0 PRAMIN window base byte address (38-bit FB addr).
+        pub(crate) fn set_window_base(self, base: Bounded<u64, 38>) -> Self {
+            self.with_addr_37_16(base.shr::<16, _>().cast::<u32>())
         }
     }
 }
 
 pub(crate) mod gb100 {
-    use kernel::io::register;
+    use kernel::{
+        io::register,
+        num::Bounded, //
+    };
 
     register! {
         /// Blackwell+ register for PRAMIN window.
         pub(crate) NV_XAL_EP_BAR0_WINDOW(u32) @ 0x0010_fd40 {
-            22:0    window_base;
+            22:0    addr_38_16;
+        }
+    }
+
+    impl NV_XAL_EP_BAR0_WINDOW {
+        /// Returns the BAR0 PRAMIN window base byte address (39-bit FB addr).
+        pub(crate) fn window_base(self) -> u64 {
+            self.addr_38_16().cast::<u64>() << 16
+        }
+
+        /// Sets the BAR0 PRAMIN window base byte address (39-bit FB addr).
+        pub(crate) fn set_window_base(self, base: Bounded<u64, 39>) -> Self {
+            self.with_addr_38_16(base.shr::<16, _>().cast::<u32>())
         }
     }
 }
 
 /// Read the current BAR0 PRAMIN window base address.
 pub(crate) fn pramin_window_read_base(arch: Architecture, bar: &Bar0) -> u64 {
-    let window_base: u32 = match arch {
+    match arch {
         Architecture::Turing | Architecture::Ampere | Architecture::Ada => {
-            bar.read(NV_PBUS_BAR0_WINDOW).window_base().into()
+            bar.read(NV_PBUS_BAR0_WINDOW).window_base()
         }
-        Architecture::Hopper => bar.read(gh100::NV_XAL_EP_BAR0_WINDOW).window_base().into(),
-        Architecture::Blackwell => bar.read(gb100::NV_XAL_EP_BAR0_WINDOW).window_base().into(),
-    };
-    u64::from(window_base) << 16
+        Architecture::Hopper => bar.read(gh100::NV_XAL_EP_BAR0_WINDOW).window_base(),
+        Architecture::Blackwell => bar.read(gb100::NV_XAL_EP_BAR0_WINDOW).window_base(),
+    }
 }
 
 /// Write a new BAR0 PRAMIN window base address.
 pub(crate) fn pramin_window_write_base(arch: Architecture, bar: &Bar0, base: u64) -> Result {
-    // Reject VRAM addresses that do not fit the 40-bit hardware range. 
-    let window_base = u32::try_from(base >> 16).map_err(|_| EINVAL)?;
     match arch {
-        Architecture::Turing | Architecture::Ampere | Architecture::Ada => bar.write_reg(
-            NV_PBUS_BAR0_WINDOW::zeroed()
-                .with_target(Bar0WindowTarget::Vram)
-                .try_with_window_base(window_base)?,
-        ),
+        Architecture::Turing | Architecture::Ampere | Architecture::Ada => {
+            let bounded: Bounded<u64, 40> = base.try_into_bounded().ok_or(EINVAL)?;
+            bar.write_reg(
+                NV_PBUS_BAR0_WINDOW::zeroed()
+                    .with_target(Bar0WindowTarget::Vram)
+                    .set_window_base(bounded),
+            )
+        }
         Architecture::Hopper => {
-            bar.write_reg(gh100::NV_XAL_EP_BAR0_WINDOW::zeroed().try_with_window_base(window_base)?)
+            let bounded: Bounded<u64, 38> = base.try_into_bounded().ok_or(EINVAL)?;
+            bar.write_reg(gh100::NV_XAL_EP_BAR0_WINDOW::zeroed().set_window_base(bounded))
         }
         Architecture::Blackwell => {
-            bar.write_reg(gb100::NV_XAL_EP_BAR0_WINDOW::zeroed().try_with_window_base(window_base)?)
+            let bounded: Bounded<u64, 39> = base.try_into_bounded().ok_or(EINVAL)?;
+            bar.write_reg(gb100::NV_XAL_EP_BAR0_WINDOW::zeroed().set_window_base(bounded))
         }
     }
     Ok(())

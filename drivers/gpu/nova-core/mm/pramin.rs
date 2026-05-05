@@ -37,8 +37,8 @@
 //!     let mut window = pramin.get_window(dev)?;
 //!
 //!     // Write and read back.
-//!     window.try_write32(0x100, 0xDEADBEEF)?;
-//!     let val = window.try_read32(0x100)?;
+//!     window.try_write32(0x100u64, 0xDEADBEEF)?;
+//!     let val = window.try_read32(0x100u64)?;
 //!     assert_eq!(val, 0xDEADBEEF);
 //!
 //!     Ok(())
@@ -69,13 +69,13 @@
 //!     let mut window = pramin.get_window(dev)?;
 //!
 //!     // Access first 1MB region.
-//!     window.try_write32(0x100, 0x11111111)?;
+//!     window.try_write32(0x100u64, 0x11111111)?;
 //!
 //!     // Access at 2MB - window auto-repositions.
-//!     window.try_write32(0x200000, 0x22222222)?;
+//!     window.try_write32(0x200000u64, 0x22222222)?;
 //!
 //!     // Back to first region - window repositions again.
-//!     let val = window.try_read32(0x100)?;
+//!     let val = window.try_read32(0x100u64)?;
 //!     assert_eq!(val, 0x11111111);
 //!
 //!     Ok(())
@@ -90,6 +90,7 @@ use crate::{
     bounded_enum,
     driver::Bar0,
     gpu::Chipset,
+    mm::VramAddress,
     num::IntoSafeCast,
     regs, //
 };
@@ -128,13 +129,15 @@ const PRAMIN_BASE: usize = 0x700000;
 /// PRAMIN aperture size (1MB).
 const PRAMIN_SIZE: usize = SZ_1M;
 
-/// Generate a PRAMIN read accessor.
+/// Generate a PRAMIN read accessor that takes an absolute VRAM address.
+///
+/// `$name` matches the underlying [`Bar0`] method (e.g. `try_read32`).
 macro_rules! define_pramin_read {
     ($name:ident, $ty:ty) => {
-        #[doc = concat!("Read a `", stringify!($ty), "` from VRAM at the given offset.")]
-        pub(crate) fn $name(&mut self, vram_offset: usize) -> Result<$ty> {
+        #[doc = concat!("Read a `", stringify!($ty), "` from VRAM at the given address.")]
+        pub(crate) fn $name(&mut self, vram_addr: impl Into<VramAddress>) -> Result<$ty> {
             let (bar_offset, new_base) =
-                self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
+                self.compute_window(vram_addr.into(), ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
                 regs::pramin_window_write_base(self.chipset.arch(), self.bar, base)?;
@@ -145,13 +148,15 @@ macro_rules! define_pramin_read {
     };
 }
 
-/// Generate a PRAMIN write accessor.
+/// Generate a PRAMIN write accessor that takes an absolute VRAM address.
+///
+/// `$name` matches the underlying [`Bar0`] method (e.g. `try_write32`).
 macro_rules! define_pramin_write {
     ($name:ident, $ty:ty) => {
-        #[doc = concat!("Write a `", stringify!($ty), "` to VRAM at the given offset.")]
-        pub(crate) fn $name(&mut self, vram_offset: usize, value: $ty) -> Result {
+        #[doc = concat!("Write a `", stringify!($ty), "` to VRAM at the given address.")]
+        pub(crate) fn $name(&mut self, vram_addr: impl Into<VramAddress>, value: $ty) -> Result {
             let (bar_offset, new_base) =
-                self.compute_window(vram_offset, ::core::mem::size_of::<$ty>())?;
+                self.compute_window(vram_addr.into(), ::core::mem::size_of::<$ty>())?;
 
             if let Some(base) = new_base {
                 regs::pramin_window_write_base(self.chipset.arch(), self.bar, base)?;
@@ -250,20 +255,21 @@ impl PraminWindow<'_> {
     /// - `new_base`: `Some(base)` if window needs repositioning, `None` otherwise.
     fn compute_window(
         &self,
-        vram_offset: usize,
+        vram_addr: VramAddress,
         access_size: usize,
     ) -> Result<(usize, Option<u64>)> {
-        // Validate VRAM offset is within the valid VRAM region.
-        let vram_addr = vram_offset as u64;
-        let end_addr = vram_addr.checked_add(access_size as u64).ok_or(EINVAL)?;
-        if vram_addr < self.vram_region.start || end_addr > self.vram_region.end {
+        let addr = vram_addr.raw();
+
+        // Validate VRAM address is within the valid VRAM region.
+        let end_addr = addr.checked_add(access_size as u64).ok_or(EINVAL)?;
+        if addr < self.vram_region.start || end_addr > self.vram_region.end {
             return Err(EINVAL);
         }
 
         // Check if access fits within the current 1MB window.
         let current_base = *self.state;
-        if vram_addr >= current_base {
-            let offset_in_window: usize = (vram_addr - current_base).into_safe_cast();
+        if addr >= current_base {
+            let offset_in_window: usize = (addr - current_base).into_safe_cast();
             if offset_in_window + access_size <= PRAMIN_SIZE {
                 return Ok((PRAMIN_BASE + offset_in_window, None));
             }
@@ -271,8 +277,8 @@ impl PraminWindow<'_> {
 
         // Access doesn't fit in current window - reposition.
         // Hardware requires 64KB alignment for the window base register.
-        let needed_base = vram_addr & !(SZ_64K as u64 - 1);
-        let offset_in_window: usize = (vram_addr - needed_base).into_safe_cast();
+        let needed_base = addr & !(SZ_64K as u64 - 1);
+        let offset_in_window: usize = (addr - needed_base).into_safe_cast();
 
         // Verify access fits in the 1MB window from the new base.
         if offset_in_window + access_size > PRAMIN_SIZE {
@@ -293,19 +299,20 @@ impl PraminWindow<'_> {
     define_pramin_write!(try_write64, u64);
 }
 
+
 /// Offset within the VRAM region to use as the self-test area.
 #[cfg(CONFIG_NOVA_MM_SELFTESTS)]
-const SELFTEST_REGION_OFFSET: usize = 0x1000;
+const SELFTEST_REGION_OFFSET: u64 = 0x1000;
 
 /// Test read/write at byte-aligned locations.
 #[cfg(CONFIG_NOVA_MM_SELFTESTS)]
 fn test_byte_readwrite(
     dev: &kernel::device::Device,
     win: &mut PraminWindow<'_>,
-    base: usize,
+    base: u64,
 ) -> Result {
     for i in 0u8..4 {
-        let offset = base + 1 + usize::from(i);
+        let offset = base + 1 + u64::from(i);
         let val = 0xA0 + i;
         win.try_write8(offset, val)?;
         let read_val = win.try_read8(offset)?;
@@ -328,7 +335,7 @@ fn test_byte_readwrite(
 fn test_u32_as_bytes(
     dev: &kernel::device::Device,
     win: &mut PraminWindow<'_>,
-    base: usize,
+    base: u64,
 ) -> Result {
     let offset = base + 0x10;
     let val: u32 = 0xDEADBEEF;
@@ -337,12 +344,13 @@ fn test_u32_as_bytes(
     // Read back as individual bytes (little-endian: EF BE AD DE).
     let expected_bytes: [u8; 4] = [0xEF, 0xBE, 0xAD, 0xDE];
     for (i, &expected) in expected_bytes.iter().enumerate() {
-        let read_val = win.try_read8(offset + i)?;
+        let i_u64: u64 = i.into_safe_cast();
+        let read_val = win.try_read8(offset + i_u64)?;
         if read_val != expected {
             dev_err!(
                 dev,
                 "PRAMIN: FAIL - offset {:#x}: expected {:#x}, read {:#x}\n",
-                offset + i,
+                offset + i_u64,
                 expected,
                 read_val
             );
@@ -357,10 +365,10 @@ fn test_u32_as_bytes(
 fn test_window_reposition(
     dev: &kernel::device::Device,
     win: &mut PraminWindow<'_>,
-    base: usize,
+    base: u64,
 ) -> Result {
-    let offset_a: usize = base;
-    let offset_b: usize = base + 0x200000; // base + 2MB (different 1MB region).
+    let offset_a: u64 = base;
+    let offset_b: u64 = base + 0x200000; // base + 2MB (different 1MB region).
     let val_a: u32 = 0x11111111;
     let val_b: u32 = 0x22222222;
 
@@ -400,13 +408,12 @@ fn test_invalid_offset(
     win: &mut PraminWindow<'_>,
     vram_end: u64,
 ) -> Result {
-    let invalid_offset: usize = vram_end.into_safe_cast();
-    let result = win.try_read32(invalid_offset);
+    let result = win.try_read32(vram_end);
     if result.is_ok() {
         dev_err!(
             dev,
             "PRAMIN: FAIL - read at invalid offset {:#x} should have failed\n",
-            invalid_offset
+            vram_end
         );
         return Err(EIO);
     }
@@ -418,7 +425,7 @@ fn test_invalid_offset(
 fn test_misaligned_access(
     dev: &kernel::device::Device,
     win: &mut PraminWindow<'_>,
-    base: usize,
+    base: u64,
 ) -> Result {
     // `u16` at odd offset (not 2-byte aligned).
     let offset_u16 = base + 0x21;
@@ -484,8 +491,7 @@ pub(crate) fn run_self_test(
     dev_info!(dev, "PRAMIN: Starting self-test...\n");
 
     let vram_region = pramin.vram_region();
-    let base: usize = vram_region.start.into_safe_cast();
-    let base = base + SELFTEST_REGION_OFFSET;
+    let base: u64 = vram_region.start + SELFTEST_REGION_OFFSET;
     let vram_end = vram_region.end;
     let mut win = pramin.get_window(pdev)?;
 

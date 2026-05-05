@@ -106,7 +106,7 @@ impl<M: MmuConfig> PtWalkInner<M> {
     /// Calculate the VRAM address of an entry within a page table.
     fn entry_addr(table: VramAddress, level: PageTableLevel, index: u64) -> VramAddress {
         let entry_size: u64 = M::entry_size(level).into_safe_cast();
-        VramAddress::new(table.raw_u64() + index * entry_size)
+        table + index * entry_size
     }
 
     /// Create a new page table walker.
