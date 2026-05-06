@@ -849,6 +849,83 @@ where
     }
 }
 
+// Shifts: [`Bounded`] by a `u32` shift amount.
+//
+// The shift amount type matches [`Integer`]'s required `Shl<u32>`/`Shr<u32>`
+// bounds, so any [`Bounded`]'s backing type can be shifted by a `u32`. The
+// output is the backing type `T` rather than another [`Bounded`] for parity
+// with the other arithmetic ops above (callers who want a typed result with
+// adjusted bit-width should use [`Bounded::shr`] / [`Bounded::shl`], which
+// validate the bit-width change at compile time but cannot be expressed as
+// operator-trait impls because their `Output` would need to depend on the
+// shift amount).
+//
+// # Examples
+//
+// ```
+// use kernel::num::Bounded;
+//
+// let v = Bounded::<u32, 16>::new::<0xff00>();
+//
+// assert_eq!(v >> 8, 0xff);
+// assert_eq!(v << 4, 0xff_000);
+// ```
+
+impl<T, const N: u32> ops::Shr<u32> for Bounded<T, N>
+where
+    T: Integer,
+{
+    type Output = T;
+
+    fn shr(self, rhs: u32) -> Self::Output {
+        self.get() >> rhs
+    }
+}
+
+impl<T, const N: u32> ops::Shl<u32> for Bounded<T, N>
+where
+    T: Integer,
+{
+    type Output = T;
+
+    fn shl(self, rhs: u32) -> Self::Output {
+        self.get() << rhs
+    }
+}
+
+// Shifts between two [`Bounded`]s with the same backing type. The RHS is
+// converted to its backing-type value and used as the shift amount.
+//
+// `T` is constrained to `ops::Shl<T, Output = T>` / `ops::Shr<T, Output = T>`
+// (i.e. self-shift) so the impls cover the common case where the shift
+// amount comes from another [`Bounded`] of the same backing type without an
+// intermediate `u32` cast — useful in register-field arithmetic where both
+// operands are extracted as [`Bounded`]s.
+
+impl<T, const N: u32, const M: u32> ops::Shr<Bounded<T, M>> for Bounded<T, N>
+where
+    T: Integer,
+    T: ops::Shr<T, Output = T>,
+{
+    type Output = T;
+
+    fn shr(self, rhs: Bounded<T, M>) -> Self::Output {
+        self.get() >> rhs.get()
+    }
+}
+
+impl<T, const N: u32, const M: u32> ops::Shl<Bounded<T, M>> for Bounded<T, N>
+where
+    T: Integer,
+    T: ops::Shl<T, Output = T>,
+{
+    type Output = T;
+
+    fn shl(self, rhs: Bounded<T, M>) -> Self::Output {
+        self.get() << rhs.get()
+    }
+}
+
 // Proxy implementations of `core::fmt`.
 
 impl<T, const N: u32> fmt::Display for Bounded<T, N>
