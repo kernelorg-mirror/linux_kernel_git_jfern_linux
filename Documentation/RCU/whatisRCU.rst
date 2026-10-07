@@ -1210,6 +1210,8 @@ SRCU::
 	srcu_read_unlock_nmisafe	start_poll_synchronize_srcu_expedited
 	srcu_read_lock_notrace		poll_state_synchronize_srcu
 	srcu_read_unlock_notrace
+	srcu_read_lock_atomic		synchronize_srcu_atomic
+	srcu_read_unlock_atomic
 	srcu_down_read
 	srcu_up_read
 	srcu_down_read_fast
@@ -1227,10 +1229,13 @@ SRCU: Initialization/cleanup/ordering::
 
 	DEFINE_SRCU
 	DEFINE_STATIC_SRCU
-	DEFINE_SRCU_FAST        // for srcu_read_lock_fast() and friends
-	DEFINE_STATIC_SRCU_FAST // for srcu_read_lock_fast() and friends
+	DEFINE_SRCU_FAST          // for srcu_read_lock_fast() and friends
+	DEFINE_STATIC_SRCU_FAST   // for srcu_read_lock_fast() and friends
+	DEFINE_SRCU_ATOMIC        // for srcu_read_lock_atomic() and friends
+	DEFINE_STATIC_SRCU_ATOMIC // for srcu_read_lock_atomic() and friends
 	init_srcu_struct
 	init_srcu_struct_fast
+	init_srcu_struct_atomic
 	cleanup_srcu_struct
 	smp_mb__after_srcu_read_unlock
 
