@@ -2686,11 +2686,13 @@ The `SRCU API
 <https://lwn.net/Articles/609973/#RCU%20Per-Flavor%20API%20Table>`__
 includes srcu_read_lock(), srcu_read_unlock(),
 srcu_dereference(), srcu_dereference_check(), synchronize_srcu(),
-synchronize_srcu_expedited(), call_srcu(), srcu_barrier(),
-and srcu_read_lock_held(). It also includes DEFINE_SRCU(),
-DEFINE_STATIC_SRCU(), DEFINE_SRCU_FAST(), DEFINE_STATIC_SRCU_FAST(),
-init_srcu_struct(), and init_srcu_struct_fast() APIs for defining and
-initializing ``srcu_struct`` structures.
+synchronize_srcu_expedited(), synchronize_srcu_atomic(), call_srcu(),
+srcu_barrier(), and srcu_read_lock_held(). It also includes
+DEFINE_SRCU(), DEFINE_STATIC_SRCU(), DEFINE_SRCU_FAST(),
+DEFINE_STATIC_SRCU_FAST(), DEFINE_SRCU_ATOMIC(),
+DEFINE_STATIC_SRCU_ATOMIC(), init_srcu_struct(),
+init_srcu_struct_fast(), and init_srcu_struct_atomic() APIs for
+defining and initializing ``srcu_struct`` structures.
 
 More recently, the SRCU API has added polling interfaces:
 
@@ -2709,6 +2711,47 @@ These functions are used to avoid unnecessary SRCU grace periods in
 certain types of buffer-cache algorithms having multi-stage age-out
 mechanisms.  The idea is that by the time the block has aged completely
 from the cache, an SRCU grace period will be very likely to have elapsed.
+
+A more recent addition to the SRCU API is the atomic flavor:
+srcu_read_lock_atomic(), srcu_read_unlock_atomic(), and
+synchronize_srcu_atomic(), along with init_srcu_struct_atomic() (or
+DEFINE_SRCU_ATOMIC() and DEFINE_STATIC_SRCU_ATOMIC()) for defining
+and initializing the corresponding ``srcu_struct`` structures. A
+reader using srcu_read_lock_atomic() promises that its critical
+section will never sleep nor block on anything that might itself
+depend on memory allocation to make progress, a promise enforced by
+disabling preemption for the duration of the critical section. Both
+srcu_read_lock_atomic() and the matching srcu_read_unlock_atomic()
+must be invoked on the same CPU, from the same context.
+
+Because atomic-SRCU readers cannot block, synchronize_srcu_atomic()
+spins rather than sleeping while waiting for them, which in turn means
+that a given ``srcu_struct`` structure used with
+synchronize_srcu_atomic() must not also be passed to call_srcu(),
+synchronize_srcu(), synchronize_srcu_expedited(),
+start_poll_synchronize_srcu(), srcu_barrier(), or
+srcu_expedite_current().
+
+synchronize_srcu_atomic() implements a reader-free fastpath: if the
+sum of the per-CPU unlock counts equals the sum of the lock counts
+across both index values, there were no pre-existing readers, and the
+grace period can end immediately, without the usual index flip. This
+sum is trustworthy only if it is computed after the grace-period
+anchor has been written: were the anchor instead written after the
+counters were summed, a reader could complete its
+srcu_read_lock_atomic() in the window between the summing and the
+anchor write, incrementing a lock count that the fastpath had already
+added up, so that the fastpath's proof would silently miss a
+pre-existing reader. Writing the anchor first instead guarantees that
+any lock increment the fastpath's scan misses must have happened after
+the anchor, and therefore cannot belong to a reader that predates this
+grace period. This anchor-before-scan ordering requirement is exercised
+by a pair of litmus tests,
+Documentation/litmus-tests/srcu/SRCU-fastpath-anchor-before-scan.litmus
+(the correct ordering, which forbids the bad outcome) and
+Documentation/litmus-tests/srcu/SRCU-fastpath-scan-before-anchor.litmus
+(the reversed ordering, included to show that it permits the bad
+outcome).
 
 Tasks RCU
 ~~~~~~~~~
