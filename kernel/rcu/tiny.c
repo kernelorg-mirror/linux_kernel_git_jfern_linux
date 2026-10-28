@@ -48,13 +48,16 @@ static struct rcu_ctrlblk rcu_ctrlblk = {
 /*
  * The callback list is only accessed with interrupts disabled, so a call_rcu()
  * that arrives with interrupts off stages the callback on a lockless list that
- * an irq_work re-issues later.  One global list and irq_work suffice, as Tiny
- * RCU is uniprocessor.
+ * an irq_work re-issues later.  Tiny RCU is uniprocessor, so the normal and
+ * debug lists share one global irq_work.
  */
 static void rcu_defer_drain(struct irq_work *iw);
 static LLIST_HEAD(rcu_defer_list);
+static LLIST_HEAD(rcu_defer_debug_list);
 static struct irq_work rcu_defer_iw = IRQ_WORK_INIT_HARD(rcu_defer_drain);
 static bool rcu_defer_draining;
+
+static void rcu_leak_callback(struct rcu_head *head) { }
 
 /*
  * Also called by __rcu_defer_drain() to re-issue a deferred callback, so it
@@ -70,6 +73,7 @@ static void rcu_do_enqueue(struct rcu_head *head, rcu_callback_t func)
 			pr_err("%s(): Double-freed CB %p->%pS()!!!  ", __func__, head, head->func);
 			mem_dump_obj(head);
 		}
+		WRITE_ONCE(head->func, rcu_leak_callback);
 		return;
 	}
 
@@ -108,6 +112,17 @@ static void __rcu_defer_drain(void)
 		rcu_do_enqueue(head, head->func);
 		drained = true;
 	}
+	if (IS_ENABLED(CONFIG_DEBUG_OBJECTS_RCU_HEAD)) {
+		llist_for_each_safe(node, next, llist_del_all(&rcu_defer_debug_list)) {
+			struct rcu_defer_entry *entry;
+
+			entry = llist_entry(node, struct rcu_defer_entry, node);
+
+			rcu_do_enqueue(entry->head, entry->func);
+			kfree_nolock(entry);
+			drained = true;
+		}
+	}
 	local_irq_restore(flags);
 
 	if (drained)
@@ -124,12 +139,21 @@ static void rcu_defer_drain(struct irq_work *iw)
 
 static void call_rcu_defer(struct rcu_head *head, rcu_callback_t func)
 {
+	struct rcu_defer_entry *entry;
+
 	/* A re-entrant call_rcu() during the drain would livelock it; drop it. */
 	if (READ_ONCE(rcu_defer_draining) && !in_nmi()) {
 		WARN_ONCE(IS_ENABLED(CONFIG_PROVE_RCU),
 			  "call_rcu() re-entered during callback drain; leaking callback\n");
 		return;
 	}
+	entry = rcu_defer_entry_alloc(head, func);
+	if (entry) {
+		if (llist_add(&entry->node, &rcu_defer_debug_list))
+			irq_work_queue(&rcu_defer_iw);
+		return;
+	}
+	/* Keep valid callbacks working even if debug metadata cannot be allocated. */
 	head->func = func;
 	if (llist_add((struct llist_node *)head, &rcu_defer_list))
 		irq_work_queue(&rcu_defer_iw);

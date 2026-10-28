@@ -231,6 +231,7 @@ struct rcu_data {
 
 	/* Deferral of an NMI/reentrant call_rcu(); see __call_rcu_common(). */
 	struct llist_head defer_head;
+	struct llist_head defer_debug_head;
 	struct irq_work defer_work;
 	raw_spinlock_t defer_lock;
 	bool defer_draining;

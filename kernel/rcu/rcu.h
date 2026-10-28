@@ -10,6 +10,7 @@
 #ifndef __LINUX_RCU_H
 #define __LINUX_RCU_H
 
+#include <linux/llist.h>
 #include <linux/slab.h>
 #include <trace/events/rcu.h>
 
@@ -581,6 +582,35 @@ static inline bool should_rcu_defer(void)
 {
 	return IS_ENABLED(CONFIG_RCU_DEFER) && irqs_disabled() &&
 	       rcu_scheduler_active != RCU_SCHEDULER_INACTIVE;
+}
+
+/*
+ * Debug checking must run after deferral, where it can take locks.  Use a
+ * separate list node so duplicate heads cannot corrupt the deferred list
+ * before debug_rcu_head_queue() gets a chance to reject them.
+ * Allocation failure falls back to the intrusive list to preserve valid
+ * callbacks; duplicate containment is best-effort in that case.
+ */
+struct rcu_defer_entry {
+	struct llist_node node;
+	struct rcu_head *head;
+	rcu_callback_t func;
+};
+
+static inline struct rcu_defer_entry *rcu_defer_entry_alloc(struct rcu_head *head,
+							  rcu_callback_t func)
+{
+	struct rcu_defer_entry *entry;
+
+	if (!IS_ENABLED(CONFIG_DEBUG_OBJECTS_RCU_HEAD))
+		return NULL;
+
+	entry = kmalloc_nolock(sizeof(*entry), 0, NUMA_NO_NODE);
+	if (entry) {
+		entry->head = head;
+		entry->func = func;
+	}
+	return entry;
 }
 
 /* Drain an outgoing CPU's deferred SRCU callbacks; see rcutree_migrate_callbacks(). */

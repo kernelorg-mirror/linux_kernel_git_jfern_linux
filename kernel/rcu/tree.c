@@ -3229,6 +3229,16 @@ static void __rcu_defer_drain(struct rcu_data *rdp)
 		head->next = NULL;
 		rcu_do_enqueue(head, head->func, false);
 	}
+	if (IS_ENABLED(CONFIG_DEBUG_OBJECTS_RCU_HEAD)) {
+		llist_for_each_safe(node, next, llist_del_all(&rdp->defer_debug_head)) {
+			struct rcu_defer_entry *entry;
+
+			entry = llist_entry(node, struct rcu_defer_entry, node);
+
+			rcu_do_enqueue(entry->head, entry->func, false);
+			kfree_nolock(entry);
+		}
+	}
 	raw_spin_unlock_irqrestore(&rdp->defer_lock, flags);
 }
 
@@ -3248,12 +3258,13 @@ static void rcu_defer_drain(struct irq_work *iw)
 }
 
 /*
- * Stage @head for this CPU's irq_work to re-issue once interrupts are on.  Only
- * the drain side takes a lock, so this stays safe from NMI.
+ * Stage @head for this CPU's irq_work to re-issue once interrupts are on.
+ * Allocation uses nonblocking trylocks, and list insertion is lockless.
  */
 static void call_rcu_defer(struct rcu_head *head, rcu_callback_t func)
 {
 	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
+	struct rcu_defer_entry *entry;
 
 	/*
 	 * Instrumentation on the enqueue path can re-enter here from inside the
@@ -3265,6 +3276,13 @@ static void call_rcu_defer(struct rcu_head *head, rcu_callback_t func)
 			  "call_rcu() re-entered during callback drain; leaking callback\n");
 		return;
 	}
+	entry = rcu_defer_entry_alloc(head, func);
+	if (entry) {
+		if (llist_add(&entry->node, &rdp->defer_debug_head))
+			irq_work_queue(&rdp->defer_work);
+		return;
+	}
+	/* Keep valid callbacks working even if debug metadata cannot be allocated. */
 	head->func = func;
 	if (llist_add((struct llist_node *)head, &rdp->defer_head))
 		irq_work_queue(&rdp->defer_work);
@@ -4345,6 +4363,7 @@ rcu_boot_init_percpu_data(int cpu)
 	rdp->last_sched_clock = jiffies;
 	rdp->cpu = cpu;
 	init_llist_head(&rdp->defer_head);
+	init_llist_head(&rdp->defer_debug_head);
 	raw_spin_lock_init(&rdp->defer_lock);
 	rdp->defer_work = IRQ_WORK_INIT_HARD(rcu_defer_drain);
 	rcu_boot_init_nocb_percpu_data(rdp);
@@ -4646,7 +4665,7 @@ void rcutree_migrate_callbacks(int cpu)
 
 	/*
 	 * Callbacks deferred past the point the outgoing CPU's irq_work can run
-	 * sit on ->defer_head, which the ->cblist migration below does not
+	 * sit on the deferred lists, which the ->cblist migration below does not
 	 * cover.  Drain them here, before the early returns.
 	 */
 	__rcu_defer_drain(rdp);
