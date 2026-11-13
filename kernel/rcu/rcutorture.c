@@ -1401,13 +1401,12 @@ static void rcu_torture_boost_once(void)
 	bool stuttered = false;
 
 	init_completion(&br.done);
-	t = kthread_create(rcu_torture_boost_reader, &br, "rcu_torture_boost_rdr");
+	t = kthread_run_on_cpu(rcu_torture_boost_reader, &br, raw_smp_processor_id(),
+			       "rcu_torture_boost_rdr_%u");
 	if (IS_ERR(t)) {
 		n_rcu_torture_boost_ktrerror++;
 		return;
 	}
-	kthread_bind(t, raw_smp_processor_id());
-	wake_up_process(t);
 
 	// Wait for the reader to enter its critical section, then start
 	// a grace period that it will block.
@@ -1437,7 +1436,8 @@ static void rcu_torture_boost_once(void)
 		VERBOSE_TOROUT_STRING("rcu_torture_boost boosting failed");
 		n_rcu_torture_boost_failure++;
 		pr_info("Boost inversion: reader got only %llu of %d ms CPU in %lu jiffies, GP %s.\n",
-			READ_ONCE(br.ran_ns) / NSEC_PER_MSEC, test_boost_reader_ms, jiffies - start,
+			div64_ul(READ_ONCE(br.ran_ns), NSEC_PER_MSEC), test_boost_reader_ms,
+			jiffies - start,
 			cur_ops->poll_gp_state(gp_state) ? "ended" : "still pending");
 		if (!xchg(&dbg_done, 1) && cur_ops->gp_kthread_dbg) {
 			pr_info("Boost inversion thread ->rt_priority %u gp_state %lu jiffies %lu\n",
@@ -5153,6 +5153,10 @@ rcu_torture_init(void)
 		test_boost_interval = 1;
 	if (test_boost_duration < 2)
 		test_boost_duration = 2;
+	if (test_boost_reader_ms < 1)
+		test_boost_reader_ms = 1;
+	if (test_boost_reader_ms > test_boost_duration * MSEC_PER_SEC)
+		test_boost_reader_ms = test_boost_duration * MSEC_PER_SEC;
 	if (rcu_torture_can_boost()) {
 
 		boost_starttime = jiffies + test_boost_interval * HZ;
